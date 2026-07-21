@@ -1,6 +1,17 @@
+# ── Runtime dependencies ───────────────────────────────────────────────────────
+# These are required to RUN the application.
 Flask
 opencv-python
 numpy
-scipy
 soundfile
 imageio-ffmpeg
+pillow
+pywebview
+
+# ── Build / packaging dependencies ────────────────────────────────────────────
+# These are only needed when building the Windows .exe with PyInstaller.
+# Install them manually before building locally:
+#   pip install pyinstaller
+#
+# The GitHub Actions workflow (build_exe.yml) installs this automatically.
+pyinstaller

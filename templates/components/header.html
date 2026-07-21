@@ -1,0 +1,13 @@
+<div class="ios-navigation-bar">
+    <span class="ios-nav-title">Media-Encrypt Studio</span>
+    <div class="ios-nav-controls" style="position: absolute; right: 15px; display: flex; align-items: center; gap: 10px;">
+        <button class="ios-btn-small" id="fullscreenBtn" onclick="toggleFullscreen()" style="padding: 4px 8px; font-size: 11px; font-weight: bold; background: linear-gradient(to bottom, #ffffff 0%, #eaeaea 50%, #dcdcdc 50%, #c8c8c8 100%); border-color: #a0a0a0; text-shadow: 0 1px 0 rgba(255,255,255,0.8); color: #333; border-radius: 4px; cursor: pointer;">Fullscreen 🖥️</button>
+        <label class="theme-switch" style="margin: 0;">
+            <input type="checkbox" id="themeToggle" onchange="toggleTheme(this.checked)">
+            <span class="theme-slider">
+                <span class="theme-icon sun">☀️</span>
+                <span class="theme-icon moon">🌙</span>
+            </span>
+        </label>
+    </div>
+</div>

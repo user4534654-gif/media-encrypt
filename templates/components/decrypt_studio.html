@@ -1,0 +1,23 @@
+<div id="tabContentDecrypt" class="hidden">
+    <div class="ios-group">
+        <div class="ios-group-header">1. Select Encrypted Files</div>
+        <div class="ios-group-row">
+            <label class="ios-label">Upload Encrypted Media (Batch Supported)</label>
+            <input type="file" id="decryptUpload" multiple class="ios-file-input">
+            <div class="file-list" id="decryptFileList"></div>
+        </div>
+    </div>
+    
+    <div class="ios-group">
+        <div class="ios-group-header">2. Decryption Key Manager<span class="help-tip">❔<span class="tooltip-text">Paste the exact key code generated when encrypting (e.g., 10x10|myseed|c|a) to restore the scrambled files.</span></span></div>
+        <div class="ios-group-row">
+            <input type="text" id="decKey" placeholder="Paste Key (e.g. 10x10|seed|c|a)" class="ios-input">
+        </div>
+        <div class="ios-group-info hidden" id="decKeyModeBadge">
+            ℹ️ Center Video/Image Decryption Mode Detected
+        </div>
+        <div class="ios-group-row" style="border-top: 1px solid #c8c7cc; padding-top: 10px;">
+            <button onclick="startBatch('unscramble')" class="ios-btn ios-btn-green">🔓 DECRYPT FILES</button>
+        </div>
+    </div>
+</div>

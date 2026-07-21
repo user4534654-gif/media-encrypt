@@ -1,0 +1,102 @@
+<div id="audioStudio" class="hidden">
+    <div class="ios-group">
+        <div class="ios-group-header">1. Upload Audio Files</div>
+        <div class="ios-group-row">
+            <label class="ios-label">Upload Audio Files (Batch Supported)</label>
+            <input type="file" id="audioUpload" multiple class="ios-file-input" accept="audio/*">
+            <div class="file-list" id="audioList"></div>
+        </div>
+    </div>
+
+    <div class="ios-group">
+        <div class="ios-group-header">2. Audio Scrambling Parameters</div>
+        <div class="ios-group-row">
+            <label class="ios-label">Scrambling Method<span class="help-tip">❔<span class="tooltip-text">Band Scrambling: Splits frequencies and scrambles blocks. Combined: Combines carrier inversion with band scrambling. Standard Inversion: Traditional time-domain frequency modulation.</span></span></label>
+            <select id="aud_method" class="ios-select" onchange="toggleAudioMethodFields()">
+                <option value="band_scramble">Band Scrambling</option>
+                <option value="combined">Combined Modulation/Scrambling</option>
+                <option value="inversion" selected>Standard Inversion</option>
+            </select>
+        </div>
+        <div class="ios-group-row" id="aud_splits_row" style="display: none;">
+            <label class="ios-label">Splits (2-100)<span class="help-tip">❔<span class="tooltip-text">Number of frequency bands to split and scramble. Max 100.</span></span></label>
+            <input type="number" id="aud_splits" value="10" min="2" max="100" class="ios-input">
+        </div>
+        <div class="ios-group-row" id="aud_seed_row" style="display: none;">
+            <label class="ios-label">Seed (Blank = Random)<span class="help-tip">❔<span class="tooltip-text">Password/seed used for frequency band permutation.</span></span></label>
+            <input type="text" id="aud_seed" placeholder="e.g. apple123" class="ios-input">
+        </div>
+        <!-- Audio Track Selection for Audio Studio -->
+        <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+            <label class="ios-label">Audio Track to Encrypt<span class="help-tip">❔<span class="tooltip-text">Choose whether to encrypt both left/right channels, or selectively encrypt only one channel, leaving the other completely untouched.</span></span></label>
+            <select id="audio_track_select" class="ios-select">
+                <option value="both" selected>Both Channels (L + R)</option>
+                <option value="left">Left Channel Only (L)</option>
+                <option value="right">Right Channel Only (R)</option>
+            </select>
+        </div>
+        <div class="ios-group-row" id="carrier_freq_row">
+            <label class="ios-label" id="carrier_freq_label">Carrier Frequency: 8000 Hz<span class="help-tip">❔<span class="tooltip-text">Audio encryption frequency. Higher values increase the degree of voice distortion/ring-modulation.</span></span></label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <input type="range" id="carrier_freq_slider" min="1000" max="16000" step="500" value="8000" style="flex: 1; accent-color: #007aff;">
+                <span id="carrier_freq_val" style="font-size: 13px; font-weight: bold; width: 80px; text-align: right;">8000 Hz</span>
+            </div>
+        </div>
+        <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+            <label class="ios-label" id="aud_vol_factor_label">Encrypted Audio Volume: 100%<span class="help-tip">❔<span class="tooltip-text">Scale the encrypted audio volume (e.g. to 5% or 0% so it seems silent). It will be restored to 100% on decryption.</span></span></label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <input type="range" id="aud_vol_factor_slider" min="0" max="100" step="5" value="100" style="flex: 1; accent-color: #007aff;">
+                <span id="aud_vol_factor_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">100%</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="ios-group">
+        <div class="ios-group-header">3. Audio Export Configuration</div>
+        <div class="ios-group-row-grid">
+            <div>
+                <label class="ios-label">Audio Hz<span class="help-tip">❔<span class="tooltip-text">Audio sample rate. 48000 Hz is standard for high-quality audio.</span></span></label>
+                <select id="audio_sr" class="ios-select">
+                    <option value="auto" selected>Auto</option>
+                    <option value="44100">44100 Hz</option>
+                    <option value="48000">48000 Hz</option>
+                </select>
+            </div>
+            <div>
+                <label class="ios-label">Audio Codec<span class="help-tip">❔<span class="tooltip-text">AAC is compressed; MP3 is legacy; FLAC/WAV are lossless.</span></span></label>
+                <select id="audio_codec" class="ios-select">
+                    <option value="auto" selected>Auto (Match Input)</option>
+                    <option value="aac">AAC</option>
+                    <option value="libmp3lame">MP3</option>
+                    <option value="libopus">Opus</option>
+                    <option value="flac">FLAC</option>
+                    <option value="pcm_s16le">PCM 16-bit</option>
+                </select>
+            </div>
+            <div>
+                <label class="ios-label">Audio Bitrate<span class="help-tip">❔<span class="tooltip-text">Higher audio bitrate improves sound quality.</span></span></label>
+                <select id="audio_bit" class="ios-select">
+                    <option value="auto" selected>Auto</option>
+                    <option value="128k">128k</option>
+                    <option value="192k">192k</option>
+                    <option value="320k">320k</option>
+                </select>
+            </div>
+        </div>
+        <div class="ios-group-row" style="border-top: 1px solid #e0e0e0;">
+            <label class="ios-label">Audio Format<span class="help-tip">❔<span class="tooltip-text">The output format for the encrypted audio. WAV is lossless and fast; MP3/OGG are compressed.</span></span></label>
+            <select id="audio_fmt" class="ios-select">
+                <option value="auto" selected>Auto (Match Input)</option>
+                <option value=".wav">.wav</option>
+                <option value=".mp3">.mp3</option>
+                <option value=".ogg">.ogg</option>
+                <option value=".flac">.flac</option>
+                <option value=".m4a">.m4a</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="ios-group">
+        <button onclick="startBatch('scramble')" class="ios-btn ios-btn-blue">🔒 ENCRYPT AUDIO</button>
+    </div>
+</div>
