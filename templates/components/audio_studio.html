@@ -7,7 +7,6 @@
             <div class="file-list" id="audioList"></div>
         </div>
     </div>
-
     <div class="ios-group">
         <div class="ios-group-header">2. Audio Scrambling Parameters</div>
         <div class="ios-group-row">
@@ -26,7 +25,6 @@
             <label class="ios-label">Seed (Blank = Random)<span class="help-tip">❔<span class="tooltip-text">Password/seed used for frequency band permutation.</span></span></label>
             <input type="text" id="aud_seed" placeholder="e.g. apple123" class="ios-input">
         </div>
-        <!-- Audio Track Selection for Audio Studio -->
         <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
             <label class="ios-label">Audio Track to Encrypt<span class="help-tip">❔<span class="tooltip-text">Choose whether to encrypt both left/right channels, or selectively encrypt only one channel, leaving the other completely untouched.</span></span></label>
             <select id="audio_track_select" class="ios-select">
@@ -50,7 +48,6 @@
             </div>
         </div>
     </div>
-
     <div class="ios-group">
         <div class="ios-group-header">3. Audio Export Configuration</div>
         <div class="ios-group-row-grid">
@@ -95,7 +92,6 @@
             </select>
         </div>
     </div>
-
     <div class="ios-group">
         <button onclick="startBatch('scramble')" class="ios-btn ios-btn-blue">🔒 ENCRYPT AUDIO</button>
     </div>

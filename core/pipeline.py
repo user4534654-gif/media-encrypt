@@ -2,28 +2,21 @@ import os
 import sys
 import subprocess
 import imageio_ffmpeg
-
 creation_flags = 0
 if sys.platform == "win32":
     creation_flags = subprocess.CREATE_NO_WINDOW
 from core.audio import process_audio_file
 from core.image_processor import process_image_file
 from core.video_processor import process_video_file
-
 def process_media(input_path, output_path, options, progress_dict, task_id):
     proc_aud = options.get('process_audio')
     reverse = options.get('reverse')
     carrier_freq = options.get('carrier_freq', 8000)
-    
     is_image = input_path.lower().endswith(('.jpg', '.png', '.jpeg', '.bmp', '.webp', '.avif'))
     is_audio = input_path.lower().endswith(('.mp3', '.wav', '.flac', '.ogg', '.m4a'))
-
-    # IMAGE PIPELINE
     if is_image:
         process_image_file(input_path, output_path, options, progress_dict, task_id)
         return
-
-    # AUDIO ONLY PIPELINE
     if is_audio:
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
         temp_wav = input_path + "_temp.wav"
@@ -39,8 +32,6 @@ def process_media(input_path, output_path, options, progress_dict, task_id):
                 aud_track=options.get('aud_track', 'both')
             )
         progress_dict[task_id] = 50
-        
-        # Select correct codec for audio format container to avoid silent/corrupted files
         out_lower = output_path.lower()
         if out_lower.endswith('.wav'):
             codec_args = ['-c:a', 'pcm_s16le']
@@ -48,12 +39,9 @@ def process_media(input_path, output_path, options, progress_dict, task_id):
             codec_args = ['-c:a', 'libmp3lame', '-b:a', options.get('aud_bitrate', '192k')]
         else:
             codec_args = ['-c:a', options.get('aud_codec', 'aac'), '-b:a', options.get('aud_bitrate', '192k')]
-            
         subprocess.run([ffmpeg_exe, '-y', '-i', temp_wav] + codec_args + ['-ar', options.get('aud_sr', '48000'), output_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags)
         if os.path.exists(temp_wav): 
             os.remove(temp_wav)
         progress_dict[task_id] = 100
         return
-
-    # VIDEO PIPELINE
     process_video_file(input_path, output_path, options, progress_dict, task_id)

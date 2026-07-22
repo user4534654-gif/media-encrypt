@@ -4,7 +4,6 @@ import os
 import sys
 import subprocess
 import imageio_ffmpeg
-
 creation_flags = 0
 if sys.platform == "win32":
     creation_flags = subprocess.CREATE_NO_WINDOW
@@ -12,12 +11,7 @@ from core.crypto import seeded_shuffle
 from core.audio import process_audio_file
 from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks
 from core.svg_generator import export_grid_to_svg, export_scrambled_grid_to_svg
-
 def _adjust_audio_length(y, target_len, action='silence'):
-    """Crop or extend audio array y to target_len samples.
-    action='loop'    → tile/repeat the audio
-    action='silence' → pad with zeros
-    """
     if len(y) >= target_len:
         return y[:target_len]
     shortage = target_len - len(y)
@@ -33,40 +27,31 @@ def _adjust_audio_length(y, target_len, action='silence'):
             return np.pad(y, (0, shortage))
         else:
             return np.pad(y, ((0, shortage), (0, 0)))
-
 def process_video_file(input_path, output_path, options, progress_dict, task_id):
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-
     proc_vid, proc_aud, reverse = options.get('process_video'), options.get('process_audio'), options.get('reverse')
     cols, rows, seed = options.get('cols', 1), options.get('rows', 1), options.get('seed', 0)
     target_w, target_h = options.get('target_w'), options.get('target_h')
     no_scale = options.get('no_scale', False)
     carrier_freq = options.get('carrier_freq', 8000)
-    video_encrypt_mode = options.get('video_encrypt_mode', 'external') # 'external', 'center', 'both'
-
-    # End-action options (what happens when a video runs out of frames)
-    center_end_action = options.get('center_end_action', 'loop')   # 'loop', 'freeze', 'black'
-    center_aud_action = options.get('center_aud_action', 'silence') # 'silence', 'loop'
-    outer_end_action  = options.get('outer_end_action',  'stop')   # 'stop', 'freeze', 'black', 'loop'
-
+    video_encrypt_mode = options.get('video_encrypt_mode', 'external')                               
+    center_end_action = options.get('center_end_action', 'loop')                              
+    center_aud_action = options.get('center_aud_action', 'silence')                    
+    outer_end_action  = options.get('outer_end_action',  'stop')                                      
     temp_aud = input_path + "_aud.wav"
     temp_center_aud_out = input_path + "_center_aud_out.wav"
     has_audio = subprocess.run([ffmpeg_exe, '-y', '-i', input_path, '-vn', temp_aud], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags).returncode == 0
     if has_audio and not os.path.exists(temp_aud):
         has_audio = False
-
     if has_audio and proc_aud:
         import soundfile as sf
-        # Probe main audio to find its sample rate
         main_sr = 48000
         try:
             info_main = sf.info(temp_aud)
             main_sr = info_main.samplerate
         except Exception as e:
             print("Failed to read main audio sample rate:", e)
-
         if not reverse and options.get('center') and options.get('dual_track'):
-            # Dual Track Audio mode: Left = encrypted background, Right = center video audio
             process_audio_file(
                 temp_aud, temp_aud, is_decrypt=False,
                 method=options.get('aud_method', 'inversion'),
@@ -76,30 +61,23 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 vol_factor=options.get('vol_factor', 1.0),
                 aud_track=options.get('aud_track', 'both')
             )
-            # Extract central video audio, resampling it to match main_sr exactly
             temp_center_aud = options['center_path'] + "_center_aud.wav"
             has_center_audio = subprocess.run([ffmpeg_exe, '-y', '-i', options['center_path'], '-vn', '-ar', str(main_sr), temp_center_aud], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags).returncode == 0
-
-            # Load both and combine Left/Right
             main_data, main_sr = sf.read(temp_aud)
             if len(main_data.shape) > 1:
                 main_data = main_data[:, 0]
-
             center_data = None
             if has_center_audio and os.path.exists(temp_center_aud):
                 center_data, center_sr = sf.read(temp_center_aud)
                 if len(center_data.shape) > 1:
                     center_data = center_data[:, 0]
-                # Extend or trim center audio to match main audio length
                 center_data = _adjust_audio_length(center_data, len(main_data), center_aud_action)
                 os.remove(temp_center_aud)
             else:
                 center_data = np.zeros_like(main_data)
-
             stereo_data = np.vstack((main_data, center_data)).T
             sf.write(temp_aud, stereo_data, main_sr)
         elif reverse and options.get('dual_track'):
-            # Decrypting Dual Track: Left = encrypted background, Right = center audio
             stereo_data, sr = sf.read(temp_aud)
             if len(stereo_data.shape) > 1 and stereo_data.shape[1] > 1:
                 left_data  = stereo_data[:, 0]
@@ -108,7 +86,6 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             else:
                 left_data = stereo_data
             sf.write(temp_aud, left_data, sr)
-
             process_audio_file(
                 temp_aud, temp_aud, is_decrypt=True,
                 method=options.get('aud_method', 'inversion'),
@@ -116,16 +93,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 num_splits=options.get('aud_splits', 10),
                 carrier_freq=carrier_freq,
                 vol_factor=options.get('vol_factor', 1.0),
-                aud_track='both'  # decrypt the extracted mono left track
+                aud_track='both'                                         
             )
-
-            # Duplicate decrypted mono to stereo for normalization
             dec_data, dec_sr = sf.read(temp_aud)
             if len(dec_data.shape) == 1:
                 dec_stereo = np.vstack((dec_data, dec_data)).T
                 sf.write(temp_aud, dec_stereo, dec_sr)
         else:
-            # Standard audio mode
             process_audio_file(
                 temp_aud, temp_aud, is_decrypt=reverse,
                 method=options.get('aud_method', 'inversion'),
@@ -135,32 +109,22 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 vol_factor=options.get('vol_factor', 1.0),
                 aud_track=options.get('aud_track', 'both')
             )
-
-    # ── Video capture setup ──────────────────────────────────────────
     cap = cv2.VideoCapture(input_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     out_w = target_w if target_w else int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     out_h = target_h if target_h else int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    # ── Block grid (lossless: last block absorbs edge pixels) ────────
-    all_blocks = get_blocks(out_w, out_h, cols, rows)  # exactly cols*rows entries
-    n_blocks = len(all_blocks)                          # == cols * rows
-
+    all_blocks = get_blocks(out_w, out_h, cols, rows)                             
+    n_blocks = len(all_blocks)                                          
     dest_to_src = {idx: idx for idx in range(n_blocks)}
-
     center_size = options.get('center_size', '1/4')
     outer_indices, inner_indices, (cx1, cy1, cx2, cy2) = get_outer_blocks(cols, rows, out_w, out_h, center_size=center_size)
     N_outer = len(outer_indices)
     C1, R1 = find_best_grid(N_outer, target_ratio=cols/rows)
     src_blocks_outer = get_blocks(out_w, out_h, C1, R1)
     shuffled_outer = seeded_shuffle(list(outer_indices), seed)
-
-    # Precise gapless dimensions for central video
     cw = cx2 - cx1
     ch = cy2 - cy1
-
-    # Calculate inner columns/rows for central video scrambling
     if center_size == '2/4':
         s = 0.7071
     elif center_size == '3/4':
@@ -170,8 +134,6 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     cols_inner = max(1, min(cols - 1, int(cols * s)))
     rows_inner = max(1, min(rows - 1, int(rows * s)))
     center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
-
-    # Setup central video tile scrambling
     dest_to_src_center = {idx: idx for idx in range(cols_inner * rows_inner)}
     shuffled_center = seeded_shuffle(list(range(cols_inner * rows_inner)), seed)
     if reverse:
@@ -180,7 +142,6 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     else:
         for i, v in enumerate(shuffled_center):
             dest_to_src_center[i] = v
-
     if proc_vid and not options.get('center'):
         if reverse:
             fwd = seeded_shuffle(list(range(n_blocks)), seed)
@@ -190,8 +151,6 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             shuffled = seeded_shuffle(list(range(n_blocks)), seed)
             for i, v in enumerate(shuffled):
                 dest_to_src[i] = v
-
-    # Export grid SVGs during encryption
     if not reverse and options.get('export_svg', True):
         try:
             base, _ = os.path.splitext(output_path)
@@ -200,8 +159,6 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             export_scrambled_grid_to_svg(f"{base}_grid_scrambled.svg", out_w, out_h, cols, rows, seed, has_center=options.get('center', False), center_size=center_size, prefix_original=False)
         except Exception as e:
             print("Failed to export SVG grids:", e)
-
-    # ── Center video capture + FPS step accumulation ─────────────────
     cap_center = None
     fps_c = 30.0
     total_frames_c = 0
@@ -210,20 +167,12 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         cap_center = cv2.VideoCapture(options['center_path'])
         fps_c = cap_center.get(cv2.CAP_PROP_FPS) or 30.0
         total_frames_c = int(cap_center.get(cv2.CAP_PROP_FRAME_COUNT))
-        # How many center frames to advance per one outer frame
         frame_step_c = fps_c / fps
-
-    # Determine total output frames
-    # If center is present and outer_end_action != 'stop', the output may
-    # continue past the end of the main video.
     if cap_center and total_frames_c > 0 and outer_end_action != 'stop':
-        # Adapted center length in main-video frame units
         center_frames_adapted = int(total_frames_c / frame_step_c)
         output_total_frames = max(total_frames, center_frames_adapted)
     else:
-        output_total_frames = total_frames  # main video determines length
-
-    # ── FFmpeg output writers ────────────────────────────────────────
+        output_total_frames = total_frames                                
     cmd = [ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
            '-s', f'{out_w}x{out_h}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
     if has_audio:
@@ -237,14 +186,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         cmd.extend(['-an'])
     cmd.append(output_path)
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL, creationflags=creation_flags)
-
-    # Optional Center writer for Decryption
     proc_center = None
     if reverse and options.get('center'):
         base, ext = os.path.splitext(output_path)
         output_path_center = f"{base}_center{ext}"
         has_center_aud_out = os.path.exists(temp_center_aud_out)
-
         cmd_center = [ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
                       '-s', f'{cw}x{ch}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
         if has_center_aud_out:
@@ -258,20 +204,14 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             cmd_center.extend(['-an'])
         cmd_center.append(output_path_center)
         proc_center = subprocess.Popen(cmd_center, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL, creationflags=creation_flags)
-
-    # ── Main frame loop ──────────────────────────────────────────────
     frame_count = 0
-    last_outer_frame = None     # for freeze action on outer video
-    last_center_frame = None    # for freeze action on center video
+    last_outer_frame = None                                       
+    last_center_frame = None                                       
     outer_exhausted = False
     center_exhausted = False
-
-    # Center FPS accumulator
-    accumulated_c = 0.0         # fractional center-frame index
-    center_read_cursor = 0      # how many frames we've sequentially read from cap_center
-
+    accumulated_c = 0.0                                        
+    center_read_cursor = 0                                                               
     while frame_count < output_total_frames:
-        # ── Read outer frame ─────────────────────────────────────────
         ret, frame = cap.read()
         if not ret:
             outer_exhausted = True
@@ -279,18 +219,15 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 ret, frame = cap.read()
                 if not ret:
-                    break  # truly empty video
+                    break                     
             elif outer_end_action == 'freeze' and last_outer_frame is not None:
                 frame = last_outer_frame.copy()
             elif outer_end_action == 'black' and last_outer_frame is not None:
                 frame = np.zeros_like(last_outer_frame)
             else:
-                break  # 'stop' or no prior frame
-
+                break                            
         if frame is not None:
             last_outer_frame = frame
-
-        # ── Resize outer frame if needed ─────────────────────────────
         if frame is not None and (out_w != frame.shape[1] or out_h != frame.shape[0]):
             if no_scale:
                 canvas = np.zeros((out_h, out_w, 3), dtype=np.uint8)
@@ -302,26 +239,20 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 frame = canvas
             else:
                 frame = cv2.resize(frame, (out_w, out_h))
-
         if proc_vid:
             if options.get('center'):
                 if reverse:
-                    # ── Decrypt / restore outer background ───────────
                     restored_frame = np.zeros((out_h, out_w, 3), dtype=np.uint8)
                     if video_encrypt_mode in ['external', 'both']:
                         for j in range(N_outer):
-                            # Source: destination block in the shuffled outer layout
                             idx = shuffled_outer[j]
                             dx1, dy1, dx2, dy2 = all_blocks[idx]
                             tile = frame[dy1:dy2, dx1:dx2]
-                            # Destination: source packed grid position
                             x1, y1, x2, y2 = src_blocks_outer[j]
                             tile_resized = cv2.resize(tile, (x2 - x1, y2 - y1))
                             restored_frame[y1:y2, x1:x2] = tile_resized
                     else:
                         restored_frame = frame.copy()
-
-                    # ── Decrypt / restore center video frame ─────────
                     center_frame = frame[cy1:cy2, cx1:cx2]
                     if video_encrypt_mode in ['center', 'both']:
                         unscrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
@@ -337,13 +268,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                         center_frame_to_write = unscrambled_c
                     else:
                         center_frame_to_write = center_frame
-
                     proc.stdin.write(restored_frame.tobytes())
                     if proc_center:
                         center_out = cv2.resize(center_frame_to_write, (cw, ch))
                         proc_center.stdin.write(center_out.tobytes())
                 else:
-                    # ── Encrypt outer background ──────────────────────
                     new_frame = np.zeros((out_h, out_w, 3), dtype=np.uint8)
                     if video_encrypt_mode in ['external', 'both']:
                         for j in range(N_outer):
@@ -357,12 +286,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                         for idx in outer_indices:
                             dx1, dy1, dx2, dy2 = all_blocks[idx]
                             new_frame[dy1:dy2, dx1:dx2] = frame[dy1:dy2, dx1:dx2]
-
-                    # ── Read center video frame (FPS step accumulation) ─
                     if cap_center:
                         target_c_idx = int(accumulated_c)
-
-                        # Sequential read until we reach the target index
                         while center_read_cursor <= target_c_idx:
                             rc, fc = cap_center.read()
                             if not rc:
@@ -370,10 +295,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                 break
                             last_center_frame = fc
                             center_read_cursor += 1
-
                         if center_exhausted:
                             if center_end_action == 'loop':
-                                # Reset and read first frame
                                 cap_center.set(cv2.CAP_PROP_POS_FRAMES, 0)
                                 center_read_cursor = 0
                                 accumulated_c = 0.0
@@ -384,16 +307,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                     center_read_cursor = 1
                             elif center_end_action == 'black':
                                 last_center_frame = np.zeros((ch, cw, 3), dtype=np.uint8)
-                            # 'freeze': last_center_frame stays as-is
-
                         frame_c = last_center_frame
                         accumulated_c += frame_step_c
-
                         if frame_c is not None:
                             frame_c_resized = cv2.resize(frame_c, (cw, ch))
-
                             if video_encrypt_mode in ['center', 'both']:
-                                # Scramble center video frame
                                 scrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
                                 for i in range(cols_inner * rows_inner):
                                     t_idx = dest_to_src_center[i]
@@ -405,12 +323,9 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                         tile = cv2.resize(tile, (dw_blk, dh_blk))
                                     scrambled_c[dy1:dy2, dx1:dx2] = tile
                                 frame_c_resized = scrambled_c
-
                             new_frame[cy1:cy2, cx1:cx2] = frame_c_resized
-
                     proc.stdin.write(new_frame.tobytes())
             else:
-                # ── Simple full-frame scramble (no center) ────────────
                 new_frame = frame.copy()
                 for i in range(n_blocks):
                     t_idx = dest_to_src[i]
@@ -424,17 +339,14 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 proc.stdin.write(new_frame.tobytes())
         else:
             proc.stdin.write(frame.tobytes())
-
         frame_count += 1
         if total_frames > 0 and frame_count % 5 == 0:
             progress_dict[task_id] = int((frame_count / max(output_total_frames, 1)) * 100)
-
     proc.stdin.close()
     proc.wait()
     if proc_center:
         proc_center.stdin.close()
         proc_center.wait()
-
     cap.release()
     if cap_center:
         cap_center.release()

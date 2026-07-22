@@ -1,6 +1,4 @@
 const SETTINGS_KEY = 'media_encrypt_settings_v20';
-
-// Global state variables
 let origRatio = 1;
 let activeFolder = 'input';
 let encryptionMode = 'normal';
@@ -8,14 +6,11 @@ let imgEncryptionMode = 'normal';
 let activeMainTab = 'encrypt';
 let activeMediaType = 'video';
 let activeImageFormat = 'auto';
-
-
 function saveAllSettings() {
     const bitSlider = document.getElementById('v_bit_slider');
     const freqSlider = document.getElementById('carrier_freq_slider');
     const encVideo = document.getElementById('encVideo');
     const encAudio = document.getElementById('encAudio');
-    
     const settings = {
         encryptionMode: encryptionMode,
         imgEncryptionMode: imgEncryptionMode,
@@ -64,7 +59,6 @@ function saveAllSettings() {
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
-
 function loadAllSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return;
@@ -79,16 +73,13 @@ function loadAllSettings() {
         if (settings.imgEncryptionMode) setImageEncryptionMode(settings.imgEncryptionMode);
         if (settings.activeImageFormat) setImageFormat(settings.activeImageFormat);
         if (settings.activeMediaType) setMediaTypeTab(settings.activeMediaType);
-        
         const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
         const setChecked = (id, checked) => { const el = document.getElementById(id); if (el) el.checked = checked; };
-        
         setChecked('encVideo', settings.encVideo);
         setChecked('encAudio', settings.encAudio);
         setVal('v_fmt', settings.v_fmt);
         setVal('v_codec', settings.v_codec);
         setVal('v_preset', settings.v_preset);
-        
         const bitSlider = document.getElementById('v_bit_slider');
         const bitVal = document.getElementById('v_bit_val');
         const bitLabel = document.getElementById('v_bit_label');
@@ -97,29 +88,23 @@ function loadAllSettings() {
             if (bitVal) bitVal.innerText = settings.v_bit + 'k';
             if (bitLabel) bitLabel.innerText = 'Video Bitrate: ' + settings.v_bit + 'k';
         }
-        
         if (settings.autoVidBitrate !== undefined) {
             setChecked('autoVidBitrate', settings.autoVidBitrate);
             toggleVidBitrateAuto(settings.autoVidBitrate);
         }
-        
         setVal('a_sr', settings.a_sr);
         setVal('a_codec', settings.a_codec);
         setVal('a_bit', settings.a_bit);
-        
         setVal('cols', settings.cols);
         setVal('rows', settings.rows);
         setVal('sid', settings.sid);
-        
         setChecked('aspectLock', settings.aspectLock);
         setChecked('noScale', settings.noScale);
         setVal('resW', settings.resW);
         setVal('resH', settings.resH);
-        
         setVal('img_cols', settings.img_cols);
         setVal('img_rows', settings.img_rows);
         setVal('img_sid', settings.img_sid);
-        
         const freqSlider = document.getElementById('carrier_freq_slider');
         const freqVal = document.getElementById('carrier_freq_val');
         const freqLabel = document.getElementById('carrier_freq_label');
@@ -133,11 +118,9 @@ function loadAllSettings() {
         setVal('audio_bit', settings.audio_bit);
         setVal('audio_fmt', settings.audio_fmt);
         setVal('decKey', settings.decKey);
-        
         setVal('aud_method', settings.aud_method || 'inversion');
         setVal('aud_splits', settings.aud_splits || '10');
         setVal('aud_seed', settings.aud_seed || '');
-        
         const audVolSlider = document.getElementById('aud_vol_factor_slider');
         const audVolVal = document.getElementById('aud_vol_factor_val');
         const audVolLabel = document.getElementById('aud_vol_factor_label');
@@ -146,10 +129,8 @@ function loadAllSettings() {
             if (audVolVal) audVolVal.innerText = settings.aud_vol_factor + '%';
             if (audVolLabel) audVolLabel.innerText = 'Encrypted Audio Volume: ' + settings.aud_vol_factor + '%';
         }
-        
         setVal('v_aud_method', settings.v_aud_method || 'inversion');
         setVal('v_aud_splits', settings.v_aud_splits || '10');
-        
         const volSlider = document.getElementById('vol_factor_slider');
         const volVal = document.getElementById('vol_factor_val');
         const volLabel = document.getElementById('vol_factor_label');
@@ -158,14 +139,12 @@ function loadAllSettings() {
             if (volVal) volVal.innerText = settings.vol_factor + '%';
             if (volLabel) volLabel.innerText = 'Encrypted Audio Volume: ' + settings.vol_factor + '%';
         }
-        
         setChecked('dual_track', settings.dual_track || false);
         setVal('center_size', settings.center_size || '1/4');
         setVal('img_center_size', settings.img_center_size || '1/4');
         setVal('outer_end_action', settings.outer_end_action || 'stop');
         setVal('center_end_action', settings.center_end_action || 'loop');
         setVal('center_aud_action', settings.center_aud_action || 'silence');
-        
         updateVisibility();
         if (typeof toggleAudioMethodFields === 'function') toggleAudioMethodFields();
         if (typeof toggleVideoAudioMethodFields === 'function') toggleVideoAudioMethodFields();
@@ -173,7 +152,6 @@ function loadAllSettings() {
         console.error("Error loading settings:", e);
     }
 }
-
 function initAutoSave() {
     const inputs = [
         'themeToggle', 'encVideo', 'encAudio', 'v_fmt', 'v_codec', 'v_preset', 'v_bit_slider', 'autoVidBitrate',
@@ -191,7 +169,6 @@ function initAutoSave() {
         }
     });
 }
-
 function toggleVidBitrateAuto(isAuto) {
     const sliderContainer = document.getElementById('vidBitrateSliderContainer');
     if (sliderContainer) {

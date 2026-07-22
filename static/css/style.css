@@ -1,20 +1,10 @@
-/* iOS 1-6 Skeuomorphic Style for Media-Crypto */
 
 :root {
-  /* Matte Metal Base Colors */
-  --metal-highlight: #2d3139; /* Lightest part of the matte sheen */
-  --metal-shading: #1e2025;   /* Mid-tone gray */
-  --metal-shadow: #111215;    /* Darkest background areas */
-
-  /* 
-    URL-Encoded SVG Hexagonal Pattern
-    - Center-to-center distance: 16px wide by 27.713px high (16 * sqrt(3))
-    - Two layers of hexagons: a subtle light-gray highlight layer offset slightly down, 
-      and a dark-gray hole layer on top to simulate depth.
-  */
+  --metal-highlight: #2d3139; 
+  --metal-shading: #1e2025;   
+  --metal-shadow: #111215;    
   --hex-perforations: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='27.713' viewBox='0 0 16 27.713'%3E%3Cdefs%3E%3Cpolygon id='h' points='0,-6 5.2,-3 5.2,3 0,6 -5.2,3 -5.2,-3'/%3E%3Cg id='hole'%3E%3Cuse href='%23h' x='0' y='0.6' fill='%233e434f'/%3E%3Cuse href='%23h' x='0' y='0' fill='%230a0b0d'/%3E%3C/g%3E%3C/defs%3E%3Cuse href='%23hole' x='8' y='13.856'/%3E%3Cuse href='%23hole' x='0' y='0'/%3E%3Cuse href='%23hole' x='16' y='0'/%3E%3Cuse href='%23hole' x='0' y='27.713'/%3E%3Cuse href='%23hole' x='16' y='27.713'/%3E%3C/svg%3E");
 }
-
 body.ios-linen-bg {
     background-color: var(--metal-shadow);
     background-image: 
@@ -32,8 +22,6 @@ body.ios-linen-bg {
     color: #333333;
     transition: background-color 0.3s;
 }
-
-/* Device Wrapper (iPhone/iPad style bezel frame) - Enlarged to 960px */
 .ios-device-container {
     width: 100%;
     max-width: 960px;
@@ -50,8 +38,6 @@ body.ios-linen-bg {
     margin: 15px auto;
     transition: background 0.3s;
 }
-
-/* Navigation Bar (Brushed blue metallic header) */
 .ios-navigation-bar {
     background: linear-gradient(to bottom, #8ea1b1 0%, #58778f 50%, #355875 50%, #244662 100%);
     border-bottom: 1px solid #183044;
@@ -65,7 +51,6 @@ body.ios-linen-bg {
     position: relative;
     user-select: none;
 }
-
 .ios-nav-title {
     color: #ffffff;
     font-size: 19px;
@@ -73,25 +58,19 @@ body.ios-linen-bg {
     text-shadow: 0 -1px 1px rgba(0,0,0,0.7);
     letter-spacing: -0.5px;
 }
-
-/* Theme Toggle Button Alignment inside Header */
 .ios-nav-theme-toggle {
     position: absolute;
     right: 15px;
     display: flex;
     align-items: center;
 }
-
-/* Content Area */
 .ios-content-scroll {
     padding: 15px;
     max-height: 80vh;
     overflow-y: auto;
-    background-color: #c4ccd0; /* Classic silver iOS utility panel color */
+    background-color: #c4ccd0; 
     transition: background-color 0.3s;
 }
-
-/* Grouped Box List Style */
 .ios-group {
     background: #ffffff;
     border: 1px solid #9ea3a8;
@@ -102,11 +81,9 @@ body.ios-linen-bg {
         inset 0 1px 0 rgba(255,255,255,0.8);
     transition: background 0.3s, border-color 0.3s;
 }
-
 .ios-group-container {
     background: #ffffff;
 }
-
 .ios-group-header {
     font-size: 13px;
     font-weight: bold;
@@ -118,7 +95,6 @@ body.ios-linen-bg {
     display: flex;
     align-items: center;
 }
-
 .ios-group-header-flex {
     display: flex;
     align-items: center;
@@ -131,7 +107,6 @@ body.ios-linen-bg {
     text-transform: uppercase;
     letter-spacing: 0.3px;
 }
-
 .ios-group-row {
     padding: 12px 15px;
     border-bottom: 1px solid #e0e0e0;
@@ -140,11 +115,9 @@ body.ios-linen-bg {
     flex-direction: column;
     transition: background 0.3s, border-color 0.3s;
 }
-
 .ios-group-row:last-child {
     border-bottom: none;
 }
-
 .ios-group-row-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -153,7 +126,6 @@ body.ios-linen-bg {
     background: #ffffff;
     transition: background 0.3s;
 }
-
 .ios-group-info {
     background: #e8ecf0;
     padding: 10px 15px;
@@ -164,8 +136,6 @@ body.ios-linen-bg {
     border-bottom: 1px solid #d0d5da;
     text-align: center;
 }
-
-/* Form inputs & dropdowns */
 .ios-label {
     font-size: 12px;
     font-weight: bold;
@@ -174,7 +144,6 @@ body.ios-linen-bg {
     display: block;
     text-shadow: 0 1px 0 rgba(255,255,255,0.8);
 }
-
 .ios-input, .ios-select {
     font-family: inherit;
     font-size: 14px;
@@ -189,12 +158,10 @@ body.ios-linen-bg {
     width: 100%;
     transition: border-color 0.25s, background 0.3s, color 0.3s;
 }
-
 .ios-input:focus, .ios-select:focus {
     border-color: #3b82f6;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.12), 0 0 4px rgba(59,130,246,0.3);
 }
-
 .ios-file-input {
     font-family: inherit;
     font-size: 13px;
@@ -207,8 +174,6 @@ body.ios-linen-bg {
     cursor: pointer;
     transition: background 0.3s, border-color 0.3s;
 }
-
-/* Toggle lists */
 .toggles {
     display: flex;
     justify-content: space-around;
@@ -216,8 +181,6 @@ body.ios-linen-bg {
     background: #f9f9f9;
     border-top: 1px solid #e5e5e5;
 }
-
-/* Checkbox alignment correction */
 .ios-switch-label {
     font-size: 13px;
     font-weight: bold;
@@ -229,7 +192,6 @@ body.ios-linen-bg {
     user-select: none;
     vertical-align: middle;
 }
-
 .ios-switch-label input[type="checkbox"] {
     width: 15px;
     height: 15px;
@@ -238,8 +200,6 @@ body.ios-linen-bg {
     padding: 0;
     vertical-align: middle;
 }
-
-/* iOS Segmented Controls */
 .segmented-control {
     display: flex;
     width: 100%;
@@ -251,7 +211,6 @@ body.ios-linen-bg {
         inset 0 1px 0 rgba(255,255,255,0.4);
     background: #bfc3c7;
 }
-
 .segment-btn {
     flex: 1;
     padding: 8px 12px;
@@ -265,19 +224,15 @@ body.ios-linen-bg {
     text-shadow: 0 1px 0 rgba(255,255,255,0.9);
     transition: 0.15s;
 }
-
 .segment-btn:last-child {
     border-right: none;
 }
-
 .segment-btn.active {
     background: linear-gradient(to bottom, #606d7d 0%, #444f5c 100%);
     color: #ffffff;
     text-shadow: 0 -1px 0 rgba(0,0,0,0.4);
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
 }
-
-/* Buttons (Glossy 3D Look) */
 .ios-btn {
     font-family: inherit;
     font-size: 15px;
@@ -296,31 +251,26 @@ body.ios-linen-bg {
     transition: filter 0.15s, transform 0.1s;
     user-select: none;
 }
-
 .ios-btn:active {
     transform: scale(0.99);
     filter: brightness(0.9);
 }
-
 .ios-btn-blue {
     background: linear-gradient(to bottom, #64a6fb 0%, #0050d2 100%);
     border: 1px solid #003a98;
     text-shadow: 0 -1px 1px rgba(0,0,0,0.5);
 }
-
 .ios-btn-green {
     background: linear-gradient(to bottom, #89e365 0%, #2f9a0c 100%);
     border: 1px solid #206d06;
     text-shadow: 0 -1px 1px rgba(0,0,0,0.5);
 }
-
 .ios-btn-silver {
     background: linear-gradient(to bottom, #ffffff 0%, #c8c8c8 100%);
     border: 1px solid #a0a0a0;
     color: #333333;
     text-shadow: 0 1px 0 rgba(255,255,255,0.8);
 }
-
 .ios-btn-small {
     background: linear-gradient(to bottom, #9eb0c0 0%, #304f69 100%);
     border: 1px solid #1a3348;
@@ -333,12 +283,9 @@ body.ios-linen-bg {
     text-shadow: 0 -1px 0 rgba(0,0,0,0.4);
     box-shadow: 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.3);
 }
-
 .ios-btn-small:active {
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
 }
-
-/* Vault Folder Action Button */
 .vault-folder-btn {
     background: linear-gradient(to bottom, #ffffff 0%, #c8c8c8 100%);
     border: 1px solid #a0a0a0;
@@ -351,12 +298,9 @@ body.ios-linen-bg {
     text-shadow: 0 1px 0 rgba(255,255,255,0.8);
     box-shadow: 0 1px 2px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.6);
 }
-
 .vault-folder-btn:active {
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
 }
-
-/* File list output */
 .file-list {
     font-size: 11px;
     font-weight: bold;
@@ -369,8 +313,6 @@ body.ios-linen-bg {
     border: 1px solid #e0e0e0;
     transition: background 0.3s, border-color 0.3s;
 }
-
-/* Progress bar (candy stripe gloss styling) */
 .ios-progress-bar {
     background: linear-gradient(to bottom, #b4b4b4 0%, #dedede 100%);
     height: 20px;
@@ -380,7 +322,6 @@ body.ios-linen-bg {
     position: relative;
     border: 1px solid #8e8e8e;
 }
-
 .ios-progress-fill {
     background: linear-gradient(45deg, 
         #308eff 25%, #64a6fb 25%, 
@@ -394,7 +335,6 @@ body.ios-linen-bg {
     animation: move-stripes 0.8s linear infinite;
     transition: width 0.3s ease;
 }
-
 .ios-progress-fill.complete {
     animation: none;
     background: linear-gradient(45deg, 
@@ -404,13 +344,10 @@ body.ios-linen-bg {
         #89e365 100%);
     background-size: 20px 20px;
 }
-
 @keyframes move-stripes {
     0% { background-position: 0 0; }
     100% { background-position: 20px 0; }
 }
-
-/* Loading spinner (classic iOS gray wheel style) */
 .ios-spinner {
     display: inline-block;
     width: 14px;
@@ -422,13 +359,10 @@ body.ios-linen-bg {
     margin-right: 8px;
     vertical-align: middle;
 }
-
 @keyframes spin-loader {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
-
-/* Vault List Grid styling */
 .vault-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -436,7 +370,6 @@ body.ios-linen-bg {
     max-height: 280px;
     overflow-y: auto;
 }
-
 .vault-item {
     background: linear-gradient(to bottom, #ffffff 0%, #f4f5f6 100%);
     border: 1px solid #b8bcbf;
@@ -452,7 +385,6 @@ body.ios-linen-bg {
     justify-content: space-between;
     min-height: 160px;
 }
-
 .vault-item span {
     display: block;
     overflow: hidden;
@@ -463,12 +395,10 @@ body.ios-linen-bg {
     color: #444;
     margin: 8px 0;
 }
-
 .vault-actions {
     display: flex;
     gap: 5px;
 }
-
 .vault-btn {
     border: 1px solid #9ea3a8;
     padding: 5px 8px;
@@ -480,20 +410,16 @@ body.ios-linen-bg {
     text-align: center;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
 }
-
 .vault-btn:not(.delete) {
     background: linear-gradient(to bottom, #ffffff 0%, #e0e0e0 100%);
     color: #333;
 }
-
 .vault-btn.delete {
     background: linear-gradient(to bottom, #fb7c7c 0%, #e12727 100%);
     border-color: #b51c1c;
     color: #ffffff;
     text-shadow: 0 -1px 0 rgba(0,0,0,0.4);
 }
-
-/* Floating Modal Style */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -506,7 +432,6 @@ body.ios-linen-bg {
     align-items: center;
     z-index: 9999;
 }
-
 .modal-content {
     background: #cbd3d8;
     padding: 15px;
@@ -520,7 +445,6 @@ body.ios-linen-bg {
     justify-content: center;
     box-shadow: 0 12px 30px rgba(0,0,0,0.6);
 }
-
 .modal-close {
     position: absolute;
     top: -12px;
@@ -539,22 +463,14 @@ body.ios-linen-bg {
     align-items: center;
     justify-content: center;
 }
-
-/* Hidden Utility */
 .hidden {
     display: none !important;
 }
-
 .flex-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
-
-/* =========================================
-   DARK THEME (Obsidian iOS 6 Style)
-   ========================================= */
-
 body.ios-dark-theme {
     background-color: var(--metal-shadow);
     background-image: 
@@ -563,12 +479,10 @@ body.ios-dark-theme {
     background-size: 16px 27.713px, auto;
     background-repeat: repeat, no-repeat;
 }
-
 body.ios-dark-theme .ios-device-container {
     background: #282a2e;
     border-color: #181819;
 }
-
 body.ios-dark-theme .ios-navigation-bar {
     background: linear-gradient(to bottom, #444950 0%, #2f3238 50%, #1e2024 50%, #141517 100%);
     border-bottom: 1px solid #0f1011;
@@ -576,11 +490,9 @@ body.ios-dark-theme .ios-navigation-bar {
         inset 0 1px 0 rgba(255,255,255,0.15), 
         0 2px 4px rgba(0,0,0,0.4);
 }
-
 body.ios-dark-theme .ios-content-scroll {
     background-color: #212326;
 }
-
 body.ios-dark-theme .ios-group {
     background: #2a2c30;
     border-color: #404348;
@@ -588,32 +500,26 @@ body.ios-dark-theme .ios-group {
         0 1px 2px rgba(0,0,0,0.3), 
         inset 0 1px 0 rgba(255,255,255,0.05);
 }
-
 body.ios-dark-theme .ios-group-row {
     background: #2a2c30;
     border-bottom: 1px solid #3c3f44;
 }
-
 body.ios-dark-theme .ios-group-row-grid {
     background: #2a2c30;
 }
-
 body.ios-dark-theme .ios-group-header,
 body.ios-dark-theme .ios-group-header-flex {
     color: #8c93a0;
     text-shadow: 0 1px 0 rgba(0,0,0,0.5);
 }
-
 body.ios-dark-theme .ios-label {
     color: #d1d5db;
     text-shadow: 0 1px 0 rgba(0,0,0,0.5);
 }
-
 body.ios-dark-theme .ios-switch-label {
     color: #d1d5db;
     text-shadow: 0 1px 0 rgba(0,0,0,0.5);
 }
-
 body.ios-dark-theme .ios-input, 
 body.ios-dark-theme .ios-select {
     background: #1c1d20;
@@ -621,72 +527,60 @@ body.ios-dark-theme .ios-select {
     color: #e5e7eb;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.35);
 }
-
 body.ios-dark-theme .ios-input:focus, 
 body.ios-dark-theme .ios-select:focus {
     border-color: #1e70e0;
 }
-
 body.ios-dark-theme .ios-file-input {
     background: #26272b;
     border-color: #404348;
     color: #bbccdd;
 }
-
 body.ios-dark-theme .segmented-control {
     border-color: #1c1d20;
     background: #2c2e33;
 }
-
 body.ios-dark-theme .segment-btn {
     border-right: 1px solid #1c1d20;
     color: #a1a6b0;
     background: linear-gradient(to bottom, #3b3e45 0%, #26272c 100%);
     text-shadow: 0 1px 0 rgba(0,0,0,0.5);
 }
-
 body.ios-dark-theme .segment-btn.active {
     background: linear-gradient(to bottom, #236fd1 0%, #17529c 100%);
     color: #ffffff;
     text-shadow: 0 -1px 0 rgba(0,0,0,0.4);
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
 }
-
 body.ios-dark-theme .ios-group-info {
     background: #1c2b38;
     color: #79aede;
     border-top: 1px solid #14212c;
     border-bottom: 1px solid #14212c;
 }
-
 body.ios-dark-theme .file-list {
     background: #1c1d20;
     border-color: #3a3d42;
     color: #8892a0;
 }
-
 body.ios-dark-theme .ios-spinner {
     border-color: rgba(255,255,255,0.1);
     border-top-color: #007aff;
 }
-
 body.ios-dark-theme .vault-item {
     background: linear-gradient(to bottom, #2d3036 0%, #222428 100%);
     border-color: #404348;
     box-shadow: 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
 }
-
 body.ios-dark-theme .vault-item span {
     color: #e5e7eb;
 }
-
 body.ios-dark-theme .vault-btn:not(.delete) {
     background: linear-gradient(to bottom, #434954 0%, #2f333b 100%);
     border-color: #1e2126;
     color: #e5e7eb;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
 }
-
 body.ios-dark-theme .vault-folder-btn {
     background: linear-gradient(to bottom, #434954 0%, #2f333b 100%);
     border-color: #1e2126;
@@ -694,11 +588,9 @@ body.ios-dark-theme .vault-folder-btn {
     text-shadow: 0 -1px 0 rgba(0,0,0,0.5);
     box-shadow: 0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
 }
-
 body.ios-dark-theme .vault-folder-btn:active {
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
 }
-
 .custom-emoji-icon {
     height: 1.1em;
     width: auto;
@@ -706,23 +598,17 @@ body.ios-dark-theme .vault-folder-btn:active {
     vertical-align: -0.15em;
     margin: 0 0.1em;
 }
-
-/* =========================================
-   THEME TOGGLE SWITCH (☀️, 🌙)
-   ========================================= */
 .theme-switch {
     position: relative;
     display: inline-block;
     width: 54px;
     height: 26px;
 }
-
 .theme-switch input {
     opacity: 0;
     width: 0;
     height: 0;
 }
-
 .theme-slider {
     position: absolute;
     cursor: pointer;
@@ -740,7 +626,6 @@ body.ios-dark-theme .vault-folder-btn:active {
     padding: 0 6px;
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.15);
 }
-
 .theme-slider:before {
     position: absolute;
     content: "";
@@ -754,43 +639,32 @@ body.ios-dark-theme .vault-folder-btn:active {
     box-shadow: 0 2px 4px rgba(0,0,0,0.25);
     z-index: 2;
 }
-
 input:checked + .theme-slider {
     background-color: #1e293b;
     border-color: #0f172a;
 }
-
 input:checked + .theme-slider:before {
     transform: translateX(26px);
 }
-
 .theme-icon {
     font-size: 11px;
     user-select: none;
     z-index: 1;
 }
-
 .theme-slider .sun {
     opacity: 1;
     margin-left: 1px;
 }
-
 .theme-slider .moon {
     opacity: 0.3;
     margin-right: 1px;
 }
-
 input:checked + .theme-slider .sun {
     opacity: 0.3;
 }
-
 input:checked + .theme-slider .moon {
     opacity: 1;
 }
-
-/* =========================================
-   ❔ FUNCTION TOOLTIPS
-   ========================================= */
 .help-tip {
     display: inline-block;
     position: relative;
@@ -809,12 +683,10 @@ input:checked + .theme-slider .moon {
     vertical-align: middle;
     border: none;
 }
-
 .help-tip:hover {
     background-color: #007aff;
     z-index: 10000;
 }
-
 .help-tip .tooltip-text {
     visibility: hidden;
     width: 240px;
@@ -839,7 +711,6 @@ input:checked + .theme-slider .moon {
     white-space: normal;
     text-shadow: none;
 }
-
 .help-tip .tooltip-text::after {
     content: "";
     position: absolute;
@@ -850,13 +721,10 @@ input:checked + .theme-slider .moon {
     border-style: solid;
     border-color: #1c1d20 transparent transparent transparent;
 }
-
 .help-tip:hover .tooltip-text {
     visibility: visible;
     opacity: 1;
 }
-
-/* Dark mode overrides for tooltips */
 body.ios-dark-theme .help-tip {
     background-color: #4b5563;
 }
@@ -871,10 +739,6 @@ body.ios-dark-theme .help-tip .tooltip-text {
 body.ios-dark-theme .help-tip .tooltip-text::after {
     border-color: #111215 transparent transparent transparent;
 }
-
-/* =========================================
-   PROJECT VERSION FOOTER
-   ========================================= */
 .project-version-footer {
     text-align: center;
     margin-top: 25px;
@@ -884,15 +748,10 @@ body.ios-dark-theme .help-tip .tooltip-text::after {
     color: #555555;
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
 }
-
 body.ios-dark-theme .project-version-footer {
     color: #8c93a0;
     text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
 }
-
-/* =========================================
-   COLLAPSIBLE UI SECTIONS
-   ========================================= */
 .collapse-trigger {
     cursor: pointer;
     display: flex;
@@ -909,7 +768,6 @@ body.ios-dark-theme .project-version-footer {
     letter-spacing: 0.3px;
     user-select: none;
 }
-
 body.ios-dark-theme .collapse-trigger {
     background: linear-gradient(to bottom, #3a3a3c 0%, #2c2c2e 100%);
     color: #aeaeb2;
@@ -917,50 +775,37 @@ body.ios-dark-theme .collapse-trigger {
     border-top: 1px solid #48484a;
     border-bottom: 1px solid #48484a;
 }
-
 .collapse-arrow {
     display: inline-block;
     font-size: 10px;
     transition: transform 0.2s ease-in-out;
     transform: rotate(0deg);
 }
-
 .collapse-trigger.active .collapse-arrow {
     transform: rotate(90deg);
 }
-
 .collapse-content {
     transition: max-height 0.3s ease-out;
 }
-
-/* Rounded corners for collapsible triggers in ios-group */
 .ios-group > .collapse-trigger:first-child {
     border-top-left-radius: 9px;
     border-top-right-radius: 9px;
     border-top: none;
 }
-
-/* Single collapsible trigger or last collapsible trigger in group when collapsed */
 .ios-group > .collapse-trigger:not(.active):last-child,
 .ios-group > .collapse-trigger:not(.active):has(+ .collapse-content.hidden:last-child) {
     border-bottom-left-radius: 9px;
     border-bottom-right-radius: 9px;
     border-bottom: none;
 }
-
-/* When the collapse content is the last child and visible, round the bottom corners of its children */
 .ios-group > .collapse-content:not(.hidden):last-child > .ios-group-container {
     border-bottom-left-radius: 9px;
     border-bottom-right-radius: 9px;
 }
-
 .ios-group > .collapse-content:not(.hidden):last-child > .ios-group-container > :last-child {
     border-bottom-left-radius: 9px;
     border-bottom-right-radius: 9px;
 }
-
-
-/* Custom Emoji inside Tooltips */
 .help-tip img.custom-emoji-icon {
     height: 10px;
     width: 10px;

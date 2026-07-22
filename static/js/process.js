@@ -1,7 +1,5 @@
 async function startBatch(action) {
-    
     let files;
-    
     if (action === 'scramble') {
         if (activeMediaType === 'video') {
             files = upload.files;
@@ -25,7 +23,6 @@ async function startBatch(action) {
         if (!files.length) return alert("Select encrypted files to decrypt first!");
         if (!document.getElementById('decKey').value.trim()) return alert("Please enter the decryption key!");
     }
-    
     const progBox = document.getElementById('progBox');
     const spinner = document.getElementById('progSpinner');
     if (progBox) progBox.style.display = 'block';
@@ -33,25 +30,20 @@ async function startBatch(action) {
         spinner.style.display = 'inline-block';
         spinner.style.animationPlayState = 'running';
     }
-    
     const keysOut = document.getElementById('keysOutput');
     if (keysOut) keysOut.innerHTML = '';
-    
     for (let i = 0; i < files.length; i++) {
         const progTitle = document.getElementById('progTitle');
         if (progTitle) progTitle.innerText = `Processing ${i+1}/${files.length}: ${files[i].name}`;
-        
         const progFill = document.getElementById('progFill');
         if (progFill) {
             progFill.style.width = '0%';
             progFill.classList.remove('complete');
         }
-        
         const fd = new FormData();
         fd.append('file', files[i]); 
         fd.append('action', action); 
         fd.append('task_id', `task_${Date.now()}`);
-        
         if (action === 'scramble') {
             if (activeMediaType === 'video') {
                 fd.append('enc_video', encVideo.checked); 
@@ -61,10 +53,8 @@ async function startBatch(action) {
                 fd.append('sid', document.getElementById('sid').value); 
                 fd.append('vid_format', document.getElementById('v_fmt').value); 
                 fd.append('vid_codec', document.getElementById('v_codec').value);
-                
                 const isAutoBitrate = document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : true;
                 fd.append('vid_bitrate', isAutoBitrate ? 'auto' : document.getElementById('v_bit_slider').value + 'k');
-                
                 fd.append('vid_preset', document.getElementById('v_preset').value);
                 fd.append('aud_sr', document.getElementById('a_sr').value); 
                 fd.append('aud_codec', document.getElementById('a_codec').value);
@@ -125,7 +115,6 @@ async function startBatch(action) {
             fd.append('aud_codec', 'auto');
             fd.append('aud_bitrate', 'auto');
         }
-
         const poll = setInterval(async () => {
             try {
                 const res = await fetch(`/api/progress?task_id=${fd.get('task_id')}`);
@@ -136,12 +125,10 @@ async function startBatch(action) {
                 if (txt) txt.innerText = `${data.progress}%`;
             } catch (err) {}
         }, 500);
-
         try {
             const res = await fetch('/api/process', { method: 'POST', body: fd });
             clearInterval(poll);
             const result = await res.json();
-            
             const fill = document.getElementById('progFill');
             const txt = document.getElementById('progText');
             if (fill) {
@@ -149,7 +136,6 @@ async function startBatch(action) {
                 fill.classList.add('complete');
             }
             if (txt) txt.innerText = `100%`;
-            
             if (result.status === 'error') {
                 openDebugger(`Error processing ${files[i].name}: ${result.message}`, result.traceback);
             } else if (result.key && keysOut) {
@@ -168,14 +154,12 @@ async function startBatch(action) {
             openDebugger(`Network error processing ${files[i].name}`, err.stack || err.toString());
         }
     }
-    
     const title = document.getElementById('progTitle');
     if (title) title.innerText = "All Files Processed!";
     if (spinner) {
         spinner.style.display = 'none';
         spinner.style.animationPlayState = 'paused';
     }
-    
     switchMainTab('vault');
     if (action === 'scramble') {
         switchFolder('encrypted');
@@ -183,19 +167,15 @@ async function startBatch(action) {
         switchFolder('decrypted');
     }
 }
-
 function openDebugger(errorMessage, tracebackText) {
     const errorEl = document.getElementById('debugErrorMessage');
     const helpEl = document.getElementById('debugDiagnosticHelp');
     const tbEl = document.getElementById('debugTraceback');
     const modal = document.getElementById('debugModal');
-    
     if (errorEl) errorEl.innerText = errorMessage;
     if (tbEl) tbEl.innerText = tracebackText || "No Python traceback was generated.";
-    
     let recommendations = "Check that the Python packages 'opencv-python', 'scipy', and 'imageio-ffmpeg' are properly installed on your machine. If resolving video, ensure the source files are not corrupted and codecs are valid.";
     const lowerMsg = errorMessage.toLowerCase();
-    
     if (lowerMsg.includes('ffmpeg') || lowerMsg.includes('ffprobe')) {
         recommendations = "FFmpeg binary execution failed. Please verify that 'imageio-ffmpeg' is installed in pip, or that FFmpeg is added to your system's PATH. If on Windows, try running pip install imageio-ffmpeg.";
     } else if (lowerMsg.includes('dimension') || lowerMsg.includes('grid') || lowerMsg.includes('columns') || lowerMsg.includes('rows') || lowerMsg.includes('split')) {
@@ -207,25 +187,20 @@ function openDebugger(errorMessage, tracebackText) {
     } else if (lowerMsg.includes('permission') || lowerMsg.includes('denied') || lowerMsg.includes('write')) {
         recommendations = "Operating system permission block. Verify that the server has write access permissions to the 'media_encrypt_vault' folders in the project directory.";
     }
-    
     if (helpEl) helpEl.innerText = recommendations;
     if (modal) modal.classList.remove('hidden');
 }
-
 function closeDebugger() {
     const modal = document.getElementById('debugModal');
     if (modal) modal.classList.add('hidden');
 }
-
 function copyTracebackToClipboard() {
     const errorEl = document.getElementById('debugErrorMessage');
     const tbEl = document.getElementById('debugTraceback');
     const copyBtn = document.getElementById('copyDebugLogBtn');
-    
     const errorText = errorEl ? errorEl.innerText : '';
     const tracebackText = tbEl ? tbEl.innerText : '';
     const log = `Error: ${errorText}\n\nTraceback:\n${tracebackText}`;
-    
     navigator.clipboard.writeText(log).then(() => {
         if (copyBtn) {
             const originalText = copyBtn.innerHTML;
@@ -239,7 +214,6 @@ function copyTracebackToClipboard() {
         alert('Failed to copy traceback to clipboard.');
     });
 }
-
 function copyKeyToClipboard(text, btn) {
     navigator.clipboard.writeText(text).then(() => {
         const originalText = btn.innerHTML;

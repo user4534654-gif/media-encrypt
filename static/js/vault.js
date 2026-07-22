@@ -4,17 +4,14 @@ async function loadVault() {
     const grid = document.getElementById('vaultGrid');
     if (!grid) return;
     grid.innerHTML = '';
-    
     if (!data.files || data.files.length === 0) {
         grid.innerHTML = '<p style="color:#666; grid-column: 1 / -1; text-align:center; font-weight:bold; margin-top:20px;">Directory is empty.</p>';
         return;
     }
-    
     data.files.forEach(f => {
         const isVideo = f.match(/\.(mp4|mkv|avi|webm|mov|m4v|3gp)$/i);
         const isAudio = f.match(/\.(mp3|wav|ogg|flac|m4a)$/i);
         const isImage = f.match(/\.(jpg|jpeg|png|bmp|gif|webp|avif)$/i);
-        
         let preview = '';
         if (isImage) {
             preview = `<img src="/vault/${activeFolder}/${encodeURIComponent(f)}" style="width: 100px; height: 75px; object-fit: cover; border-radius: 6px; border: 1px solid #c8c7cc; margin-bottom: 5px;" alt="Image preview">`;
@@ -30,7 +27,6 @@ async function loadVault() {
         } else {
             preview = `<div style="font-size: 2.5em; margin-bottom:5px; height: 75px; display: flex; align-items: center; justify-content: center;">📄</div>`;
         }
-
         grid.innerHTML += `
             <div class="vault-item">
                 <div style="width: 100%; display: flex; justify-content: center; align-items: center;">${preview}</div>
@@ -46,7 +42,6 @@ async function loadVault() {
         `;
     });
 }
-
 async function openMedia(folder, filename) {
     try {
         const res = await fetch('/api/open_file', {
@@ -62,12 +57,10 @@ async function openMedia(folder, filename) {
         alert("Failed to open file via server.");
     }
 }
-
 function viewMedia(folder, filename) {
     const ext = filename.split('.').pop().toLowerCase();
     const url = `/vault/${folder}/${encodeURIComponent(filename)}`;
     let content = '';
-    
     if (['mp4', 'webm', 'ogg', 'mov', 'mkv', 'avi', 'm4v', '3gp'].includes(ext)) {
         content = `
             <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px;">
@@ -102,20 +95,17 @@ function viewMedia(folder, filename) {
                 </div>
             </div>`;
     }
-
     const contentEl = document.getElementById('mediaViewerContent');
     const modalEl = document.getElementById('mediaModal');
     if (contentEl) contentEl.innerHTML = content;
     if (modalEl) modalEl.classList.remove('hidden');
 }
-
 function closeViewer() {
     const modalEl = document.getElementById('mediaModal');
     const contentEl = document.getElementById('mediaViewerContent');
     if (modalEl) modalEl.classList.add('hidden');
     if (contentEl) contentEl.innerHTML = '';
 }
-
 async function deleteMedia(folder, filename) {
     if (!confirm(`Are you sure you want to delete ${filename}?`)) return;
     await fetch(`/api/vault/${folder}/${encodeURIComponent(filename)}`, { method: 'DELETE' });

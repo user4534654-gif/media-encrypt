@@ -1,7 +1,4 @@
-# Icons Registry Reference
-# This file is used as a reference so that future developers and AI assistants
-# do not forget the mapping between emojis and graphic icons used in the DOM.
-
+                          
 ICON_MAPPINGS = {
     "🔒": "lock.png",
     "🔓": "unlock.png",
@@ -19,5 +16,10 @@ ICON_MAPPINGS = {
     "🐍": "python.png",
     "❔": "question.png",
     "⚙️": "info.png",
-    "▶️": "ui-button.png"
+    "▶️": "ui-button.png",
+    "📋": "clipboard.png",
+    "✅": "checkmark.png",
+    "📺": "tv.png",
+    "🔊": "speaker.png",
+    "🧩": "puzzle.png"
 }

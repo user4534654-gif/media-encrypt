@@ -4,15 +4,12 @@ const imageUpload = document.getElementById('imageUpload');
 const centerImageUpload = document.getElementById('centerImageUpload');
 const audioUpload = document.getElementById('audioUpload');
 const decryptUpload = document.getElementById('decryptUpload');
-
 const encVideo = document.getElementById('encVideo');
 const encAudio = document.getElementById('encAudio');
 const vidSettings = document.getElementById('vidSettings');
 const audSettings = document.getElementById('audSettings');
 const encParams = document.getElementById('encryptionParams');
 const exportSection = document.getElementById('exportSettings');
-
-
 function updateVisibility() {
     if (encVideo) {
         encVideo.checked ? (vidSettings.classList.remove('hidden'), encParams.classList.remove('hidden')) : (vidSettings.classList.add('hidden'), encParams.classList.add('hidden'));
@@ -24,10 +21,8 @@ function updateVisibility() {
         (!encVideo.checked && !encAudio.checked) ? exportSection.classList.add('hidden') : exportSection.classList.remove('hidden');
     }
 }
-
 if (encVideo) encVideo.addEventListener('change', updateVisibility);
 if (encAudio) encAudio.addEventListener('change', updateVisibility);
-
 function setRatio(w, h) {
     origRatio = w / h;
     const resWEl = document.getElementById('resW');
@@ -35,7 +30,6 @@ function setRatio(w, h) {
     if (resWEl) resWEl.placeholder = w + " (Orig)";
     if (resHEl) resHEl.placeholder = h + " (Orig)";
 }
-
 const resWInput = document.getElementById('resW');
 const resHInput = document.getElementById('resH');
 if (resWInput) {
@@ -54,20 +48,17 @@ if (resHInput) {
         }
     });
 }
-
 function setEncryptionMode(mode) {
     encryptionMode = mode;
     const normBtn = document.getElementById('modeNormal');
     const centBtn = document.getElementById('modeCenter');
     if (normBtn) normBtn.classList.toggle('active', mode === 'normal');
     if (centBtn) centBtn.classList.toggle('active', mode === 'center');
-    
     const centerSection = document.getElementById('centerVideoSection');
     if (centerSection) {
         if (mode === 'center') centerSection.classList.remove('hidden');
         else centerSection.classList.add('hidden');
     }
-    
     const dualTrackRow = document.getElementById('dualTrackRow');
     if (dualTrackRow) {
         if (mode === 'center') dualTrackRow.classList.remove('hidden');
@@ -79,14 +70,12 @@ function setEncryptionMode(mode) {
     }
     saveAllSettings();
 }
-
 function setImageEncryptionMode(mode) {
     imgEncryptionMode = mode;
     const normBtn = document.getElementById('imgModeNormal');
     const centBtn = document.getElementById('imgModeCenter');
     if (normBtn) normBtn.classList.toggle('active', mode === 'normal');
     if (centBtn) centBtn.classList.toggle('active', mode === 'center');
-    
     const centerSection = document.getElementById('centerImageSection');
     if (centerSection) {
         if (mode === 'center') centerSection.classList.remove('hidden');
@@ -94,7 +83,6 @@ function setImageEncryptionMode(mode) {
     }
     saveAllSettings();
 }
-
 function setImageFormat(format) {
     activeImageFormat = format;
     ['auto', '.png', '.avif', '.jpg', '.webp'].forEach(fmt => {
@@ -105,7 +93,6 @@ function setImageFormat(format) {
     });
     saveAllSettings();
 }
-
 function setMediaTypeTab(type) {
     activeMediaType = type;
     const vTab = document.getElementById('mediaTabVideo');
@@ -114,7 +101,6 @@ function setMediaTypeTab(type) {
     if (vTab) vTab.classList.toggle('active', type === 'video');
     if (iTab) iTab.classList.toggle('active', type === 'image');
     if (aTab) aTab.classList.toggle('active', type === 'audio');
-    
     const vStudio = document.getElementById('videoStudio');
     const iStudio = document.getElementById('imageStudio');
     const aStudio = document.getElementById('audioStudio');
@@ -123,39 +109,31 @@ function setMediaTypeTab(type) {
     if (aStudio) aStudio.classList.toggle('hidden', type !== 'audio');
     saveAllSettings();
 }
-
 function switchMainTab(tab) {
     activeMainTab = tab;
-    
     const encBtn = document.getElementById('tabBtnEncrypt');
     const decBtn = document.getElementById('tabBtnDecrypt');
     const vltBtn = document.getElementById('tabBtnVault');
     if (encBtn) encBtn.classList.toggle('active', tab === 'encrypt');
     if (decBtn) decBtn.classList.toggle('active', tab === 'decrypt');
     if (vltBtn) vltBtn.classList.toggle('active', tab === 'vault');
-    
     const encCont = document.getElementById('tabContentEncrypt');
     const decCont = document.getElementById('tabContentDecrypt');
     const vltCont = document.getElementById('tabContentVault');
     if (encCont) encCont.classList.toggle('hidden', tab !== 'encrypt');
     if (decCont) decCont.classList.toggle('hidden', tab !== 'decrypt');
     if (vltCont) vltCont.classList.toggle('hidden', tab !== 'vault');
-    
     if (tab === 'vault') {
         loadVault();
     }
 }
-
 function toggleTheme(isDark) {
     document.body.classList.toggle('ios-dark-theme', isDark);
     localStorage.setItem('ios-dark-theme', isDark ? 'true' : 'false');
     saveAllSettings();
 }
-
 function toggleFullscreen() {
     const btn = document.getElementById('fullscreenBtn');
-    
-    // Check if running inside pywebview wrapper
     if (window.pywebview && window.pywebview.api && window.pywebview.api.toggle_fullscreen) {
         window.pywebview.api.toggle_fullscreen().then(isFullscreen => {
             if (btn) {
@@ -165,7 +143,6 @@ function toggleFullscreen() {
             console.error("Webview fullscreen error:", err);
         });
     } else {
-        // Fallback to normal browser Fullscreen API
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen().then(() => {
                 if (btn) btn.innerText = "Exit Fullscreen 🖥️";
@@ -179,8 +156,6 @@ function toggleFullscreen() {
         }
     }
 }
-
-// Check Decryption Key to show Badge
 const decKeyInput = document.getElementById('decKey');
 if (decKeyInput) {
     decKeyInput.addEventListener('input', function() {
@@ -196,7 +171,6 @@ if (decKeyInput) {
         }
     });
 }
-
 function switchFolder(folder) {
     activeFolder = folder;
     const inTab = document.getElementById('folderTabInput');
@@ -207,7 +181,6 @@ function switchFolder(folder) {
     if (decTab) decTab.classList.toggle('active', folder === 'decrypted');
     loadVault();
 }
-
 async function openActiveFolder() {
     await fetch('/api/open_folder', {
         method: 'POST',
@@ -215,14 +188,12 @@ async function openActiveFolder() {
         body: JSON.stringify({ folder: activeFolder })
     });
 }
-
 if (upload) {
     upload.addEventListener('change', (e) => {
         const files = Array.from(e.target.files);
         const list = document.getElementById('fileList');
         if (list) list.innerText = files.map(f => f.name).join(', ');
         if (!files.length) return;
-        
         const url = URL.createObjectURL(files[0]);
         if (files[0].type.startsWith('video/')) {
             const vid = document.createElement('video');
@@ -231,7 +202,6 @@ if (upload) {
         }
     });
 }
-
 if (centerUpload) {
     centerUpload.addEventListener('change', (e) => {
         const files = Array.from(e.target.files);
@@ -239,7 +209,6 @@ if (centerUpload) {
         if (list) list.innerText = files.map(f => f.name).join(', ');
     });
 }
-
 if (imageUpload) {
     imageUpload.addEventListener('change', (e) => {
         const files = Array.from(e.target.files);
@@ -247,7 +216,6 @@ if (imageUpload) {
         if (list) list.innerText = files.map(f => f.name).join(', ');
     });
 }
-
 if (centerImageUpload) {
     centerImageUpload.addEventListener('change', (e) => {
         const files = Array.from(e.target.files);
@@ -255,7 +223,6 @@ if (centerImageUpload) {
         if (list) list.innerText = files.map(f => f.name).join(', ');
     });
 }
-
 if (audioUpload) {
     audioUpload.addEventListener('change', (e) => {
         const files = Array.from(e.target.files);
@@ -263,7 +230,6 @@ if (audioUpload) {
         if (list) list.innerText = files.map(f => f.name).join(', ');
     });
 }
-
 if (decryptUpload) {
     decryptUpload.addEventListener('change', (e) => {
         const files = Array.from(e.target.files);
@@ -271,7 +237,6 @@ if (decryptUpload) {
         if (list) list.innerText = files.map(f => f.name).join(', ');
     });
 }
-
 const bitSlider = document.getElementById('v_bit_slider');
 const bitVal = document.getElementById('v_bit_val');
 const bitLabel = document.getElementById('v_bit_label');
@@ -281,7 +246,6 @@ if (bitSlider && bitVal && bitLabel) {
         bitLabel.innerText = 'Video Bitrate: ' + this.value + 'k';
     });
 }
-
 const freqSlider = document.getElementById('carrier_freq_slider');
 const freqVal = document.getElementById('carrier_freq_val');
 const freqLabel = document.getElementById('carrier_freq_label');
@@ -291,7 +255,6 @@ if (freqSlider && freqVal && freqLabel) {
         freqLabel.innerText = 'Carrier Frequency: ' + this.value + ' Hz';
     });
 }
-
 const volSlider = document.getElementById('vol_factor_slider');
 const volVal = document.getElementById('vol_factor_val');
 const volLabel = document.getElementById('vol_factor_label');
@@ -301,7 +264,6 @@ if (volSlider && volVal && volLabel) {
         volLabel.innerText = 'Encrypted Audio Volume: ' + this.value + '%';
     });
 }
-
 const audVolSlider = document.getElementById('aud_vol_factor_slider');
 const audVolVal = document.getElementById('aud_vol_factor_val');
 const audVolLabel = document.getElementById('aud_vol_factor_label');
@@ -311,13 +273,11 @@ if (audVolSlider && audVolVal && audVolLabel) {
         audVolLabel.innerText = 'Encrypted Audio Volume: ' + this.value + '%';
     });
 }
-
 function toggleAudioMethodFields() {
     const method = document.getElementById('aud_method').value;
     const splitsRow = document.getElementById('aud_splits_row');
     const seedRow = document.getElementById('aud_seed_row');
     const carrierRow = document.getElementById('carrier_freq_row');
-    
     if (method === 'band_scramble') {
         if (splitsRow) splitsRow.style.display = 'block';
         if (seedRow) seedRow.style.display = 'block';
@@ -332,55 +292,39 @@ function toggleAudioMethodFields() {
         if (carrierRow) carrierRow.style.display = 'block';
     }
 }
-
 function toggleVideoAudioMethodFields() {
     const method = document.getElementById('v_aud_method').value;
     const splitsRow = document.getElementById('v_aud_splits_row');
-    
     if (method === 'band_scramble' || method === 'combined') {
         if (splitsRow) splitsRow.style.display = 'block';
     } else {
         if (splitsRow) splitsRow.style.display = 'none';
     }
 }
-
 function replaceEmojisInDOM(emojiMap) {
     const emojis = Object.keys(emojiMap);
     if (emojis.length === 0) return;
-
-    // Normalize emoji mapping to handle standard and variation-selector (\ufe0f) variations
     const normalizedMap = {};
     const escapedPatterns = [];
-
-    // Sort by length descending to match longer multi-character emojis first
     emojis.sort((a, b) => b.length - a.length);
-
     for (let e of emojis) {
         const base = e.replace(/\ufe0f/g, '');
         normalizedMap[base] = emojiMap[e];
         normalizedMap[base + '\ufe0f'] = emojiMap[e];
-
         const escapedBase = base.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        // Match the base emoji with an optional variation selector
         escapedPatterns.push(escapedBase + '\\ufe0f?');
     }
-
-    // Use 'gu' flags for correct surrogate pair / unicode parsing
     const regex = new RegExp(`(${escapedPatterns.join('|')})`, 'gu');
-
     function walk(node) {
         if (node.nodeType === Node.TEXT_NODE) {
             const text = node.nodeValue;
-            // Reset regex state since it's global
             regex.lastIndex = 0;
             if (regex.test(text)) {
                 const parent = node.parentNode;
                 if (!parent || ['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'SELECT'].includes(parent.tagName)) return;
-                
                 regex.lastIndex = 0;
                 const parts = text.split(regex);
                 const fragment = document.createDocumentFragment();
-                
                 for (let part of parts) {
                     if (normalizedMap[part]) {
                         const img = document.createElement('img');
@@ -403,7 +347,6 @@ function replaceEmojisInDOM(emojiMap) {
     }
     walk(document.body);
 }
-
 async function loadCustomIcons() {
     try {
         const response = await fetch('/api/icons');
@@ -429,7 +372,6 @@ async function loadCustomIcons() {
         console.error("Error loading custom icons:", e);
     }
 }
-
 window.addEventListener('DOMContentLoaded', () => {
     loadAllSettings();
     initAutoSave();
@@ -437,8 +379,6 @@ window.addEventListener('DOMContentLoaded', () => {
     switchMainTab('encrypt');
     switchFolder('input');
 });
-
-// Global hotkey to save the debug log (Ctrl+Shift+D)
 document.addEventListener('keydown', function(event) {
     if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'd') {
         event.preventDefault();
@@ -457,18 +397,13 @@ document.addEventListener('keydown', function(event) {
             });
     }
 });
-
-// Background heartbeat to keep the active session registered on the server (run every 5 seconds)
 setInterval(() => {
     fetch('/api/heartbeat').catch(() => {});
 }, 5000);
-
-// Collapsible UI panels toggler
 function toggleSection(triggerId, contentId) {
     const trigger = document.getElementById(triggerId);
     const content = document.getElementById(contentId);
     if (!trigger || !content) return;
-
     const isActive = trigger.classList.contains('active');
     if (isActive) {
         trigger.classList.remove('active');
