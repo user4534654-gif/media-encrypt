@@ -8,12 +8,6 @@ Welcome to **Media-Encrypt Studio**! This tool uses visual matrix scrambling and
 
 ---
 
-# 🚀 QUICK START: DOWNLOAD THE READY-TO-USE WINDOWS .EXE!
-
-**No Python installation is required!** If you are on Windows, you can download the fully compiled, self-contained desktop application directly from the **[Releases](../../releases)** page. Simply download `MediaEncryptStudio.exe` and run it to launch the studio instantly.
-
----
-
 ### 🛠️ Manual Installation Guide
 
 If you prefer to run the application from the source code, please follow these steps:
@@ -35,11 +29,3 @@ If you prefer to run the application from the source code, please follow these s
 5. **Access the App**: A native application window will open via `pywebview`. If the window does not appear, open your web browser and navigate to `http://127.0.0.1:5050` to use the studio.
 
 ---
-
-## 📸 Screenshots
-
-### 1. 
-(screenshot/screenshot1.png)
-
-### 2.
-(screenshot/screenshot2.png)
