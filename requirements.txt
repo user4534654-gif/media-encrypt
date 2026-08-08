@@ -7,6 +7,7 @@ soundfile
 imageio-ffmpeg
 pillow
 pywebview
+av
 
 # ── Build / packaging dependencies ────────────────────────────────────────────
 # These are only needed when building the Windows .exe with PyInstaller.

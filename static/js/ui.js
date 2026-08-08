@@ -84,10 +84,16 @@ function setImageEncryptionMode(mode) {
     saveAllSettings();
 }
 function setImageFormat(format) {
+    if (format === '.jpeg') format = '.jpg';
     activeImageFormat = format;
-    ['auto', '.png', '.avif', '.jpg', '.webp'].forEach(fmt => {
-        const fmtId = fmt.replace('.', '');
-        const id = 'imgFmt' + fmtId.charAt(0).toUpperCase() + fmtId.slice(1);
+    const fmtButtons = {
+        'auto': 'imgFmtAuto',
+        '.png': 'imgFmtPng',
+        '.avif': 'imgFmtAvif',
+        '.jpg': 'imgFmtJpeg',
+        '.webp': 'imgFmtWebp'
+    };
+    Object.entries(fmtButtons).forEach(([fmt, id]) => {
         const btn = document.getElementById(id);
         if (btn) btn.classList.toggle('active', fmt === format);
     });
@@ -193,6 +199,7 @@ if (upload) {
         const files = Array.from(e.target.files);
         const list = document.getElementById('fileList');
         if (list) list.innerText = files.map(f => f.name).join(', ');
+        displayUploadVideoBitrate(files);
         if (!files.length) return;
         const url = URL.createObjectURL(files[0]);
         if (files[0].type.startsWith('video/')) {
@@ -200,6 +207,40 @@ if (upload) {
             vid.onloadedmetadata = () => setRatio(vid.videoWidth, vid.videoHeight);
             vid.src = url;
         }
+    });
+}
+function displayUploadVideoBitrate(files) {
+    const infoEl = document.getElementById('uploadVideoBitrateInfo');
+    if (!infoEl) return;
+    const videoFiles = files.filter(f => f.type.startsWith('video/'));
+    if (!videoFiles.length) {
+        infoEl.style.display = 'none';
+        infoEl.innerHTML = '';
+        return;
+    }
+    infoEl.style.display = 'block';
+    infoEl.innerHTML = 'Computing upload bitrate…';
+    let pending = videoFiles.length;
+    let rowsHtml = '';
+    videoFiles.forEach(file => {
+        const url = URL.createObjectURL(file);
+        const vid = document.createElement('video');
+        vid.preload = 'metadata';
+        vid.onloadedmetadata = () => {
+            if (vid.duration > 0 && file.size > 0) {
+                const kbps = Math.max(1, Math.round((file.size * 8) / vid.duration / 1000));
+                rowsHtml += `<div style="font-size: 12px; color: #007aff;">📊 ${file.name} — upload bitrate: ${kbps} kbps</div>`;
+            }
+            URL.revokeObjectURL(url);
+            pending--;
+            if (pending === 0) infoEl.innerHTML = rowsHtml;
+        };
+        vid.onerror = () => {
+            URL.revokeObjectURL(url);
+            pending--;
+            if (pending === 0) infoEl.innerHTML = rowsHtml;
+        };
+        vid.src = url;
     });
 }
 if (centerUpload) {
@@ -253,6 +294,28 @@ if (freqSlider && freqVal && freqLabel) {
     freqSlider.addEventListener('input', function() {
         freqVal.innerText = this.value + ' Hz';
         freqLabel.innerText = 'Carrier Frequency: ' + this.value + ' Hz';
+    });
+}
+function syncAudioSrLabel(which) {
+    const slider = which === 'video' ? document.getElementById('a_sr_slider') : document.getElementById('audio_sr_slider');
+    const val = which === 'video' ? document.getElementById('a_sr_val') : document.getElementById('audio_sr_val');
+    if (slider && val) val.innerText = slider.value + ' Hz';
+}
+function toggleAudioSrAuto(isAuto, which) {
+    const container = which === 'video' ? document.getElementById('aSrSliderContainer') : document.getElementById('audioSrSliderContainer');
+    if (container) container.style.display = isAuto ? 'none' : 'flex';
+    if (typeof saveAllSettings === 'function') saveAllSettings();
+}
+const aSrSlider = document.getElementById('a_sr_slider');
+if (aSrSlider) {
+    aSrSlider.addEventListener('input', function() {
+        syncAudioSrLabel('video');
+    });
+}
+const audioSrSlider = document.getElementById('audio_sr_slider');
+if (audioSrSlider) {
+    audioSrSlider.addEventListener('input', function() {
+        syncAudioSrLabel('audio');
     });
 }
 const volSlider = document.getElementById('vol_factor_slider');

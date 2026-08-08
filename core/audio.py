@@ -1,5 +1,6 @@
 import soundfile as sf
 import numpy as np
+from core.logger import LiveDebugger
 def numpy_lowpass_filter(data, cutoff, sr):
     n = len(data)
     fft_vals = np.fft.rfft(data, n)
@@ -114,6 +115,7 @@ def process_inversion(y, sr, carrier_freq=8000, reverse=False):
         cutoff = min(carrier_freq, nyquist * 0.9)
         processed = numpy_lowpass_filter(processed, cutoff, sr) * 2.0
     return processed
+@LiveDebugger.trace(module_name="AUDIO")
 def process_audio_file(in_wav, out_wav, is_decrypt=False, method="inversion", key=42, num_splits=10, carrier_freq=8000, vol_factor=1.0, aud_track="both"):
     try:
         y, sr = sf.read(in_wav)

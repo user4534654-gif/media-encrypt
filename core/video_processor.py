@@ -11,6 +11,8 @@ from core.crypto import seeded_shuffle
 from core.audio import process_audio_file
 from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks
 from core.svg_generator import export_grid_to_svg, export_scrambled_grid_to_svg
+from core.tempdir import get_temp_file_path
+from core.logger import LiveDebugger
 def _adjust_audio_length(y, target_len, action='silence'):
     if len(y) >= target_len:
         return y[:target_len]
@@ -27,6 +29,7 @@ def _adjust_audio_length(y, target_len, action='silence'):
             return np.pad(y, (0, shortage))
         else:
             return np.pad(y, ((0, shortage), (0, 0)))
+@LiveDebugger.trace(module_name="VIDEO")
 def process_video_file(input_path, output_path, options, progress_dict, task_id):
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     proc_vid, proc_aud, reverse = options.get('process_video'), options.get('process_audio'), options.get('reverse')
@@ -35,11 +38,12 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     no_scale = options.get('no_scale', False)
     carrier_freq = options.get('carrier_freq', 8000)
     video_encrypt_mode = options.get('video_encrypt_mode', 'external')                               
+    LiveDebugger.log("START_VIDEO", f"Processing video '{os.path.basename(input_path)}' | grid={cols}x{rows}, seed={seed}, mode={video_encrypt_mode}, reverse={reverse}", level="INFO", module="VIDEO")
     center_end_action = options.get('center_end_action', 'loop')                              
     center_aud_action = options.get('center_aud_action', 'silence')                    
     outer_end_action  = options.get('outer_end_action',  'stop')                                      
-    temp_aud = input_path + "_aud.wav"
-    temp_center_aud_out = input_path + "_center_aud_out.wav"
+    temp_aud = get_temp_file_path(os.path.basename(input_path) + "_aud.wav")
+    temp_center_aud_out = get_temp_file_path(os.path.basename(input_path) + "_center_aud_out.wav")
     has_audio = subprocess.run([ffmpeg_exe, '-y', '-i', input_path, '-vn', temp_aud], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags).returncode == 0
     if has_audio and not os.path.exists(temp_aud):
         has_audio = False
@@ -61,7 +65,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 vol_factor=options.get('vol_factor', 1.0),
                 aud_track=options.get('aud_track', 'both')
             )
-            temp_center_aud = options['center_path'] + "_center_aud.wav"
+            temp_center_aud = get_temp_file_path(os.path.basename(options['center_path']) + "_center_aud.wav")
             has_center_audio = subprocess.run([ffmpeg_exe, '-y', '-i', options['center_path'], '-vn', '-ar', str(main_sr), temp_center_aud], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags).returncode == 0
             main_data, main_sr = sf.read(temp_aud)
             if len(main_data.shape) > 1:

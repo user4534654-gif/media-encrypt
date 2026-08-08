@@ -3,8 +3,17 @@ import numpy as np
 import os
 from core.crypto import seeded_shuffle
 from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks
+from core.logger import LiveDebugger
 def save_image(path, img):
     ext = os.path.splitext(path)[1].lower()
+    if ext in ('.jpg', '.jpeg'):
+        try:
+            from PIL import Image
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            Image.fromarray(img_rgb).save(path, 'JPEG', quality=95, optimize=True)
+            return
+        except Exception as e:
+            raise RuntimeError(f"Failed to save as JPEG: {e}. Ensure 'pillow' is installed.")
     if ext == '.avif':
         try:
             from PIL import Image
@@ -15,6 +24,7 @@ def save_image(path, img):
         except Exception as e:
             raise RuntimeError(f"Failed to save as AVIF: {e}. Ensure 'pillow' and a suitable writer plugin are installed.")
     cv2.imwrite(path, img)
+@LiveDebugger.trace(module_name="IMAGE")
 def process_image_file(input_path, output_path, options, progress_dict, task_id):
     proc_vid = options.get('process_video')
     reverse = options.get('reverse')
@@ -22,6 +32,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
     target_w, target_h = options.get('target_w'), options.get('target_h')
     no_scale = options.get('no_scale', False)
     video_encrypt_mode = options.get('video_encrypt_mode', 'external')                               
+    LiveDebugger.log("LOAD_IMAGE", f"Loading '{os.path.basename(input_path)}' | grid={cols}x{rows}, seed={seed}, reverse={reverse}", level="DEBUG", module="IMAGE")
     img = cv2.imread(input_path)
     if img is None:
         from PIL import Image

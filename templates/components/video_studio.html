@@ -12,6 +12,7 @@
             <label class="ios-label" id="uploadLabel">Upload Video Files (Batch Supported)<span class="help-tip">❔<span class="tooltip-text">You can select multiple files to encrypt them in sequence. The encryption keys will be printed sequentially.</span></span></label>
             <input type="file" id="mediaUpload" multiple class="ios-file-input" accept="video/*">
             <div class="file-list" id="fileList"></div>
+            <div class="ios-group-info" id="uploadVideoBitrateInfo" style="display: none; margin-top: 6px;"></div>
         </div>
         <div class="ios-group-row hidden" id="centerVideoSection">
             <label class="ios-label" style="color: #007aff;">Upload Central Video (untouched)</label>
@@ -115,12 +116,12 @@
             <div class="ios-group-container" id="audSettings">
                 <div class="ios-group-row-grid">
                     <div>
-                        <label class="ios-label">Audio Hz<span class="help-tip">❔<span class="tooltip-text">Audio sample rate. 48000 Hz is standard for high-quality video audio.</span></span></label>
-                        <select id="a_sr" class="ios-select">
-                            <option value="auto" selected>Auto</option>
-                            <option value="44100">44100 Hz</option>
-                            <option value="48000">48000 Hz</option>
-                        </select>
+                        <label class="ios-label">Audio Sample Rate<span class="help-tip">❔<span class="tooltip-text">Audio sample rate of the exported video. Use the slider to select a different sample rate (e.g. for standard inversion).</span></span></label>
+                        <div id="aSrSliderContainer" style="display: none; align-items: center; gap: 12px;">
+                            <input type="range" id="a_sr_slider" min="8000" max="96000" step="1000" value="48000" style="flex: 1; accent-color: #007aff;">
+                            <span id="a_sr_val" style="font-size: 13px; font-weight: bold; width: 70px; text-align: right;">48000 Hz</span>
+                        </div>
+                        <label class="ios-switch-label" style="font-size: 11px; margin-top: 4px; display: block;"><input type="checkbox" id="a_sr_auto" checked onchange="toggleAudioSrAuto(this.checked, 'video')"> Auto (Match Input)</label>
                     </div>
                     <div>
                         <label class="ios-label">Audio Codec<span class="help-tip">❔<span class="tooltip-text">AAC is the standard for video audio; MP3 is legacy; FLAC is lossless.</span></span></label>

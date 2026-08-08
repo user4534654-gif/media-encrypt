@@ -35,10 +35,13 @@ async function startBatch(action) {
     for (let i = 0; i < files.length; i++) {
         const progTitle = document.getElementById('progTitle');
         if (progTitle) progTitle.innerText = `Processing ${i+1}/${files.length}: ${files[i].name}`;
+        const fileStartTime = Date.now();
+        let lastEta = '';
         const progFill = document.getElementById('progFill');
         if (progFill) {
             progFill.style.width = '0%';
             progFill.classList.remove('complete');
+            progFill.classList.remove('indeterminate');
         }
         const fd = new FormData();
         fd.append('file', files[i]); 
@@ -56,7 +59,8 @@ async function startBatch(action) {
                 const isAutoBitrate = document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : true;
                 fd.append('vid_bitrate', isAutoBitrate ? 'auto' : document.getElementById('v_bit_slider').value + 'k');
                 fd.append('vid_preset', document.getElementById('v_preset').value);
-                fd.append('aud_sr', document.getElementById('a_sr').value); 
+                const aSrAuto = document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true;
+                fd.append('aud_sr', aSrAuto ? 'auto' : document.getElementById('a_sr_slider').value);
                 fd.append('aud_codec', document.getElementById('a_codec').value);
                 fd.append('aud_bitrate', document.getElementById('a_bit').value);
                 fd.append('resize_w', document.getElementById('resW').value); 
@@ -95,7 +99,8 @@ async function startBatch(action) {
                 fd.append('enc_video', 'false'); 
                 fd.append('enc_audio', 'true');
                 fd.append('carrier_freq', document.getElementById('carrier_freq_slider').value);
-                fd.append('aud_sr', document.getElementById('audio_sr').value); 
+                const audioSrAuto = document.getElementById('audio_sr_auto') ? document.getElementById('audio_sr_auto').checked : true;
+                fd.append('aud_sr', audioSrAuto ? 'auto' : document.getElementById('audio_sr_slider').value); 
                 fd.append('aud_codec', document.getElementById('audio_codec').value);
                 fd.append('aud_bitrate', document.getElementById('audio_bit').value);
                 fd.append('aud_format', document.getElementById('audio_fmt').value);
@@ -121,8 +126,25 @@ async function startBatch(action) {
                 const data = await res.json();
                 const fill = document.getElementById('progFill');
                 const txt = document.getElementById('progText');
-                if (fill) fill.style.width = `${data.progress}%`;
-                if (txt) txt.innerText = `${data.progress}%`;
+                const pct = parseInt(data.progress) || 0;
+                if (fill) {
+                    fill.style.width = `${pct}%`;
+                    if (pct === 0) {
+                        fill.classList.add('indeterminate');
+                    } else {
+                        fill.classList.remove('indeterminate');
+                    }
+                }
+                if (txt) {
+                    const elapsedSec = (Date.now() - fileStartTime) / 1000;
+                    let display = `${pct}%` + lastEta;
+                    if (pct > 0 && pct < 100) {
+                        const remaining = (elapsedSec / pct) * (100 - pct);
+                        lastEta = `  ·  ≈ ${Math.round(remaining)}s left`;
+                        display = `${pct}%${lastEta}`;
+                    }
+                    txt.innerText = display;
+                }
             } catch (err) {}
         }, 500);
         try {
@@ -133,17 +155,20 @@ async function startBatch(action) {
             const txt = document.getElementById('progText');
             if (fill) {
                 fill.style.width = `100%`;
+                fill.classList.remove('indeterminate');
                 fill.classList.add('complete');
             }
             if (txt) txt.innerText = `100%`;
             if (result.status === 'error') {
-                openDebugger(`Error processing ${files[i].name}: ${result.message}`, result.traceback);
+                openDebugger(`Error processing ${files[i].name}: ${result.message}`, result.traceback, result.diagnostic);
             } else if (result.key && keysOut) {
+                const outFile = result.file ? result.file.split(/[\\/]/).pop() : '';
                 keysOut.innerHTML += `
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; background: rgba(0,0,0,0.03); padding: 5px 8px; border-radius: 6px; border: 1px solid #e1e4e8; word-break: break-all;">
                         <span style="font-weight: 500; color: #333; font-size: 12px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${files[i].name}">${files[i].name}</span>
                         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                             <code style="background: #e1f5fe; color: #0288d1; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 12px; border: 1px dashed #0288d1; font-family: monospace;">${result.key}</code>
+                            <button type="button" class="ios-btn-small" onclick="saveKeyToFile('${result.key}', '${outFile}', this)" style="padding: 2px 6px; font-size: 11px; margin: 0; background: linear-gradient(to bottom, #ffffff 0%, #eaeaea 100%); cursor: pointer; border-radius: 4px; font-weight: bold; border: 1px solid #b0b0b0;">💾 Save</button>
                             <button type="button" class="ios-btn-small" onclick="copyKeyToClipboard('${result.key}', this)" style="padding: 2px 6px; font-size: 11px; margin: 0; background: linear-gradient(to bottom, #ffffff 0%, #eaeaea 100%); cursor: pointer; border-radius: 4px; font-weight: bold; border: 1px solid #b0b0b0;">📋 Copy</button>
                         </div>
                     </div>
@@ -167,27 +192,55 @@ async function startBatch(action) {
         switchFolder('decrypted');
     }
 }
-function openDebugger(errorMessage, tracebackText) {
+function openDebugger(errorMessage, tracebackText, diagnostic) {
     const errorEl = document.getElementById('debugErrorMessage');
+    const locationEl = document.getElementById('debugLocation');
+    const rootCauseEl = document.getElementById('debugRootCause');
     const helpEl = document.getElementById('debugDiagnosticHelp');
+    const snippetContainer = document.getElementById('debugCodeSnippetContainer');
+    const snippetEl = document.getElementById('debugCodeSnippet');
+    const localsBody = document.getElementById('debugLocalsBody');
     const tbEl = document.getElementById('debugTraceback');
     const modal = document.getElementById('debugModal');
-    if (errorEl) errorEl.innerText = errorMessage;
-    if (tbEl) tbEl.innerText = tracebackText || "No Python traceback was generated.";
-    let recommendations = "Check that the Python packages 'opencv-python', 'scipy', and 'imageio-ffmpeg' are properly installed on your machine. If resolving video, ensure the source files are not corrupted and codecs are valid.";
-    const lowerMsg = errorMessage.toLowerCase();
-    if (lowerMsg.includes('ffmpeg') || lowerMsg.includes('ffprobe')) {
-        recommendations = "FFmpeg binary execution failed. Please verify that 'imageio-ffmpeg' is installed in pip, or that FFmpeg is added to your system's PATH. If on Windows, try running pip install imageio-ffmpeg.";
-    } else if (lowerMsg.includes('dimension') || lowerMsg.includes('grid') || lowerMsg.includes('columns') || lowerMsg.includes('rows') || lowerMsg.includes('split')) {
-        recommendations = "Grid dimensions calculations mismatch. Make sure columns and rows count is greater than 1. If Center Mode is activated, ensure the columns and rows size is large enough to contain the central 1/4 layout.";
-    } else if (lowerMsg.includes('seed') || lowerMsg.includes('key') || lowerMsg.includes('unscramble')) {
-        recommendations = "Key error or seed hash parsing crash. Ensure you pasted the exact encryption key string (e.g. 10x10|myseed|a) and did not leave leading/trailing white spaces.";
-    } else if (lowerMsg.includes('codec') || lowerMsg.includes('format')) {
-        recommendations = "Media encoding error. The selected codec is incompatible with the selected container format. Try setting both format and codec to 'Auto' to let the server match the original input characteristics.";
-    } else if (lowerMsg.includes('permission') || lowerMsg.includes('denied') || lowerMsg.includes('write')) {
-        recommendations = "Operating system permission block. Verify that the server has write access permissions to the 'media_encrypt_vault' folders in the project directory.";
+    const diag = diagnostic || {};
+    if (errorEl) {
+        errorEl.innerText = diag.error_type ? `${diag.error_type}: ${diag.error_message || errorMessage}` : (errorMessage || 'Unknown Error');
     }
-    if (helpEl) helpEl.innerText = recommendations;
+    if (locationEl) {
+        locationEl.innerText = diag.file ? `Location: ${diag.file}:${diag.line || 0} in ${diag.function || 'unknown'}()` : 'Location: Unknown';
+    }
+    if (rootCauseEl) {
+        rootCauseEl.innerText = diag.root_cause || 'Process execution interrupted by runtime exception.';
+    }
+    if (helpEl) {
+        helpEl.innerText = diag.suggestion || 'Inspect the stack traceback and local variables below for details.';
+    }
+    if (snippetEl && snippetContainer) {
+        if (diag.code_line && diag.code_line !== 'N/A') {
+            snippetEl.innerText = `Line ${diag.line}: ${diag.code_line}`;
+            snippetContainer.style.display = 'block';
+        } else {
+            snippetContainer.style.display = 'none';
+        }
+    }
+    if (localsBody) {
+        localsBody.innerHTML = '';
+        const vars = diag.local_vars || {};
+        const keys = Object.keys(vars);
+        if (keys.length > 0) {
+            keys.forEach(k => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid #e0e0e0';
+                tr.innerHTML = `<td style="padding: 6px 10px; font-weight: bold; color: #0066cc;">${k}</td><td style="padding: 6px 10px; color: #333; word-break: break-all;">${vars[k]}</td>`;
+                localsBody.appendChild(tr);
+            });
+        } else {
+            localsBody.innerHTML = '<tr><td colspan="2" style="padding: 8px 10px; color: #888;">No local variables captured at failure.</td></tr>';
+        }
+    }
+    if (tbEl) {
+        tbEl.innerText = diag.traceback || tracebackText || "No Python traceback was generated.";
+    }
     if (modal) modal.classList.remove('hidden');
 }
 function closeDebugger() {
@@ -213,6 +266,35 @@ function copyTracebackToClipboard() {
         console.error('Failed to copy text: ', err);
         alert('Failed to copy traceback to clipboard.');
     });
+}
+async function saveKeyToFile(key, filename, btn) {
+    if (!filename) {
+        alert("Key saved automatically next to the encrypted file.");
+        return;
+    }
+    try {
+        const res = await fetch('/api/save_key', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: filename, key: key })
+        });
+        const data = await res.json();
+        if (data.success) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "✅ Saved";
+            btn.style.color = "#34c759";
+            btn.style.borderColor = "#34c759";
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.color = "";
+                btn.style.borderColor = "#b0b0b0";
+            }, 1500);
+        } else {
+            alert("Failed to save key file: " + (data.error || "unknown error"));
+        }
+    } catch (err) {
+        alert("Failed to save key file.");
+    }
 }
 function copyKeyToClipboard(text, btn) {
     navigator.clipboard.writeText(text).then(() => {

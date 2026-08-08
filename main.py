@@ -287,6 +287,9 @@ def process_api():
             LiveDebugger.log("Start Process", f"Encrypting '{filename}' -> '{out_path}' | Key: '{key}'", ["Flask", "core.pipeline"])
             process_media(path, out_path, options, task_progress, task_id)
             LiveDebugger.log("Process Complete", f"Successfully encrypted and saved output file: '{out_path}'", ["Flask", "core.pipeline", "os"])
+            key_path = save_key_file(os.path.basename(out_path), key)
+            if key_path:
+                LiveDebugger.log("Save Key", f"Auto-saved encryption key to: {key_path}", ["os"])
             return jsonify({"status": "ok", "key": key, "file": out_path})
         elif action == "unscramble":
             raw_key = clean_key(request.form.get('key'))
@@ -384,8 +387,36 @@ def process_api():
             return jsonify({"status": "ok", "file": out_path})
     except Exception as e:
         tb = traceback.format_exc()
-        LiveDebugger.log("Process Error", f"Exception during processing: {e}\n{tb}", ["Flask", "traceback"])
-        return jsonify({"status": "error", "message": str(e), "traceback": tb})
+        diagnostic = LiveDebugger.analyze_exception(e, module_name="HTTP", func_name="process_api")
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "traceback": tb,
+            "diagnostic": diagnostic
+        })
+def save_key_file(filename, key):
+    try:
+        base_name, _ = os.path.splitext(filename)
+        key_path = os.path.join(ENCRYPTED_FOLDER, f"{base_name}.key.txt")
+        with open(key_path, 'w', encoding='utf-8') as f:
+            f.write(f"Media-Encrypt Studio Key\n")
+            f.write(f"File: {filename}\n")
+            f.write(f"Key: {key}\n")
+        return key_path
+    except Exception as e:
+        return None
+@app.route('/api/save_key', methods=['POST'])
+def save_key_api():
+    data = request.json or {}
+    filename = data.get('filename', '')
+    key = data.get('key', '')
+    if not filename or not key:
+        return jsonify({"success": False, "error": "filename and key are required"}), 400
+    key_path = save_key_file(filename, clean_key(key))
+    if key_path:
+        LiveDebugger.log("Save Key", f"Saved encryption key file to: {key_path}", ["os"])
+        return jsonify({"success": True, "path": key_path})
+    return jsonify({"success": False, "error": "Could not write key file"})
 @app.route('/api/save_debug_log', methods=['POST'])
 def save_debug_log():
     try:

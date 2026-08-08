@@ -52,12 +52,12 @@
         <div class="ios-group-header">3. Audio Export Configuration</div>
         <div class="ios-group-row-grid">
             <div>
-                <label class="ios-label">Audio Hz<span class="help-tip">❔<span class="tooltip-text">Audio sample rate. 48000 Hz is standard for high-quality audio.</span></span></label>
-                <select id="audio_sr" class="ios-select">
-                    <option value="auto" selected>Auto</option>
-                    <option value="44100">44100 Hz</option>
-                    <option value="48000">48000 Hz</option>
-                </select>
+                <label class="ios-label">Audio Sample Rate<span class="help-tip">❔<span class="tooltip-text">Audio sample rate of the encrypted output. Use the slider to select a different sample rate (e.g. for standard inversion).</span></span></label>
+                <div id="audioSrSliderContainer" style="display: none; align-items: center; gap: 12px;">
+                    <input type="range" id="audio_sr_slider" min="8000" max="96000" step="1000" value="48000" style="flex: 1; accent-color: #007aff;">
+                    <span id="audio_sr_val" style="font-size: 13px; font-weight: bold; width: 70px; text-align: right;">48000 Hz</span>
+                </div>
+                <label class="ios-switch-label" style="font-size: 11px; margin-top: 4px; display: block;"><input type="checkbox" id="audio_sr_auto" checked onchange="toggleAudioSrAuto(this.checked, 'audio')"> Auto (Match Input)</label>
             </div>
             <div>
                 <label class="ios-label">Audio Codec<span class="help-tip">❔<span class="tooltip-text">AAC is compressed; MP3 is legacy; FLAC/WAV are lossless.</span></span></label>
