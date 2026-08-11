@@ -1,0 +1,26 @@
+<div class="ios-group" style="margin-top: 20px;">
+    <div class="ios-group-header-flex">
+        <span>📁 Vault Manager</span>
+        <button class="ios-btn-small" onclick="loadVault()">Refresh</button>
+    </div>
+    <div class="ios-group-row" style="padding: 10px 15px; background: #f9f9f9;">
+        <div class="segmented-control">
+            <button type="button" id="folderTabInput" class="segment-btn active" onclick="switchFolder('input')">Inputs</button>
+            <button type="button" id="folderTabEncrypted" class="segment-btn" onclick="switchFolder('encrypted')">Encrypted</button>
+            <button type="button" id="folderTabDecrypted" class="segment-btn" onclick="switchFolder('decrypted')">Decrypted</button>
+        </div>
+    </div>
+    <div class="ios-group-row" style="padding: 15px;">
+        <div class="vault-grid" id="vaultGrid">
+        </div>
+    </div>
+    <div class="ios-group-row" style="text-align: center; padding: 12px 15px;">
+        <button onclick="openActiveFolder()" class="ios-btn ios-btn-silver">📂 Open Current Directory</button>
+    </div>
+</div>
+<div id="mediaModal" class="modal-overlay hidden">
+    <div class="modal-content">
+        <button class="modal-close" onclick="closeViewer()">X</button>
+        <div id="mediaViewerContent"></div>
+    </div>
+</div>

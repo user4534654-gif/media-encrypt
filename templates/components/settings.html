@@ -1,0 +1,90 @@
+<div class="ios-group" id="exportSettings">
+    <div class="ios-group-header">Export Configuration</div>
+    <div class="ios-group-container" id="vidSettings">
+        <div class="ios-group-row-grid">
+            <div>
+                <label class="ios-label">Format</label>
+                <select id="v_fmt" class="ios-select">
+                    <option value=".mp4">.mp4</option>
+                    <option value=".mkv">.mkv</option>
+                    <option value=".avi">.avi</option>
+                </select>
+            </div>
+            <div>
+                <label class="ios-label">Codec</label>
+                <select id="v_codec" class="ios-select">
+                    <option value="libx264">H.264</option>
+                    <option value="libx265">H.265 (HEVC)</option>
+                </select>
+            </div>
+            <div>
+                <label class="ios-label">Bitrate</label>
+                <select id="v_bit" class="ios-select">
+                    <option value="1000k">1000k (Low)</option>
+                    <option value="3000k" selected>3000k (Med)</option>
+                    <option value="8000k">8000k (High)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="ios-group-container" id="audSettings" style="border-top: 1px solid #c8c7cc;">
+        <div class="ios-group-row-grid">
+            <div>
+                <label class="ios-label">Audio Hz</label>
+                <select id="a_sr" class="ios-select">
+                    <option value="44100">44100 Hz</option>
+                    <option value="48000" selected>48000 Hz</option>
+                </select>
+            </div>
+            <div>
+                <label class="ios-label">Audio Codec</label>
+                <select id="a_codec" class="ios-select">
+                    <option value="aac">AAC</option>
+                    <option value="libmp3lame">MP3</option>
+                </select>
+            </div>
+            <div>
+                <label class="ios-label">Audio Bitrate</label>
+                <select id="a_bit" class="ios-select">
+                    <option value="128k">128k</option>
+                    <option value="192k" selected>192k</option>
+                    <option value="320k">320k</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="ios-group" id="encryptionParams">
+    <div class="ios-group-header">Video Matrix Scrambling Parameters</div>
+    <div class="ios-group-row-grid">
+        <div>
+            <label class="ios-label">Columns</label>
+            <input type="number" id="cols" value="10" min="2" class="ios-input">
+        </div>
+        <div>
+            <label class="ios-label">Rows</label>
+            <input type="number" id="rows" value="10" min="2" class="ios-input">
+        </div>
+    </div>
+    <div class="ios-group-row">
+        <label class="ios-label">SID Seed (Blank = Random)</label>
+        <input type="text" id="sid" placeholder="e.g. apple123" class="ios-input">
+    </div>
+    <div class="ios-group-header" style="margin-top: 10px; text-transform: uppercase; font-size: 11px;">Resolution & Aspect Ratio</div>
+    <div class="ios-group-row-grid">
+        <div>
+            <div class="flex-row">
+                <label class="ios-label">Target Width (px)</label>
+                <label class="ios-switch-label" style="font-size: 11px;"><input type="checkbox" id="aspectLock" checked> Lock</label>
+            </div>
+            <input type="number" id="resW" placeholder="Orig Width" class="ios-input">
+        </div>
+        <div>
+            <div class="flex-row">
+                <label class="ios-label">Target Height (px)</label>
+                <label class="ios-switch-label" style="font-size: 11px;"><input type="checkbox" id="noScale"> Pad Black</label>
+            </div>
+            <input type="number" id="resH" placeholder="Orig Height" class="ios-input">
+        </div>
+    </div>
+</div>

@@ -1,0 +1,24 @@
+<div class="ios-group">
+    <div class="ios-group-header">1. Select Mode & Upload Files</div>
+    <div class="ios-group-row" style="padding: 10px 15px;">
+        <label class="ios-label">Encryption Mode</label>
+        <div class="segmented-control">
+            <button type="button" id="modeNormal" class="segment-btn active" onclick="setEncryptionMode('normal')">Normal</button>
+            <button type="button" id="modeCenter" class="segment-btn" onclick="setEncryptionMode('center')">Center Video</button>
+        </div>
+    </div>
+    <div class="ios-group-row">
+        <label class="ios-label" id="uploadLabel">Upload Media Files (Batch Supported)</label>
+        <input type="file" id="mediaUpload" multiple class="ios-file-input">
+        <div class="file-list" id="fileList"></div>
+    </div>
+    <div class="ios-group-row hidden" id="centerVideoSection">
+        <label class="ios-label" style="color: #007aff;">Upload Central Video/Image (1/4 size, untouched)</label>
+        <input type="file" id="centerVideoUpload" class="ios-file-input">
+        <div class="file-list" id="centerFileList"></div>
+    </div>
+    <div class="ios-group-row toggles" id="encToggles">
+        <label class="ios-switch-label"><input type="checkbox" id="encVideo" checked> Scramble Video</label>
+        <label class="ios-switch-label"><input type="checkbox" id="encAudio" checked> Modulate Audio</label>
+    </div>
+</div>

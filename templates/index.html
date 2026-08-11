@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Media-Encrypt Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="ios-linen-bg">
+    <script>
+        try {
+            const settings = JSON.parse(localStorage.getItem('media_encrypt_settings_v20') || '{}');
+            if (settings.theme) {
+                document.body.classList.add('ios-dark-theme');
+            }
+        } catch(e) {}
+    </script>
+    <div class="ios-device-container">
+        {% include 'components/header.html' %}
+        <div class="ios-group" style="margin: 12px; padding: 5px; background: rgba(0,0,0,0.05); border-color: #a5abb0;">
+            <div class="segmented-control">
+                <button type="button" id="tabBtnEncrypt" class="segment-btn active" onclick="switchMainTab('encrypt')">🔒 Encrypt</button>
+                <button type="button" id="tabBtnDecrypt" class="segment-btn" onclick="switchMainTab('decrypt')">🔓 Decrypt</button>
+                <button type="button" id="tabBtnVault" class="segment-btn" onclick="switchMainTab('vault')">📁 Vault</button>
+            </div>
+        </div>
+        <div class="ios-content-scroll">
+            <div id="tabContentEncrypt">
+                <div class="ios-group" style="padding: 5px; margin-bottom: 12px; border-color: #b0b5ba;">
+                    <div class="segmented-control">
+                        <button type="button" id="mediaTabVideo" class="segment-btn active" onclick="setMediaTypeTab('video')">🎬 Video</button>
+                        <button type="button" id="mediaTabImage" class="segment-btn" onclick="setMediaTypeTab('image')">🖼️ Image</button>
+                        <button type="button" id="mediaTabAudio" class="segment-btn" onclick="setMediaTypeTab('audio')">🎵 Audio</button>
+                    </div>
+                </div>
+                {% include 'components/video_studio.html' %}
+                {% include 'components/image_studio.html' %}
+                {% include 'components/audio_studio.html' %}
+            </div>
+            {% include 'components/decrypt_studio.html' %}
+            <div id="tabContentVault" class="hidden">
+                {% include 'components/vault.html' %}
+            </div>
+            {% include 'components/progress.html' %}
+            <div class="project-version-footer">
+                Media-Encrypt Studio v2.0
+            </div>
+        </div>
+    </div>
+    {% include 'components/debugger.html' %}
+    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/vault.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/process.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+</body>
+</html>

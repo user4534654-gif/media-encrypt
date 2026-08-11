@@ -1,0 +1,73 @@
+<div id="imageStudio" class="hidden">
+    <div class="ios-group">
+        <div class="ios-group-header">1. Select Mode & Upload Images</div>
+        <div class="ios-group-row" style="padding: 10px 15px;">
+            <label class="ios-label">Encryption Mode<span class="help-tip">❔<span class="tooltip-text">Normal: Scrambles the entire image. Center: Overlays a secondary untouched image in the center (1/4 size) while scrambling the background.</span></span></label>
+            <div class="segmented-control">
+                <button type="button" id="imgModeNormal" class="segment-btn active" onclick="setImageEncryptionMode('normal')">Normal</button>
+                <button type="button" id="imgModeCenter" class="segment-btn" onclick="setImageEncryptionMode('center')">Center Image</button>
+            </div>
+        </div>
+        <div class="ios-group-row">
+            <label class="ios-label">Upload Image Files (Batch Supported)</label>
+            <input type="file" id="imageUpload" multiple class="ios-file-input" accept="image/*">
+            <div class="file-list" id="imageList"></div>
+        </div>
+        <div class="ios-group-row hidden" id="centerImageSection">
+            <label class="ios-label" style="color: #007aff;">Upload Central Image (untouched)</label>
+            <input type="file" id="centerImageUpload" class="ios-file-input" accept="image/*">
+            <div class="file-list" id="centerImageList"></div>
+            <label class="ios-label" style="margin-top: 10px;">Central Overlay Size</label>
+            <select id="img_center_size" class="ios-select">
+                <option value="1/4" selected>1/4 (Default)</option>
+                <option value="2/4">2/4 (Half Space)</option>
+                <option value="3/4">3/4 (Most Space)</option>
+            </select>
+            <label class="ios-label" style="margin-top: 10px;">Image Encryption Target</label>
+            <select id="img_video_encrypt_mode" class="ios-select">
+                <option value="external" selected>External Image (Background) Only</option>
+                <option value="center">Central Image Only</option>
+                <option value="both">Both (External & Center)</option>
+            </select>
+        </div>
+    </div>
+    <div class="ios-group">
+        <div class="ios-group-header">2. Image Scrambling Parameters</div>
+        <div class="ios-group-row-grid">
+            <div>
+                <label class="ios-label">Columns<span class="help-tip">❔<span class="tooltip-text">The number of horizontal slices in the image scrambling grid.</span></span></label>
+                <input type="number" id="img_cols" value="10" min="2" class="ios-input">
+            </div>
+            <div>
+                <label class="ios-label">Rows<span class="help-tip">❔<span class="tooltip-text">The number of vertical slices in the image scrambling grid.</span></span></label>
+                <input type="number" id="img_rows" value="10" min="2" class="ios-input">
+            </div>
+        </div>
+        <div class="ios-group-row">
+            <label class="ios-label">SID Seed (Blank = Random)<span class="help-tip">❔<span class="tooltip-text">A custom key, password, or string to lock/unlock your scrambled image blocks.</span></span></label>
+            <input type="text" id="img_sid" placeholder="e.g. image123" class="ios-input">
+        </div>
+        <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+            <label class="ios-label" style="margin-bottom: 0;">Export SVG Visual Grid<span class="help-tip">❔<span class="tooltip-text">Generates SVG files showing the original and permuted block grids for visualization/debugging.</span></span></label>
+            <label class="ios-switch-label">
+                <input type="checkbox" id="imgExportSvg" checked>
+            </label>
+        </div>
+    </div>
+    <div class="ios-group">
+        <div class="ios-group-header">3. Export Format Configuration</div>
+        <div class="ios-group-row" style="padding: 12px 15px;">
+            <label class="ios-label" style="margin-bottom: 8px;">Export Format<span class="help-tip">❔<span class="tooltip-text">Choose the output format of the scrambled image. PNG is lossless; WebP and AVIF offer high compression.</span></span></label>
+            <div class="segmented-control">
+                <button type="button" id="imgFmtAuto" class="segment-btn active" onclick="setImageFormat('auto')">Auto</button>
+                <button type="button" id="imgFmtPng" class="segment-btn" onclick="setImageFormat('.png')">PNG</button>
+                <button type="button" id="imgFmtAvif" class="segment-btn" onclick="setImageFormat('.avif')">AVIF</button>
+                <button type="button" id="imgFmtJpeg" class="segment-btn" onclick="setImageFormat('.jpg')">JPEG</button>
+                <button type="button" id="imgFmtWebp" class="segment-btn" onclick="setImageFormat('.webp')">WEBP</button>
+            </div>
+        </div>
+    </div>
+    <div class="ios-group">
+        <button onclick="startBatch('scramble')" class="ios-btn ios-btn-blue">🔒 ENCRYPT IMAGES</button>
+    </div>
+</div>

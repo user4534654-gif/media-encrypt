@@ -1,0 +1,25 @@
+                          
+ICON_MAPPINGS = {
+    "🔒": "lock.png",
+    "🔓": "unlock.png",
+    "ℹ️": "info.png",
+    "📁": "folder.png",
+    "📂": "folder-open.png",
+    "🖼️": "image.png",
+    "🎬": "video.png",
+    "🎵": "audio.png",
+    "📄": "file.png",
+    "⚠️": "warning.png",
+    "☀️": "sun.png",
+    "🌙": "moon.png",
+    "🖥️": "display.png",
+    "🐍": "python.png",
+    "❔": "question.png",
+    "⚙️": "info.png",
+    "▶️": "ui-button.png",
+    "📋": "clipboard.png",
+    "✅": "checkmark.png",
+    "📺": "tv.png",
+    "🔊": "speaker.png",
+    "🧩": "puzzle.png"
+}

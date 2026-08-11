@@ -1,0 +1,233 @@
+<div id="videoStudio">
+    <div class="ios-group">
+        <div class="ios-group-header">1. Select Mode & Upload Video</div>
+        <div class="ios-group-row" style="padding: 10px 15px;">
+            <label class="ios-label">Encryption Mode<span class="help-tip">❔<span class="tooltip-text">Normal: Slices and scrambles the entire screen. Center: Overlays a secondary untouched image/video in the center (1/4 size) while scrambling the background.</span></span></label>
+            <div class="segmented-control">
+                <button type="button" id="modeNormal" class="segment-btn active" onclick="setEncryptionMode('normal')">Normal</button>
+                <button type="button" id="modeCenter" class="segment-btn" onclick="setEncryptionMode('center')">Center Video</button>
+            </div>
+        </div>
+        <div class="ios-group-row">
+            <label class="ios-label" id="uploadLabel">Upload Video Files (Batch Supported)<span class="help-tip">❔<span class="tooltip-text">You can select multiple files to encrypt them in sequence. The encryption keys will be printed sequentially.</span></span></label>
+            <input type="file" id="mediaUpload" multiple class="ios-file-input" accept="video/*">
+            <div class="file-list" id="fileList"></div>
+            <div class="ios-group-info" id="uploadVideoBitrateInfo" style="display: none; margin-top: 6px;"></div>
+        </div>
+        <div class="ios-group-row hidden" id="centerVideoSection">
+            <label class="ios-label" style="color: #007aff;">Upload Central Video (untouched)</label>
+            <input type="file" id="centerVideoUpload" class="ios-file-input" accept="video/*">
+            <div class="file-list" id="centerFileList"></div>
+            <label class="ios-label" style="margin-top: 10px;">Central Overlay Size</label>
+            <select id="center_size" class="ios-select">
+                <option value="1/4" selected>1/4 (Default)</option>
+                <option value="2/4">2/4 (Half Space)</option>
+                <option value="3/4">3/4 (Most Space)</option>
+            </select>
+            <label class="ios-label" style="margin-top: 10px;">Video Encryption Target</label>
+            <select id="video_encrypt_mode" class="ios-select">
+                <option value="external" selected>External Video (Background) Only</option>
+                <option value="center">Central Video Only</option>
+                <option value="both">Both (External & Center)</option>
+            </select>
+            <label class="ios-label" style="margin-top: 10px;">Outer Video End Action<span class="help-tip">❔<span class="tooltip-text">Action if outer video ends before center video. Stop: end video. Freeze: freeze last frame. Black: black frame. Loop: restart outer video.</span></span></label>
+            <select id="outer_end_action" class="ios-select">
+                <option value="stop" selected>Stop (Default)</option>
+                <option value="freeze">Freeze Last Frame</option>
+                <option value="black">Black Screen</option>
+                <option value="loop">Loop Video</option>
+            </select>
+            <label class="ios-label" style="margin-top: 10px;">Center Video End Action<span class="help-tip">❔<span class="tooltip-text">Action if center video ends before outer video. Loop: restart. Freeze: freeze last frame. Black: black screen.</span></span></label>
+            <select id="center_end_action" class="ios-select">
+                <option value="loop" selected>Loop Video (Default)</option>
+                <option value="freeze">Freeze Last Frame</option>
+                <option value="black">Black Screen</option>
+            </select>
+            <label class="ios-label" style="margin-top: 10px;">Center Audio End Action<span class="help-tip">❔<span class="tooltip-text">Action for center audio track. Silence: pad with zeros. Loop: repeat audio track.</span></span></label>
+            <select id="center_aud_action" class="ios-select">
+                <option value="silence" selected>Silence (Default)</option>
+                <option value="loop">Loop Audio</option>
+            </select>
+        </div>
+        <div class="ios-group-row toggles" id="encToggles">
+            <label class="ios-switch-label"><input type="checkbox" id="encVideo" checked> Scramble Video</label>
+            <label class="ios-switch-label"><input type="checkbox" id="encAudio" checked> Modulate Audio</label>
+        </div>
+    </div>
+    <div class="ios-group" id="exportSettings">
+        <div class="collapse-trigger" id="vidCollapseHeader" onclick="toggleSection('vidCollapseHeader', 'vidCollapseContent')">
+            <span>🎬 Video Quality & Format Settings</span>
+            <span class="collapse-arrow">▶️</span>
+        </div>
+        <div class="collapse-content hidden" id="vidCollapseContent">
+            <div class="ios-group-container" id="vidSettings" style="border-bottom: 1px solid #c8c7cc;">
+                <div class="ios-group-row-grid">
+                    <div>
+                        <label class="ios-label">Format<span class="help-tip">❔<span class="tooltip-text">The file container type for the exported video. MP4 is recommended for web compatibility.</span></span></label>
+                        <select id="v_fmt" class="ios-select">
+                            <option value="auto" selected>Auto (Match Input)</option>
+                            <option value=".mp4">.mp4</option>
+                            <option value=".mkv">.mkv</option>
+                            <option value=".avi">.avi</option>
+                            <option value=".webm">.webm</option>
+                            <option value=".mov">.mov</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="ios-label">Codec<span class="help-tip">❔<span class="tooltip-text">The compression library. H.264 is widely supported; H.265 (HEVC) offers better compression but takes longer.</span></span></label>
+                        <select id="v_codec" class="ios-select">
+                            <option value="auto" selected>Auto (Match Input)</option>
+                            <option value="libx264">H.264</option>
+                            <option value="libx265">H.265 (HEVC)</option>
+                            <option value="libvpx-vp9">VP9</option>
+                            <option value="libaom-av1">AV1</option>
+                            <option value="mpeg4">MPEG-4</option>
+                            <option value="prores">ProRes</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="ios-label">Preset<span class="help-tip">❔<span class="tooltip-text">Controls the compression speed vs tradeoff. Faster presets compile quickly but result in larger files.</span></span></label>
+                        <select id="v_preset" class="ios-select">
+                            <option value="auto" selected>Auto</option>
+                            <option value="ultrafast">ultrafast</option>
+                            <option value="fast">fast</option>
+                            <option value="medium">medium</option>
+                            <option value="slow">slow</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <div class="flex-row" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 5px;">
+                        <label class="ios-label" id="v_bit_label" style="margin-bottom: 0;">Video Bitrate: 3000k<span class="help-tip">❔<span class="tooltip-text">Higher bitrate yields better visual quality but increases the final file size.</span></span></label>
+                        <label class="ios-switch-label" style="font-size: 11px; margin-bottom: 0;"><input type="checkbox" id="autoVidBitrate" checked onchange="toggleVidBitrateAuto(this.checked)"> Auto</label>
+                    </div>
+                    <div id="vidBitrateSliderContainer" style="display: none; align-items: center; gap: 12px;">
+                        <input type="range" id="v_bit_slider" min="500" max="25000" step="500" value="3000" style="flex: 1; accent-color: #007aff;">
+                        <span id="v_bit_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">3000k</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="collapse-trigger" id="audCollapseHeader" onclick="toggleSection('audCollapseHeader', 'audCollapseContent')">
+            <span>🎵 Audio Quality & Scrambling Settings</span>
+            <span class="collapse-arrow">▶️</span>
+        </div>
+        <div class="collapse-content hidden" id="audCollapseContent">
+            <div class="ios-group-container" id="audSettings">
+                <div class="ios-group-row-grid">
+                    <div>
+                        <label class="ios-label">Audio Sample Rate<span class="help-tip">❔<span class="tooltip-text">Audio sample rate of the exported video. Use the slider to select a different sample rate (e.g. for standard inversion).</span></span></label>
+                        <div id="aSrSliderContainer" style="display: none; align-items: center; gap: 12px;">
+                            <input type="range" id="a_sr_slider" min="8000" max="96000" step="1000" value="48000" style="flex: 1; accent-color: #007aff;">
+                            <span id="a_sr_val" style="font-size: 13px; font-weight: bold; width: 70px; text-align: right;">48000 Hz</span>
+                        </div>
+                        <label class="ios-switch-label" style="font-size: 11px; margin-top: 4px; display: block;"><input type="checkbox" id="a_sr_auto" checked onchange="toggleAudioSrAuto(this.checked, 'video')"> Auto (Match Input)</label>
+                    </div>
+                    <div>
+                        <label class="ios-label">Audio Codec<span class="help-tip">❔<span class="tooltip-text">AAC is the standard for video audio; MP3 is legacy; FLAC is lossless.</span></span></label>
+                        <select id="a_codec" class="ios-select">
+                            <option value="auto" selected>Auto (Match Input)</option>
+                            <option value="aac">AAC</option>
+                            <option value="libmp3lame">MP3</option>
+                            <option value="libopus">Opus</option>
+                            <option value="flac">FLAC</option>
+                            <option value="pcm_s16le">PCM 16-bit</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="ios-label">Audio Bitrate<span class="help-tip">❔<span class="tooltip-text">Higher audio bitrate improves sound quality.</span></span></label>
+                        <select id="a_bit" class="ios-select">
+                            <option value="auto" selected>Auto</option>
+                            <option value="128k">128k</option>
+                            <option value="192k">192k</option>
+                            <option value="320k">320k</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-label">Audio Encryption Method<span class="help-tip">❔<span class="tooltip-text">Band Scrambling (a.txt): Splits frequencies and scrambles blocks. Combined (b.txt): Combines carrier inversion with band scrambling. Standard Inversion: Traditional time-domain frequency modulation.</span></span></label>
+                    <select id="v_aud_method" class="ios-select" onchange="toggleVideoAudioMethodFields()">
+                        <option value="band_scramble">Band Scrambling (a.txt)</option>
+                        <option value="combined">Combined Modulation/Scrambling (b.txt)</option>
+                        <option value="inversion" selected>Standard Inversion</option>
+                    </select>
+                </div>
+                <div class="ios-group-row" id="v_aud_splits_row" style="display: none;">
+                    <label class="ios-label">Audio Splits (2-100)<span class="help-tip">❔<span class="tooltip-text">Number of frequency bands to split and scramble. Max 100.</span></span></label>
+                    <input type="number" id="v_aud_splits" value="10" min="2" max="100" class="ios-input">
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-label">Audio Track to Encrypt<span class="help-tip">❔<span class="tooltip-text">Choose whether to encrypt both left/right channels, or selectively encrypt only one channel, leaving the other completely untouched.</span></span></label>
+                    <select id="aud_track" class="ios-select">
+                        <option value="both" selected>Both Channels (L + R)</option>
+                        <option value="left">Left Channel Only (L)</option>
+                        <option value="right">Right Channel Only (R)</option>
+                    </select>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-label" id="vol_factor_label">Encrypted Audio Volume: 100%<span class="help-tip">❔<span class="tooltip-text">Scale the encrypted audio volume (e.g. to 5% or 0% so it seems silent). It will be restored to 100% on decryption.</span></span></label>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <input type="range" id="vol_factor_slider" min="0" max="100" step="5" value="100" style="flex: 1; accent-color: #007aff;">
+                        <span id="vol_factor_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">100%</span>
+                    </div>
+                </div>
+                <div class="ios-group-row hidden" id="dualTrackRow" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="dual_track"> Dual-Track L/R Audio
+                        <span class="help-tip">❔<span class="tooltip-text">Left track has encrypted main audio; Right track has normal center video audio. Merged and normalized back to stereo on decryption.</span></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="ios-group" id="encryptionParams">
+        <div class="collapse-trigger" id="paramsCollapseHeader" onclick="toggleSection('paramsCollapseHeader', 'paramsCollapseContent')">
+            <span>🧩 Video Grid & Resize Settings</span>
+            <span class="collapse-arrow">▶️</span>
+        </div>
+        <div class="collapse-content hidden" id="paramsCollapseContent">
+            <div class="ios-group-container">
+                <div class="ios-group-row-grid">
+                    <div>
+                        <label class="ios-label">Columns<span class="help-tip">❔<span class="tooltip-text">The number of horizontal slices in the scrambling grid.</span></span></label>
+                        <input type="number" id="cols" value="10" min="2" class="ios-input">
+                    </div>
+                    <div>
+                        <label class="ios-label">Rows<span class="help-tip">❔<span class="tooltip-text">The number of vertical slices in the scrambling grid.</span></span></label>
+                        <input type="number" id="rows" value="10" min="2" class="ios-input">
+                    </div>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0;">
+                    <label class="ios-label">SID Seed (Blank = Random)<span class="help-tip">❔<span class="tooltip-text">A custom key, password, or string to lock/unlock your scrambled visual blocks.</span></span></label>
+                    <input type="text" id="sid" placeholder="e.g. apple123" class="ios-input">
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <label class="ios-label" style="margin-bottom: 0;">Export SVG Visual Grid<span class="help-tip">❔<span class="tooltip-text">Generates SVG files showing the original and permuted block grids for visualization/debugging.</span></span></label>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="exportSvg" checked>
+                    </label>
+                </div>
+                <div class="ios-group-header" style="margin-top: 10px; text-transform: uppercase; font-size: 11px; margin-left: 14px;">Resolution & Aspect Ratio</div>
+                <div class="ios-group-row-grid" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <div>
+                        <div class="flex-row">
+                            <label class="ios-label">Target Width (px)<span class="help-tip">❔<span class="tooltip-text">The desired width of the output video.</span></span></label>
+                            <label class="ios-switch-label" style="font-size: 11px;"><input type="checkbox" id="aspectLock" checked> Lock<span class="help-tip">❔<span class="tooltip-text">Automatically adjusts target height to match the original aspect ratio when changing the width.</span></span></label>
+                        </div>
+                        <input type="number" id="resW" placeholder="Orig Width" class="ios-input">
+                    </div>
+                    <div>
+                        <div class="flex-row">
+                            <label class="ios-label">Target Height (px)<span class="help-tip">❔<span class="tooltip-text">The desired height of the output video.</span></span></label>
+                            <label class="ios-switch-label" style="font-size: 11px;"><input type="checkbox" id="noScale"> Pad Black<span class="help-tip">❔<span class="tooltip-text">Pads the video with black borders instead of stretching/scaling it to fit the target resolution.</span></span></label>
+                        </div>
+                        <input type="number" id="resH" placeholder="Orig Height" class="ios-input">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="ios-group">
+        <button onclick="startBatch('scramble')" class="ios-btn ios-btn-blue">🔒 ENCRYPT VIDEO</button>
+    </div>
+</div>

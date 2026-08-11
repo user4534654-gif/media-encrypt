@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Runtime storage (created when the app runs)
+media_encrypt_vault/
+
+# Build artifacts
+build/
+dist/
+*.spec.bak
