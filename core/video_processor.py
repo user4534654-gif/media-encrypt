@@ -237,8 +237,12 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             p.stdin.write(data)
         except (BrokenPipeError, OSError) as err:
             stderr_msg = ""
-            if p.stderr:
-                stderr_msg = p.stderr.read().decode('utf-8', errors='ignore')
+            try:
+                _, err_bytes = p.communicate(timeout=2)
+                if err_bytes:
+                    stderr_msg = err_bytes.decode('utf-8', errors='ignore')
+            except Exception:
+                pass
             raise RuntimeError(f"FFmpeg process ended unexpectedly: {stderr_msg.strip() or str(err)}") from err
     frame_count = 0
     last_outer_frame = None                                       
@@ -382,13 +386,17 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         proc.stdin.close()
     except Exception:
         pass
-    proc.wait()
+    _, stderr_bytes = proc.communicate()
+    if proc.returncode != 0 and stderr_bytes:
+        print("FFmpeg encoding stderr:", stderr_bytes.decode('utf-8', errors='ignore'))
     if proc_center:
         try:
             proc_center.stdin.close()
         except Exception:
             pass
-        proc_center.wait()
+        _, stderr_c_bytes = proc_center.communicate()
+        if proc_center.returncode != 0 and stderr_c_bytes:
+            print("FFmpeg center encoding stderr:", stderr_c_bytes.decode('utf-8', errors='ignore'))
     cap.release()
     if cap_center:
         cap_center.release()

@@ -48,13 +48,14 @@ hidden = [
 
 # ── Data files (non-Python assets bundled into the exe) ───────────────────────
 datas = [
-    (os.path.join(spec_dir, "templates"),  "templates"),
-    (os.path.join(spec_dir, "static"),     "static"),
-    (os.path.join(spec_dir, "context"),    "context"),
-    (os.path.join(spec_dir, "icon.png"),   "."),
     *collect_data_files("imageio_ffmpeg"),
     *collect_data_files("soundfile"),
 ]
+
+for item, dst in [("templates", "templates"), ("static", "static"), ("context", "context"), ("icon.png", ".")]:
+    full_path = os.path.join(spec_dir, item)
+    if os.path.exists(full_path):
+        datas.append((full_path, dst))
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
