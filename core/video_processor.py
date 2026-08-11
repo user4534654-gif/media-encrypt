@@ -205,7 +205,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     if vid_codec != 'prores':
         cmd.extend(['-pix_fmt', 'yuv420p'])
     if has_audio:
-        cmd.extend(['-c:a', options.get('aud_codec'), '-b:a', options.get('aud_bitrate'), '-ar', options.get('aud_sr')])
+        aud_c = options.get('aud_codec', 'aac')
+        aud_sr = str(options.get('aud_sr', '48000'))
+        if aud_c in ['pcm_s16le', 'flac']:
+            cmd.extend(['-c:a', aud_c, '-ar', aud_sr])
+        else:
+            aud_b = options.get('aud_bitrate', '320k')
+            cmd.extend(['-c:a', aud_c, '-b:a', aud_b, '-ar', aud_sr])
     else:
         cmd.extend(['-an'])
     cmd.append(output_path)
@@ -227,7 +233,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         if vid_codec != 'prores':
             cmd_center.extend(['-pix_fmt', 'yuv420p'])
         if has_center_aud_out:
-            cmd_center.extend(['-c:a', options.get('aud_codec'), '-b:a', options.get('aud_bitrate'), '-ar', options.get('aud_sr')])
+            aud_c = options.get('aud_codec', 'aac')
+            aud_sr = str(options.get('aud_sr', '48000'))
+            if aud_c in ['pcm_s16le', 'flac']:
+                cmd_center.extend(['-c:a', aud_c, '-ar', aud_sr])
+            else:
+                aud_b = options.get('aud_bitrate', '320k')
+                cmd_center.extend(['-c:a', aud_c, '-b:a', aud_b, '-ar', aud_sr])
         else:
             cmd_center.extend(['-an'])
         cmd_center.append(output_path_center)

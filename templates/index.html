@@ -5,6 +5,7 @@
     <title>Media-Encrypt Studio</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/preview.css') }}">
 </head>
 <body class="ios-linen-bg">
     <script>
@@ -48,6 +49,7 @@
         </div>
     </div>
     {% include 'components/debugger.html' %}
+    <script src="{{ url_for('static', filename='js/preview.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
     <script src="{{ url_for('static', filename='js/vault.js') }}"></script>
     <script src="{{ url_for('static', filename='js/process.js') }}"></script>

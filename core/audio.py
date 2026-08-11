@@ -7,7 +7,15 @@ def numpy_lowpass_filter(data, cutoff, sr):
     n = len(data)
     fft_vals = np.fft.rfft(data, n)
     freqs = np.fft.rfftfreq(n, d=1.0/sr)
-    fft_vals[freqs > cutoff] = 0.0
+    trans_width = min(1000.0, cutoff * 0.15)
+    f_start = max(0.0, cutoff - trans_width)
+    f_end = min(sr / 2.0, cutoff)
+    weights = np.ones_like(freqs)
+    mask_trans = (freqs >= f_start) & (freqs <= f_end)
+    if f_end > f_start:
+        weights[mask_trans] = 0.5 * (1.0 + np.cos(np.pi * (freqs[mask_trans] - f_start) / (f_end - f_start)))
+    weights[freqs > f_end] = 0.0
+    fft_vals = fft_vals * weights
     return np.fft.irfft(fft_vals, n)
 def mulberry32(seed):
     state = seed & 0xFFFFFFFF
@@ -40,67 +48,74 @@ def get_inverse_permutation(n, seed):
     return inv
 def process_band_scramble(y, sr, key, num_splits=10, reverse=False):
     block_size = 2048
-    pad_len = block_size - (len(y) % block_size)
-    if pad_len == block_size:
-        pad_len = 0
-    y_pad = np.pad(y, (0, pad_len))
-    blocks = y_pad.reshape(-1, block_size)
-    S = np.fft.rfft(blocks, axis=1).T                                  
-    freq_bins = S.shape[0]
+    hop_size = 1024
+    win = np.sin(np.pi * np.arange(block_size) / block_size)
+    pad_len = block_size - (len(y) % hop_size)
+    y_pad = np.pad(y, (0, pad_len + block_size))
+    num_frames = (len(y_pad) - block_size) // hop_size + 1
+    out_signal = np.zeros_like(y_pad)
+    freq_bins = block_size // 2 + 1
     freq_indices = np.arange(freq_bins)
     bands = np.array_split(freq_indices, num_splits)
-    S_out = np.zeros_like(S)
-    for i, band_indices in enumerate(bands):
-        band_data = S[band_indices, :]
-        original_shape = band_data.shape
-        flat_data = band_data.flatten()
-        rng = np.random.RandomState(key + i)
-        perm = rng.permutation(len(flat_data))
-        if reverse:
-            inv = np.argsort(perm)
-            out_flat = flat_data[inv]
-        else:
-            out_flat = flat_data[perm]
-        S_out[band_indices, :] = out_flat.reshape(original_shape)
-    S_out = S_out.T
-    blocks_out = np.fft.irfft(S_out, n=block_size, axis=1)
-    return blocks_out.reshape(-1)
+    for f_idx in range(num_frames):
+        start = f_idx * hop_size
+        frame = y_pad[start:start + block_size] * win
+        S = np.fft.rfft(frame)
+        S_out = np.zeros_like(S)
+        for i, band_indices in enumerate(bands):
+            band_data = S[band_indices]
+            rng = np.random.RandomState(key + i)
+            perm = rng.permutation(len(band_data))
+            if reverse:
+                inv = np.argsort(perm)
+                S_out[band_indices] = band_data[inv]
+            else:
+                S_out[band_indices] = band_data[perm]
+        frame_out = np.fft.irfft(S_out, n=block_size) * win
+        out_signal[start:start + block_size] += frame_out
+    return out_signal[:len(y)]
 def process_combined(y, sr, key, num_splits=10, carrier_freq=8000, reverse=False):
     block_size = 2048
-    pad_len = block_size - (len(y) % block_size)
-    if pad_len == block_size:
-        pad_len = 0
-    y_padded = np.pad(y, (0, pad_len))
-    num_blocks = len(y_padded) // block_size
+    hop_size = 1024
+    win = np.sin(np.pi * np.arange(block_size) / block_size)
+    pad_len = block_size - (len(y) % hop_size)
+    y_pad = np.pad(y, (0, pad_len + block_size))
     if not reverse:
-        t = np.arange(len(y_padded)) / sr
+        t = np.arange(len(y_pad)) / sr
         carrier = np.cos(2 * np.pi * carrier_freq * t)
-        y_mod = y_padded * carrier
-        blocks = y_mod.reshape(num_blocks, block_size)
-        S = np.fft.rfft(blocks, axis=1).T
-        freq_bins = S.shape[0]
+        y_mod = y_pad * carrier
+        num_frames = (len(y_mod) - block_size) // hop_size + 1
+        out_signal = np.zeros_like(y_mod)
+        freq_bins = block_size // 2 + 1
         freq_indices = np.arange(1, freq_bins - 1)
         bands = np.array_split(freq_indices, num_splits)
-        S_enc = S.copy()
-        for i, band_indices in enumerate(bands):
-            perm = get_permutation(len(band_indices), key + i)
-            S_enc[band_indices, :] = S[band_indices, :][perm, :]
-        S_enc = S_enc.T
-        blocks_enc = np.fft.irfft(S_enc, n=block_size, axis=1)
-        return blocks_enc.reshape(-1)
+        for f_idx in range(num_frames):
+            start = f_idx * hop_size
+            frame = y_mod[start:start + block_size] * win
+            S = np.fft.rfft(frame)
+            S_enc = S.copy()
+            for i, band_indices in enumerate(bands):
+                perm = get_permutation(len(band_indices), key + i)
+                S_enc[band_indices] = S[band_indices][perm]
+            frame_out = np.fft.irfft(S_enc, n=block_size) * win
+            out_signal[start:start + block_size] += frame_out
+        return out_signal[:len(y)]
     else:
-        blocks = y_padded.reshape(num_blocks, block_size)
-        S_enc = np.fft.rfft(blocks, axis=1).T
-        freq_bins = S_enc.shape[0]
+        num_frames = (len(y_pad) - block_size) // hop_size + 1
+        y_demod_blocks = np.zeros_like(y_pad)
+        freq_bins = block_size // 2 + 1
         freq_indices = np.arange(1, freq_bins - 1)
         bands = np.array_split(freq_indices, num_splits)
-        S_dec = S_enc.copy()
-        for i, band_indices in enumerate(bands):
-            inv = get_inverse_permutation(len(band_indices), key + i)
-            S_dec[band_indices, :] = S_enc[band_indices, :][inv, :]
-        S_dec = S_dec.T
-        blocks_dec = np.fft.irfft(S_dec, n=block_size, axis=1)
-        y_demod_blocks = blocks_dec.reshape(-1)
+        for f_idx in range(num_frames):
+            start = f_idx * hop_size
+            frame = y_pad[start:start + block_size] * win
+            S_enc = np.fft.rfft(frame)
+            S_dec = S_enc.copy()
+            for i, band_indices in enumerate(bands):
+                inv = get_inverse_permutation(len(band_indices), key + i)
+                S_dec[band_indices] = S_enc[band_indices][inv]
+            frame_out = np.fft.irfft(S_dec, n=block_size) * win
+            y_demod_blocks[start:start + block_size] += frame_out
         t = np.arange(len(y_demod_blocks)) / sr
         carrier = np.cos(2 * np.pi * carrier_freq * t)
         y_demod = y_demod_blocks * carrier
@@ -109,7 +124,7 @@ def process_combined(y, sr, key, num_splits=10, carrier_freq=8000, reverse=False
         if cutoff <= 0:
             cutoff = nyquist * 0.5
         decrypted_audio = numpy_lowpass_filter(y_demod, cutoff, sr) * 2.0
-        return decrypted_audio
+        return decrypted_audio[:len(y)]
 def process_inversion(y, sr, carrier_freq=8000, reverse=False):
     t = np.arange(len(y)) / sr
     carrier = np.cos(2 * np.pi * carrier_freq * t)

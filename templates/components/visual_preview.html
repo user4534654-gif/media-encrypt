@@ -1,0 +1,73 @@
+
+<div class="visual-preview-container ios-group" id="visualPreviewContainer">
+    <div class="ios-group-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>🎨 Interactive Visual Preview & Encryption Target<span class="help-tip">❔<span class="tooltip-text">Interactive layout preview. Click on the Red box (Center Overlay) or Blue box (Background) to select it and configure its settings.</span></span></span>
+        <span class="preview-target-badge" id="previewTargetBadge">Target: Background (Blue)</span>
+    </div>
+    <div class="preview-canvas-wrapper">
+        <div class="preview-background-box active-selection" id="previewBgBox" onclick="selectPreviewTarget('external', event)">
+            <div class="preview-bg-label">
+                <span class="color-dot blue-dot"></span> Background Video / Image
+                <span class="enc-status-badge" id="bgEncStatusBadge">🔒 Encrypted</span>
+            </div>
+            <div class="preview-center-box size-1-4" id="previewCenterBox" onclick="selectPreviewTarget('center', event)">
+                <div class="preview-center-label">
+                    <span class="color-dot red-dot"></span> Center Overlay
+                    <span class="enc-status-badge" id="centerEncStatusBadge">🔓 Untouched</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="preview-selection-hint">
+        💡 <i>Click on the <b>Red (Center)</b> box or <b>Blue (Background)</b> box above to select and edit individual settings!</i>
+    </div>
+    <div class="audio-timeline-wrapper" id="audioTimelineWrapper">
+        <div class="audio-timeline-header">
+            <span>🎵 Audio Channels & Timeline Duration Preview<span class="help-tip">❔<span class="tooltip-text">Timeline and audio track matrix preview. Select which video audio (Background or Center) is assigned to Left (L) and Right (R) channels, and view live end-action durations.</span></span></span>
+        </div>
+        <div class="audio-track-line" id="trackLineL">
+            <div class="track-info">
+                <span class="channel-badge" id="badgeL">L</span>
+                <select class="track-source-select blue-source" id="trackLSourceSelect" onchange="updateTrackRouting('L', this.value)">
+                    <option value="background" selected>Background Audio (Blue)</option>
+                    <option value="center">Center Audio (Red)</option>
+                </select>
+                <span class="track-method-badge" id="trackLMethodBadge">[inversion]</span>
+                <label class="track-enc-checkbox">
+                    <input type="checkbox" id="trackLEncCheckbox" checked onchange="updateTrackEncState('L', this.checked)"> 🔒 Encrypt<span class="help-tip">❔<span class="tooltip-text">Toggle frequency scrambling/modulation on the Left audio channel.</span></span>
+                </label>
+            </div>
+            <div class="track-timeline-bar-container">
+                <div class="track-timeline-bar blue-bar" id="trackLBar">
+                    <div class="timeline-ticks" id="trackLTicks"></div>
+                    <span class="timeline-label" id="trackLLabel">L Track (10s)</span>
+                </div>
+            </div>
+        </div>
+        <div class="audio-track-line" id="trackLineR">
+            <div class="track-info">
+                <span class="channel-badge" id="badgeR">R</span>
+                <select class="track-source-select red-source" id="trackRSourceSelect" onchange="updateTrackRouting('R', this.value)">
+                    <option value="center" selected>Center Audio (Red)</option>
+                    <option value="background">Background Audio (Blue)</option>
+                </select>
+                <span class="track-method-badge" id="trackRMethodBadge">[inversion]</span>
+                <label class="track-enc-checkbox">
+                    <input type="checkbox" id="trackREncCheckbox" checked onchange="updateTrackEncState('R', this.checked)"> 🔒 Encrypt<span class="help-tip">❔<span class="tooltip-text">Toggle frequency scrambling/modulation on the Right audio channel.</span></span>
+                </label>
+            </div>
+            <div class="track-timeline-bar-container">
+                <div class="track-timeline-bar red-bar" id="trackRBar">
+                    <div class="timeline-ticks" id="trackRTicks"></div>
+                    <span class="timeline-label" id="trackRLabel">R Track (10s)</span>
+                </div>
+            </div>
+        </div>
+        <div class="timeline-legend">
+            <span class="legend-item"><span class="legend-box solid-box"></span> Active Video</span>
+            <span class="legend-item"><span class="legend-box loop-box"></span> Looped</span>
+            <span class="legend-item"><span class="legend-box freeze-box"></span> Frozen Frame</span>
+            <span class="legend-item"><span class="legend-box black-box"></span> Black Screen</span>
+        </div>
+    </div>
+</div>

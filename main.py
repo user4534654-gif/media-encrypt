@@ -162,7 +162,7 @@ def resolve_auto_quality(file_path, options):
             else:
                 options['aud_codec'] = 'aac'
     if options.get('aud_bitrate') == 'auto':
-        options['aud_bitrate'] = info.get('audio_bitrate') or '192k'
+        options['aud_bitrate'] = info.get('audio_bitrate') or '320k'
     if options.get('aud_method') == 'auto':
         options['aud_method'] = 'inversion'
     if options.get('aud_splits') == 'auto':

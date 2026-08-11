@@ -73,10 +73,11 @@ async function startBatch(action) {
                 fd.append('aud_method', document.getElementById('v_aud_method').value);
                 fd.append('aud_splits', document.getElementById('v_aud_splits').value);
                 fd.append('vol_factor', parseFloat(document.getElementById('vol_factor_slider').value) / 100.0);
-                fd.append('dual_track', document.getElementById('dual_track').checked);
+                const isDualTrack = document.getElementById('dual_track') ? document.getElementById('dual_track').checked : (document.getElementById('dualTrackPreviewToggle') ? document.getElementById('dualTrackPreviewToggle').checked : false);
+                fd.append('dual_track', isDualTrack);
                 fd.append('center_size', document.getElementById('center_size').value);
                 fd.append('video_encrypt_mode', document.getElementById('video_encrypt_mode').value);
-                fd.append('aud_track', document.getElementById('aud_track').value);
+                fd.append('aud_track', document.getElementById('aud_track') ? document.getElementById('aud_track').value : 'both');
                 fd.append('outer_end_action', document.getElementById('outer_end_action').value);
                 fd.append('center_end_action', document.getElementById('center_end_action').value);
                 fd.append('center_aud_action', document.getElementById('center_aud_action').value);
