@@ -37,11 +37,14 @@
                     <input type="checkbox" id="trackLEncCheckbox" checked onchange="updateTrackEncState('L', this.checked)"> 🔒 Encrypt<span class="help-tip">❔<span class="tooltip-text">Toggle frequency scrambling/modulation on the Left audio channel.</span></span>
                 </label>
             </div>
-            <div class="track-timeline-bar-container">
-                <div class="track-timeline-bar blue-bar" id="trackLBar">
-                    <div class="timeline-ticks" id="trackLTicks"></div>
-                    <span class="timeline-label" id="trackLLabel">L Track (10s)</span>
+            <div class="track-timeline-bar-container" id="trackLContainer">
+                <div class="track-active-segment blue-segment" id="trackLActiveSeg">
+                    <span class="segment-label" id="trackLActiveLabel">L Track (10s)</span>
                 </div>
+                <div class="track-end-segment hidden" id="trackLEndSeg">
+                    <span class="segment-label" id="trackLEndLabel"></span>
+                </div>
+                <div class="timeline-ticks" id="trackLTicks"></div>
             </div>
         </div>
         <div class="audio-track-line" id="trackLineR">
@@ -56,11 +59,14 @@
                     <input type="checkbox" id="trackREncCheckbox" checked onchange="updateTrackEncState('R', this.checked)"> 🔒 Encrypt<span class="help-tip">❔<span class="tooltip-text">Toggle frequency scrambling/modulation on the Right audio channel.</span></span>
                 </label>
             </div>
-            <div class="track-timeline-bar-container">
-                <div class="track-timeline-bar red-bar" id="trackRBar">
-                    <div class="timeline-ticks" id="trackRTicks"></div>
-                    <span class="timeline-label" id="trackRLabel">R Track (10s)</span>
+            <div class="track-timeline-bar-container" id="trackRContainer">
+                <div class="track-active-segment red-segment" id="trackRActiveSeg">
+                    <span class="segment-label" id="trackRActiveLabel">R Track (10s)</span>
                 </div>
+                <div class="track-end-segment hidden" id="trackREndSeg">
+                    <span class="segment-label" id="trackREndLabel"></span>
+                </div>
+                <div class="timeline-ticks" id="trackRTicks"></div>
             </div>
         </div>
         <div class="timeline-legend">

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media-Encrypt Studio — Code Base & Function Map</title>
+    <style>
+        :root {
+            --bg-main: #1e1e1e;
+            --bg-card: #252526;
+            --bg-card-hover: #2d2d30;
+            --bg-code: #181818;
+            --border-color: #383838;
+            --border-highlight: #7f6df2;
+            --text-main: #dcddde;
+            --text-muted: #8e8e93;
+            --purple-accent: #a882ff;
+            --purple-tag: #3b2d54;
+            --green-accent: #4ec9b0;
+            --blue-accent: #569cd6;
+            --orange-accent: #ce9178;
+            --yellow-accent: #dcdcaa;
+            --red-accent: #f44747;
+        }
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 30px 20px;
+            line-height: 1.5;
+        }
+        .obsidian-container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .header-title {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--purple-accent);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .callout-maintenance {
+            background: rgba(168, 130, 255, 0.08);
+            border: 1px solid var(--purple-accent);
+            border-left: 5px solid var(--purple-accent);
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .callout-title {
+            font-weight: 800;
+            font-size: 14px;
+            color: var(--purple-accent);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .callout-body {
+            font-size: 13px;
+            color: var(--text-main);
+            margin: 0;
+        }
+        .callout-body code {
+            background: var(--bg-code);
+            color: var(--green-accent);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        h2 {
+            font-size: 20px;
+            color: var(--blue-accent);
+            margin-top: 35px;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 6px;
+        }
+        h3 {
+            font-size: 16px;
+            color: var(--yellow-accent);
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .diagram-card {
+            background: var(--bg-code);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            margin-bottom: 25px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        pre.ascii-tree {
+            font-family: "Cascadia Code", "Fira Code", "Courier New", monospace;
+            font-size: 13px;
+            color: var(--green-accent);
+            margin: 0;
+            line-height: 1.4;
+        }
+        .tag {
+            display: inline-block;
+            background: var(--purple-tag);
+            color: var(--purple-accent);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-right: 6px;
+        }
+        .grid-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            transition: transform 0.15s ease, border-color 0.15s ease;
+        }
+        .card:hover {
+            border-color: var(--purple-accent);
+            background: var(--bg-card-hover);
+        }
+        .card-header {
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--yellow-accent);
+            font-family: monospace;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .conn-line {
+            font-size: 12px;
+            color: var(--text-main);
+            margin: 4px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+        .conn-arrow {
+            color: var(--purple-accent);
+            font-weight: bold;
+        }
+        .func-name {
+            color: var(--blue-accent);
+            font-family: monospace;
+        }
+        .func-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            font-style: italic;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 13px;
+        }
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background: var(--bg-card);
+            color: var(--purple-accent);
+        }
+        tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.02);
+        }
+    </style>
+</head>
+<body>
+<div class="obsidian-container">
+    <div class="header-title">
+        <span>🧠</span> Media-Encrypt Studio — Code Base & Connection Map
+    </div>
+    <div class="callout-maintenance">
+        <div class="callout-title">
+            <span>⚠️</span> Knowledge Base Update Rule (For AI Chat & Developers)
+        </div>
+        <p class="callout-body">
+            <b>MANDATORY NOTE FOR FUTURE EDITS:</b> Whenever adding, modifying, renaming, or deleting any function, module, or route in this codebase, you <b>MUST update this <code>CODE_MAP.html</code> file</b> to reflect the structural changes. Keep descriptions minimal, update directional caller/callee links, and keep diagrams accurate.
+        </p>
+    </div>
+    <h2>1. Executive Request & Media Flow Map</h2>
+    <div class="diagram-card">
+        <pre class="ascii-tree">
+                                     HTTP Request / CLI Entry
+                                                |
+                                          [ main.py ]
+                                                |
+                                       process_media()
+                                       [ core/pipeline.py ]
+                                                |
+              +---------------------------------+---------------------------------+
+              |                                 |                                 |
+              v                                 v                                 v
+        IMAGE MODE                         AUDIO MODE                        VIDEO MODE
+    process_image_file()               process_audio_file()              process_video_file()
+  [ core/image_processor.py ]           [ core/audio.py ]            [ core/video_processor.py ]
+              |                                 |                                 |
+    +---------+---------+                       |                       +---------+---------+
+    |                   |                       |                       |                   |
+    v                   v                       v                       v                   v
+Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video      Center Video
+  (Full)            (Overlay)                   |                     (Full)         (Dual Layer)
+                            +-------------------+-------------------+
+                            |                   |                   |
+                            v                   v                   v
+                    Band Scrambling    Combined Modulation    Standard Inversion
+                        (a.txt)             (b.txt)            (Frequency Swap)
+        </pre>
+    </div>
+    <h2>2. Module Architecture & Call Graph</h2>
+    <h3>🌐 Entry & Dispatcher (`main.py` & `core/pipeline.py`)</h3>
+    <div class="grid-cards">
+        <div class="card">
+            <div class="card-header">
+                process_api() <span class="tag">main.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> HTTP POST <code>/api/process</code></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">probe_media_file()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">resolve_auto_quality()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_media()</span></div>
+            <div class="func-desc">Handles uploaded file, parses key options, triggers pipeline.</div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                resolve_auto_quality() <span class="tag">main.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_api()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">probe_media_file()</span></div>
+            <div class="func-desc">Auto-detects optimal codecs, formats, bitrates if set to 'auto'.</div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                process_media() <span class="tag">pipeline.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_api()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_image_file()</span> (for images)</div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_audio_file()</span> (for standalone audio)</div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_video_file()</span> (for videos)</div>
+            <div class="func-desc">Master router delegating processing to appropriate handler.</div>
+        </div>
+    </div>
+    <h3>🎬 Video Engine (`core/video_processor.py`)</h3>
+    <div class="grid-cards">
+        <div class="card">
+            <div class="card-header">
+                process_video_file() <span class="tag">video_processor.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_media()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_audio_file()</span> (Dual-track / background)</div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">get_blocks()</span>, <span class="func-name">get_outer_blocks()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">seeded_shuffle()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">export_grid_to_svg()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> FFmpeg subprocess (stdin rawvideo piping)</div>
+            <div class="func-desc">Executes normal & center video block scrambling and audio extraction.</div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                _adjust_audio_length() <span class="tag">video_processor.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_video_file()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> Returns padded or looped audio array</div>
+            <div class="func-desc">Crops, loops, or pads audio array to fit target frame duration.</div>
+        </div>
+    </div>
+    <h3>🖼️ Image Engine (`core/image_processor.py`)</h3>
+    <div class="grid-cards">
+        <div class="card">
+            <div class="card-header">
+                process_image_file() <span class="tag">image_processor.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_media()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">get_blocks()</span>, <span class="func-name">get_outer_blocks()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">seeded_shuffle()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">save_image()</span></div>
+            <div class="func-desc">Performs matrix block shuffling for single frame images.</div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                save_image() <span class="tag">image_processor.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_image_file()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> Pillow / OpenCV disk write</div>
+            <div class="func-desc">High-quality image exporter for JPG, PNG, AVIF, WEBP.</div>
+        </div>
+    </div>
+    <h3>🎵 Audio DSP Engine (`core/audio.py`)</h3>
+    <div class="grid-cards">
+        <div class="card">
+            <div class="card-header">
+                process_audio_file() <span class="tag">audio.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_media()</span>, <span class="func-name">process_video_file()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_band_scramble()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_combined()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_inversion()</span></div>
+            <div class="func-desc">Main audio track dispatcher (supports multichannel & selective track).</div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                process_band_scramble() <span class="tag">audio.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_audio_file()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> FFT spectrum split and band permuted array</div>
+            <div class="func-desc">Splits frequency spectrum into N bands and scrambles them.</div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                process_combined() <span class="tag">audio.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_audio_file()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">get_permutation()</span>, <span class="func-name">numpy_lowpass_filter()</span></div>
+            <div class="func-desc">Combines carrier modulation with block FFT band scrambling.</div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                process_inversion() <span class="tag">audio.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_audio_file()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">numpy_lowpass_filter()</span></div>
+            <div class="func-desc">Traditional time-domain cosine ring modulation / frequency inversion.</div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                numpy_lowpass_filter() <span class="tag">audio.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_combined()</span>, <span class="func-name">process_inversion()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> FFT irfft audio signal</div>
+            <div class="func-desc">Hann-smoothed FFT lowpass filter eliminating carrier harmonics.</div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                mulberry32() / get_permutation() <span class="tag">audio.py</span>
+            </div>
+            <div class="conn-line"><span class="conn-arrow">IN:</span> <span class="func-name">process_combined()</span></div>
+            <div class="conn-line"><span class="conn-arrow">OUT:</span> Permutation index array</div>
+            <div class="func-desc">Deterministic PRNG and array permutation generator.</div>
+        </div>
+    </div>
+    <h3>🛠️ Core Support Utilities</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Module</th>
+                <th>Function</th>
+                <th>Called By</th>
+                <th>Output / Purpose</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>grid_utils.py</code></td>
+                <td><code>get_blocks()</code></td>
+                <td><code>video_processor</code>, <code>image_processor</code>, <code>svg_generator</code></td>
+                <td>Calculates exact gapless (x1, y1, x2, y2) tile coordinates.</td>
+            </tr>
+            <tr>
+                <td><code>grid_utils.py</code></td>
+                <td><code>get_outer_blocks()</code></td>
+                <td><code>video_processor</code>, <code>image_processor</code>, <code>svg_generator</code></td>
+                <td>Splits grid into inner center overlay and outer background regions.</td>
+            </tr>
+            <tr>
+                <td><code>grid_utils.py</code></td>
+                <td><code>find_best_grid()</code></td>
+                <td><code>video_processor</code>, <code>image_processor</code>, <code>svg_generator</code></td>
+                <td>Finds optimal (cols, rows) ratio for N outer blocks.</td>
+            </tr>
+            <tr>
+                <td><code>crypto.py</code></td>
+                <td><code>seeded_shuffle()</code></td>
+                <td><code>video_processor</code>, <code>image_processor</code>, <code>svg_generator</code></td>
+                <td>Deterministic PRNG array shuffling using seed string.</td>
+            </tr>
+            <tr>
+                <td><code>crypto.py</code></td>
+                <td><code>hash_str()</code></td>
+                <td><code>main.py</code></td>
+                <td>Hashes key/seed string into uint32 seed integer.</td>
+            </tr>
+            <tr>
+                <td><code>crypto.py</code></td>
+                <td><code>clean_key()</code></td>
+                <td><code>main.py</code></td>
+                <td>Strips extra spaces and "KEY:" prefixes from key strings.</td>
+            </tr>
+            <tr>
+                <td><code>svg_generator.py</code></td>
+                <td><code>export_grid_to_svg()</code></td>
+                <td><code>video_processor</code>, <code>image_processor</code></td>
+                <td>Generates visual SVG overlay layout file.</td>
+            </tr>
+            <tr>
+                <td><code>svg_generator.py</code></td>
+                <td><code>export_scrambled_grid_to_svg()</code></td>
+                <td><code>video_processor</code>, <code>image_processor</code></td>
+                <td>Generates sequence-numbered permuted SVG grid file.</td>
+            </tr>
+            <tr>
+                <td><code>metadata_prober.py</code></td>
+                <td><code>probe_media_file()</code></td>
+                <td><code>main.py</code>, <code>video_processor</code></td>
+                <td>Probes codecs, bitrates, resolution, sample rates (via PyAV/FFmpeg).</td>
+            </tr>
+            <tr>
+                <td><code>tempdir.py</code></td>
+                <td><code>get_temp_file_path()</code></td>
+                <td><code>pipeline.py</code>, <code>video_processor</code></td>
+                <td>Manages auto-cleaning process-isolated temporary working directory.</td>
+            </tr>
+            <tr>
+                <td><code>logger.py</code></td>
+                <td><code>LiveDebugger</code></td>
+                <td>All modules (via <code>@LiveDebugger.trace</code>)</td>
+                <td>Real-time console debugger & exception root cause analyzer.</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

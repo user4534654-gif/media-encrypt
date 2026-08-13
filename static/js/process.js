@@ -71,8 +71,13 @@ async function startBatch(action) {
                     fd.append('center_file', centerUpload.files[0]);
                 }
                 fd.append('aud_method', document.getElementById('v_aud_method').value);
-                fd.append('aud_splits', document.getElementById('v_aud_splits').value);
-                fd.append('vol_factor', parseFloat(document.getElementById('vol_factor_slider').value) / 100.0);
+                const volBgElem = document.getElementById('vol_factor_bg_slider') || document.getElementById('vol_factor_slider');
+                const volCenterElem = document.getElementById('vol_factor_center_slider');
+                const volBgVal = volBgElem ? (parseFloat(volBgElem.value) / 100.0) : 1.0;
+                const volCenterVal = volCenterElem ? (parseFloat(volCenterElem.value) / 100.0) : 1.0;
+                fd.append('vol_factor', volBgVal);
+                fd.append('vol_factor_bg', volBgVal);
+                fd.append('vol_factor_center', volCenterVal);
                 const isDualTrack = document.getElementById('dual_track') ? document.getElementById('dual_track').checked : (document.getElementById('dualTrackPreviewToggle') ? document.getElementById('dualTrackPreviewToggle').checked : false);
                 fd.append('dual_track', isDualTrack);
                 fd.append('center_size', document.getElementById('center_size').value);
@@ -80,7 +85,8 @@ async function startBatch(action) {
                 fd.append('aud_track', document.getElementById('aud_track') ? document.getElementById('aud_track').value : 'both');
                 fd.append('outer_end_action', document.getElementById('outer_end_action').value);
                 fd.append('center_end_action', document.getElementById('center_end_action').value);
-                fd.append('center_aud_action', document.getElementById('center_aud_action').value);
+                const centerAudActionElem = document.getElementById('center_aud_action');
+                fd.append('center_aud_action', centerAudActionElem ? centerAudActionElem.value : 'silence');
                 fd.append('export_svg', document.getElementById('exportSvg').checked);
             } else if (activeMediaType === 'image') {
                 fd.append('enc_video', 'true'); 

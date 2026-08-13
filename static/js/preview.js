@@ -163,79 +163,90 @@ function probeFileDuration(file, callback) {
     media.src = url;
 }
 function updateTimelineVisualization() {
+    const audioWrapper = document.getElementById('audioTimelineWrapper');
+    if (typeof activeMediaType !== 'undefined' && activeMediaType === 'image') {
+        if (audioWrapper) audioWrapper.style.display = 'none';
+        return;
+    } else {
+        if (audioWrapper) audioWrapper.style.display = 'block';
+    }
     const centerEndSelect = document.getElementById('center_end_action');
     const centerEndAction = centerEndSelect ? centerEndSelect.value : 'loop'; 
     const outerEndSelect = document.getElementById('outer_end_action');
     const outerEndAction = outerEndSelect ? outerEndSelect.value : 'stop'; 
-    const trackLSelect = document.getElementById('trackLSourceSelect');
-    const trackRSelect = document.getElementById('trackRSourceSelect');
-    const sourceL = trackLSelect ? trackLSelect.value : 'background';
-    const sourceR = trackRSelect ? trackRSelect.value : 'center';
-    const encL = document.getElementById('trackLEncCheckbox') ? document.getElementById('trackLEncCheckbox').checked : true;
-    const encR = document.getElementById('trackREncCheckbox') ? document.getElementById('trackREncCheckbox').checked : true;
-    const audMethodSelect = document.getElementById('v_aud_method') || document.getElementById('aud_method');
-    const activeMethod = audMethodSelect ? audMethodSelect.value : 'inversion';
     const maxDuration = Math.max(durBg, durCenter, 1);
-    renderTrackBar('trackLBar', 'trackLLabel', 'trackLTicks', 'trackLMethodBadge', 'L', sourceL, encL, activeMethod, durBg, durCenter, maxDuration, outerEndAction, centerEndAction);
-    renderTrackBar('trackRBar', 'trackRLabel', 'trackRTicks', 'trackRMethodBadge', 'R', sourceR, encR, activeMethod, durBg, durCenter, maxDuration, outerEndAction, centerEndAction);
+    renderTrackBar('L', 'background', durBg, durCenter, maxDuration, outerEndAction, centerEndAction);
+    renderTrackBar('R', 'center', durBg, durCenter, maxDuration, outerEndAction, centerEndAction);
 }
-function renderTrackBar(barId, labelId, ticksId, methodBadgeId, chName, source, isEncrypted, activeMethod, durBgVal, durCenterVal, totalMaxDur, outerEndAction, centerEndAction) {
-    const bar = document.getElementById(barId);
-    const label = document.getElementById(labelId);
-    const ticks = document.getElementById(ticksId);
-    const methodBadge = document.getElementById(methodBadgeId);
-    if (!bar || !label || !ticks) return;
-    if (methodBadge) {
-        if (isEncrypted) {
-            methodBadge.innerText = `[${activeMethod}]`;
-            methodBadge.style.background = '#e0e0e0';
-            methodBadge.style.color = '#333';
-        } else {
-            methodBadge.innerText = `[Clear]`;
-            methodBadge.style.background = '#d4edda';
-            methodBadge.style.color = '#155724';
-        }
-    }
-    bar.className = 'track-timeline-bar';
+function renderTrackBar(chName, source, durBgVal, durCenterVal, totalMaxDur, outerEndAction, centerEndAction) {
+    const activeSeg = document.getElementById(`track${chName}ActiveSeg`);
+    const activeLabel = document.getElementById(`track${chName}ActiveLabel`);
+    const endSeg = document.getElementById(`track${chName}EndSeg`);
+    const endLabel = document.getElementById(`track${chName}EndLabel`);
+    const ticks = document.getElementById(`track${chName}Ticks`);
+    if (!activeSeg || !activeLabel || !endSeg || !endLabel || !ticks) return;
     ticks.innerHTML = '';
     const trackDur = (source === 'center') ? durCenterVal : durBgVal;
     const trackEndAction = (source === 'center') ? centerEndAction : outerEndAction;
-    if (source === 'center') {
-        bar.classList.add('red-bar');
+    const remDur = totalMaxDur - trackDur;
+    const isCenter = (source === 'center');
+    activeSeg.className = 'track-active-segment';
+    if (isCenter) {
+        activeSeg.classList.add('red-segment');
     } else {
-        bar.classList.add('blue-bar');
+        activeSeg.classList.add('blue-segment');
     }
-    let widthPct = Math.min(100, Math.round((trackDur / totalMaxDur) * 100));
-    let statusText = `${chName} Track (${source === 'center' ? 'Center' : 'Background'}: ${trackDur}s)`;
-    if (trackDur < totalMaxDur) {
+    const titleText = isCenter ? 'Center Overlay Video' : 'Background Video';
+    if (remDur <= 0) {
+        activeSeg.classList.add('full-width');
+        activeSeg.style.width = '100%';
+        activeLabel.innerText = `${titleText} (${trackDur}s)`;
+        endSeg.classList.add('hidden');
+        endSeg.style.width = '0%';
+    } else {
+        const activePct = Math.max(10, Math.min(90, Math.round((trackDur / totalMaxDur) * 100)));
+        const endPct = 100 - activePct;
+        activeSeg.style.width = activePct + '%';
+        activeLabel.innerText = `${titleText} (${trackDur}s)`;
+        endSeg.classList.remove('hidden');
+        endSeg.style.width = endPct + '%';
+        endSeg.className = 'track-end-segment';
         if (trackEndAction === 'loop') {
-            widthPct = 100;
-            bar.classList.add('loop-bar');
-            statusText = `${chName} Track (${source === 'center' ? 'Center' : 'Background'}: ${trackDur}s Looped to ${totalMaxDur}s)`;
+            endSeg.classList.add('loop-end');
+            endLabel.innerText = `Looped (+${remDur}s)`;
         } else if (trackEndAction === 'freeze') {
-            widthPct = 100;
-            if (source === 'center') {
-                bar.classList.add('pale-red-bar');
+            if (isCenter) {
+                endSeg.classList.add('pale-red-end');
             } else {
-                bar.classList.add('pale-blue-bar');
+                endSeg.classList.add('pale-blue-end');
             }
-            statusText = `${chName} Track (${source === 'center' ? 'Center' : 'Background'}: ${trackDur}s -> Frozen Frame to ${totalMaxDur}s)`;
+            endLabel.innerText = `Frozen (+${remDur}s)`;
         } else if (trackEndAction === 'black') {
-            widthPct = 100;
-            bar.classList.add('black-bar');
-            statusText = `${chName} Track (${source === 'center' ? 'Center' : 'Background'}: ${trackDur}s -> Black Screen to ${totalMaxDur}s)`;
+            endSeg.classList.add('black-end');
+            endLabel.innerText = `Black Screen (+${remDur}s)`;
         } else { 
-            statusText = `${chName} Track (${source === 'center' ? 'Center' : 'Background'}: ${trackDur}s Ended)`;
+            endSeg.classList.add('stop-end');
+            endLabel.innerText = `Ended (+${remDur}s)`;
         }
     }
-    bar.style.width = widthPct + '%';
-    label.innerText = statusText;
     const stepCount = Math.min(totalMaxDur, 10);
     for (let i = 1; i <= stepCount; i++) {
         const tick = document.createElement('div');
         tick.className = 'timeline-tick-mark';
         ticks.appendChild(tick);
     }
+}
+function updateVolBgLabel(val) {
+    const valElem = document.getElementById('vol_factor_bg_val');
+    if (valElem) valElem.innerText = val + '%';
+    const mainVolSlider = document.getElementById('vol_factor_slider');
+    const mainVolVal = document.getElementById('vol_factor_val');
+    if (mainVolSlider) mainVolSlider.value = val;
+    if (mainVolVal) mainVolVal.innerText = val + '%';
+}
+function updateVolCenterLabel(val) {
+    const valElem = document.getElementById('vol_factor_center_val');
+    if (valElem) valElem.innerText = val + '%';
 }
 document.addEventListener('DOMContentLoaded', function() {
     initVisualPreview();

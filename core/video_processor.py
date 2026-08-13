@@ -29,6 +29,19 @@ def _adjust_audio_length(y, target_len, action='silence'):
             return np.pad(y, (0, shortage))
         else:
             return np.pad(y, ((0, shortage), (0, 0)))
+def _close_ffmpeg_proc(p, name="FFmpeg"):
+    if p is None:
+        return
+    if p.stdin and not p.stdin.closed:
+        try:
+            p.stdin.close()
+        except Exception:
+            pass
+    p.stdin = None
+    _, stderr_bytes = p.communicate()
+    if p.returncode != 0 and stderr_bytes:
+        err_text = stderr_bytes.decode('utf-8', errors='ignore')
+        LiveDebugger.log("FFMPEG_ERROR", f"{name} encoding failed with returncode {p.returncode}: {err_text.strip()}", level="ERROR", module="VIDEO")
 @LiveDebugger.trace(module_name="VIDEO")
 def process_video_file(input_path, output_path, options, progress_dict, task_id):
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
@@ -54,15 +67,17 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             info_main = sf.info(temp_aud)
             main_sr = info_main.samplerate
         except Exception as e:
-            print("Failed to read main audio sample rate:", e)
+            LiveDebugger.log("AUDIO_SR_WARN", f"Failed to read main audio sample rate: {e}", level="WARNING", module="VIDEO")
         if not reverse and options.get('center') and options.get('dual_track'):
+            vol_bg = options.get('vol_factor_bg', options.get('vol_factor', 1.0))
+            vol_center = options.get('vol_factor_center', 1.0)
             process_audio_file(
                 temp_aud, temp_aud, is_decrypt=False,
                 method=options.get('aud_method', 'inversion'),
                 key=options.get('aud_key', 42),
                 num_splits=options.get('aud_splits', 10),
                 carrier_freq=carrier_freq,
-                vol_factor=options.get('vol_factor', 1.0),
+                vol_factor=vol_bg,
                 aud_track=options.get('aud_track', 'both')
             )
             temp_center_aud = get_temp_file_path(os.path.basename(options['center_path']) + "_center_aud.wav")
@@ -75,7 +90,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 center_data, center_sr = sf.read(temp_center_aud)
                 if len(center_data.shape) > 1:
                     center_data = center_data[:, 0]
-                center_data = _adjust_audio_length(center_data, len(main_data), center_aud_action)
+                center_data = _adjust_audio_length(center_data, len(main_data), center_aud_action) * vol_center
                 os.remove(temp_center_aud)
             else:
                 center_data = np.zeros_like(main_data)
@@ -170,7 +185,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             export_scrambled_grid_to_svg(f"{base}_grid_original.svg", out_w, out_h, cols, rows, seed, has_center=options.get('center', False), center_size=center_size, prefix_original=True)
             export_scrambled_grid_to_svg(f"{base}_grid_scrambled.svg", out_w, out_h, cols, rows, seed, has_center=options.get('center', False), center_size=center_size, prefix_original=False)
         except Exception as e:
-            print("Failed to export SVG grids:", e)
+            LiveDebugger.log("SVG_EXPORT_WARN", f"Failed to export SVG grids: {e}", level="WARNING", module="VIDEO")
     cap_center = None
     fps_c = 30.0
     total_frames_c = 0
@@ -250,170 +265,169 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         except (BrokenPipeError, OSError) as err:
             stderr_msg = ""
             try:
+                if p.stdin and not p.stdin.closed:
+                    p.stdin.close()
+                p.stdin = None
                 _, err_bytes = p.communicate(timeout=2)
                 if err_bytes:
                     stderr_msg = err_bytes.decode('utf-8', errors='ignore')
             except Exception:
                 pass
             raise RuntimeError(f"FFmpeg process ended unexpectedly: {stderr_msg.strip() or str(err)}") from err
-    frame_count = 0
-    last_outer_frame = None                                       
-    last_center_frame = None                                       
-    outer_exhausted = False
-    center_exhausted = False
-    accumulated_c = 0.0                                        
-    center_read_cursor = 0                                                               
-    while frame_count < output_total_frames:
-        ret, frame = cap.read()
-        if not ret:
-            outer_exhausted = True
-            if outer_end_action == 'loop':
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                ret, frame = cap.read()
-                if not ret:
-                    break                     
-            elif outer_end_action == 'freeze' and last_outer_frame is not None:
-                frame = last_outer_frame.copy()
-            elif outer_end_action == 'black' and last_outer_frame is not None:
-                frame = np.zeros_like(last_outer_frame)
-            else:
-                break                            
-        if frame is not None:
-            last_outer_frame = frame
-        if frame is not None and (out_w != frame.shape[1] or out_h != frame.shape[0]):
-            if no_scale:
-                canvas = np.zeros((out_h, out_w, 3), dtype=np.uint8)
-                orig_h, orig_w = frame.shape[:2]
-                copy_w, copy_h = min(out_w, orig_w), min(out_h, orig_h)
-                cxo, cyo = (out_w - copy_w) // 2, (out_h - copy_h) // 2
-                fxo, fyo = (orig_w - copy_w) // 2, (orig_h - copy_h) // 2
-                canvas[cyo:cyo+copy_h, cxo:cxo+copy_w] = frame[fyo:fyo+copy_h, fxo:fxo+copy_w]
-                frame = canvas
-            else:
-                frame = cv2.resize(frame, (out_w, out_h))
-        if proc_vid:
-            if options.get('center'):
-                if reverse:
-                    restored_frame = np.zeros((out_h, out_w, 3), dtype=np.uint8)
-                    if video_encrypt_mode in ['external', 'both']:
-                        for j in range(N_outer):
-                            idx = shuffled_outer[j]
-                            dx1, dy1, dx2, dy2 = all_blocks[idx]
-                            tile = frame[dy1:dy2, dx1:dx2]
-                            x1, y1, x2, y2 = src_blocks_outer[j]
-                            tile_resized = cv2.resize(tile, (x2 - x1, y2 - y1))
-                            restored_frame[y1:y2, x1:x2] = tile_resized
-                    else:
-                        restored_frame = frame.copy()
-                    center_frame = frame[cy1:cy2, cx1:cx2]
-                    if video_encrypt_mode in ['center', 'both']:
-                        unscrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
-                        for i in range(cols_inner * rows_inner):
-                            t_idx = dest_to_src_center[i]
-                            sx1, sy1, sx2, sy2 = center_blocks[t_idx]
-                            dx1, dy1, dx2, dy2 = center_blocks[i]
-                            tile = center_frame[sy1:sy2, sx1:sx2]
-                            dw_blk, dh_blk = dx2 - dx1, dy2 - dy1
-                            if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
-                                tile = cv2.resize(tile, (dw_blk, dh_blk))
-                            unscrambled_c[dy1:dy2, dx1:dx2] = tile
-                        center_frame_to_write = unscrambled_c
-                    else:
-                        center_frame_to_write = center_frame
-                    write_pipe_frame(proc, restored_frame.tobytes())
-                    if proc_center:
-                        center_out = cv2.resize(center_frame_to_write, (cw, ch))
-                        write_pipe_frame(proc_center, center_out.tobytes())
+    try:
+        frame_count = 0
+        last_outer_frame = None                                       
+        last_center_frame = None                                       
+        outer_exhausted = False
+        center_exhausted = False
+        accumulated_c = 0.0                                        
+        center_read_cursor = 0                                                               
+        while frame_count < output_total_frames:
+            ret, frame = cap.read()
+            if not ret:
+                outer_exhausted = True
+                if outer_end_action == 'loop':
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    ret, frame = cap.read()
+                    if not ret:
+                        break                     
+                elif outer_end_action == 'freeze' and last_outer_frame is not None:
+                    frame = last_outer_frame.copy()
+                elif outer_end_action == 'black' and last_outer_frame is not None:
+                    frame = np.zeros_like(last_outer_frame)
                 else:
-                    new_frame = np.zeros((out_h, out_w, 3), dtype=np.uint8)
-                    if video_encrypt_mode in ['external', 'both']:
-                        for j in range(N_outer):
-                            x1, y1, x2, y2 = src_blocks_outer[j]
-                            tile = frame[y1:y2, x1:x2]
-                            idx = shuffled_outer[j]
-                            dx1, dy1, dx2, dy2 = all_blocks[idx]
-                            tile_resized = cv2.resize(tile, (dx2 - dx1, dy2 - dy1))
-                            new_frame[dy1:dy2, dx1:dx2] = tile_resized
+                    break                            
+            if frame is not None:
+                last_outer_frame = frame
+            if frame is not None and (out_w != frame.shape[1] or out_h != frame.shape[0]):
+                if no_scale:
+                    canvas = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+                    orig_h, orig_w = frame.shape[:2]
+                    copy_w, copy_h = min(out_w, orig_w), min(out_h, orig_h)
+                    cxo, cyo = (out_w - copy_w) // 2, (out_h - copy_h) // 2
+                    fxo, fyo = (orig_w - copy_w) // 2, (orig_h - copy_h) // 2
+                    canvas[cyo:cyo+copy_h, cxo:cxo+copy_w] = frame[fyo:fyo+copy_h, fxo:fxo+copy_w]
+                    frame = canvas
+                else:
+                    frame = cv2.resize(frame, (out_w, out_h))
+            if proc_vid:
+                if options.get('center'):
+                    if reverse:
+                        restored_frame = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+                        if video_encrypt_mode in ['external', 'both']:
+                            for j in range(N_outer):
+                                idx = shuffled_outer[j]
+                                dx1, dy1, dx2, dy2 = all_blocks[idx]
+                                tile = frame[dy1:dy2, dx1:dx2]
+                                x1, y1, x2, y2 = src_blocks_outer[j]
+                                tile_resized = cv2.resize(tile, (x2 - x1, y2 - y1))
+                                restored_frame[y1:y2, x1:x2] = tile_resized
+                        else:
+                            restored_frame = frame.copy()
+                        center_frame = frame[cy1:cy2, cx1:cx2]
+                        if video_encrypt_mode in ['center', 'both']:
+                            unscrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
+                            for i in range(cols_inner * rows_inner):
+                                t_idx = dest_to_src_center[i]
+                                sx1, sy1, sx2, sy2 = center_blocks[t_idx]
+                                dx1, dy1, dx2, dy2 = center_blocks[i]
+                                tile = center_frame[sy1:sy2, sx1:sx2]
+                                dw_blk, dh_blk = dx2 - dx1, dy2 - dy1
+                                if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
+                                    tile = cv2.resize(tile, (dw_blk, dh_blk))
+                                unscrambled_c[dy1:dy2, dx1:dx2] = tile
+                            center_frame_to_write = unscrambled_c
+                        else:
+                            center_frame_to_write = center_frame
+                        write_pipe_frame(proc, restored_frame.tobytes())
+                        if proc_center:
+                            center_out = cv2.resize(center_frame_to_write, (cw, ch))
+                            write_pipe_frame(proc_center, center_out.tobytes())
                     else:
-                        for idx in outer_indices:
-                            dx1, dy1, dx2, dy2 = all_blocks[idx]
-                            new_frame[dy1:dy2, dx1:dx2] = frame[dy1:dy2, dx1:dx2]
-                    if cap_center:
-                        target_c_idx = int(accumulated_c)
-                        while center_read_cursor <= target_c_idx:
-                            rc, fc = cap_center.read()
-                            if not rc:
-                                center_exhausted = True
-                                break
-                            last_center_frame = fc
-                            center_read_cursor += 1
-                        if center_exhausted:
-                            if center_end_action == 'loop':
-                                cap_center.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                                center_read_cursor = 0
-                                accumulated_c = 0.0
-                                center_exhausted = False
+                        new_frame = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+                        if video_encrypt_mode in ['external', 'both']:
+                            for j in range(N_outer):
+                                x1, y1, x2, y2 = src_blocks_outer[j]
+                                tile = frame[y1:y2, x1:x2]
+                                idx = shuffled_outer[j]
+                                dx1, dy1, dx2, dy2 = all_blocks[idx]
+                                tile_resized = cv2.resize(tile, (dx2 - dx1, dy2 - dy1))
+                                new_frame[dy1:dy2, dx1:dx2] = tile_resized
+                        else:
+                            for idx in outer_indices:
+                                dx1, dy1, dx2, dy2 = all_blocks[idx]
+                                new_frame[dy1:dy2, dx1:dx2] = frame[dy1:dy2, dx1:dx2]
+                        if cap_center:
+                            target_c_idx = int(accumulated_c)
+                            while center_read_cursor <= target_c_idx:
                                 rc, fc = cap_center.read()
-                                if rc:
-                                    last_center_frame = fc
-                                    center_read_cursor = 1
-                            elif center_end_action == 'black':
-                                last_center_frame = np.zeros((ch, cw, 3), dtype=np.uint8)
-                        frame_c = last_center_frame
-                        accumulated_c += frame_step_c
-                        if frame_c is not None:
-                            frame_c_resized = cv2.resize(frame_c, (cw, ch))
-                            if video_encrypt_mode in ['center', 'both']:
-                                scrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
-                                for i in range(cols_inner * rows_inner):
-                                    t_idx = dest_to_src_center[i]
-                                    sx1, sy1, sx2, sy2 = center_blocks[t_idx]
-                                    dx1, dy1, dx2, dy2 = center_blocks[i]
-                                    tile = frame_c_resized[sy1:sy2, sx1:sx2]
-                                    dw_blk, dh_blk = dx2 - dx1, dy2 - dy1
-                                    if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
-                                        tile = cv2.resize(tile, (dw_blk, dh_blk))
-                                    scrambled_c[dy1:dy2, dx1:dx2] = tile
-                                frame_c_resized = scrambled_c
-                            new_frame[cy1:cy2, cx1:cx2] = frame_c_resized
+                                if not rc:
+                                    center_exhausted = True
+                                    break
+                                last_center_frame = fc
+                                center_read_cursor += 1
+                            if center_exhausted:
+                                if center_end_action == 'loop':
+                                    cap_center.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                                    center_read_cursor = 0
+                                    accumulated_c = 0.0
+                                    center_exhausted = False
+                                    rc, fc = cap_center.read()
+                                    if rc:
+                                        last_center_frame = fc
+                                        center_read_cursor = 1
+                                elif center_end_action == 'black':
+                                    last_center_frame = np.zeros((ch, cw, 3), dtype=np.uint8)
+                            frame_c = last_center_frame
+                            accumulated_c += frame_step_c
+                            if frame_c is not None:
+                                frame_c_resized = cv2.resize(frame_c, (cw, ch))
+                                if video_encrypt_mode in ['center', 'both']:
+                                    scrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
+                                    for i in range(cols_inner * rows_inner):
+                                        t_idx = dest_to_src_center[i]
+                                        sx1, sy1, sx2, sy2 = center_blocks[t_idx]
+                                        dx1, dy1, dx2, dy2 = center_blocks[i]
+                                        tile = frame_c_resized[sy1:sy2, sx1:sx2]
+                                        dw_blk, dh_blk = dx2 - dx1, dy2 - dy1
+                                        if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
+                                            tile = cv2.resize(tile, (dw_blk, dh_blk))
+                                        scrambled_c[dy1:dy2, dx1:dx2] = tile
+                                    frame_c_resized = scrambled_c
+                                new_frame[cy1:cy2, cx1:cx2] = frame_c_resized
+                        write_pipe_frame(proc, new_frame.tobytes())
+                else:
+                    new_frame = frame.copy()
+                    for i in range(n_blocks):
+                        t_idx = dest_to_src[i]
+                        sx1, sy1, sx2, sy2 = all_blocks[t_idx]
+                        dx1, dy1, dx2, dy2 = all_blocks[i]
+                        tile = frame[sy1:sy2, sx1:sx2]
+                        dw_blk, dh_blk = dx2 - dx1, dy2 - dy1
+                        if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
+                            tile = cv2.resize(tile, (dw_blk, dh_blk))
+                        new_frame[dy1:dy2, dx1:dx2] = tile
                     write_pipe_frame(proc, new_frame.tobytes())
             else:
-                new_frame = frame.copy()
-                for i in range(n_blocks):
-                    t_idx = dest_to_src[i]
-                    sx1, sy1, sx2, sy2 = all_blocks[t_idx]
-                    dx1, dy1, dx2, dy2 = all_blocks[i]
-                    tile = frame[sy1:sy2, sx1:sx2]
-                    dw_blk, dh_blk = dx2 - dx1, dy2 - dy1
-                    if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
-                        tile = cv2.resize(tile, (dw_blk, dh_blk))
-                    new_frame[dy1:dy2, dx1:dx2] = tile
-                write_pipe_frame(proc, new_frame.tobytes())
-        else:
-            write_pipe_frame(proc, frame.tobytes())
-        frame_count += 1
-        if total_frames > 0 and frame_count % 5 == 0:
-            progress_dict[task_id] = int((frame_count / max(output_total_frames, 1)) * 100)
-    try:
-        proc.stdin.close()
-    except Exception:
-        pass
-    _, stderr_bytes = proc.communicate()
-    if proc.returncode != 0 and stderr_bytes:
-        print("FFmpeg encoding stderr:", stderr_bytes.decode('utf-8', errors='ignore'))
-    if proc_center:
-        try:
-            proc_center.stdin.close()
-        except Exception:
-            pass
-        _, stderr_c_bytes = proc_center.communicate()
-        if proc_center.returncode != 0 and stderr_c_bytes:
-            print("FFmpeg center encoding stderr:", stderr_c_bytes.decode('utf-8', errors='ignore'))
-    cap.release()
-    if cap_center:
-        cap_center.release()
-    if has_audio and os.path.exists(temp_aud):
-        os.remove(temp_aud)
-    if os.path.exists(temp_center_aud_out):
-        os.remove(temp_center_aud_out)
+                write_pipe_frame(proc, frame.tobytes())
+            frame_count += 1
+            if total_frames > 0 and frame_count % 5 == 0:
+                progress_dict[task_id] = int((frame_count / max(output_total_frames, 1)) * 100)
+    finally:
+        _close_ffmpeg_proc(proc, name="FFmpeg Main")
+        if proc_center:
+            _close_ffmpeg_proc(proc_center, name="FFmpeg Center")
+        cap.release()
+        if cap_center:
+            cap_center.release()
+        if os.path.exists(temp_aud):
+            try:
+                os.remove(temp_aud)
+            except Exception:
+                pass
+        if os.path.exists(temp_center_aud_out):
+            try:
+                os.remove(temp_center_aud_out)
+            except Exception:
+                pass
     progress_dict[task_id] = 100

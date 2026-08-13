@@ -1,11 +1,56 @@
 
-.visual-preview-container {
+.visual-canvas-container, .visual-preview-container {
     background: #ffffff;
     border-radius: 12px;
     padding: 14px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     border: 1px solid #d1d1d6;
     box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+.symmetrical-settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 14px;
+}
+@media (max-width: 600px) {
+    .symmetrical-settings-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.settings-card {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 12px;
+    box-sizing: border-box;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    transition: all 0.2s ease;
+}
+.settings-card.blue-card {
+    border: 1.5px solid rgba(0, 122, 255, 0.4);
+    background: rgba(0, 122, 255, 0.02);
+}
+.settings-card.red-card {
+    border: 1.5px solid rgba(255, 59, 48, 0.4);
+    background: rgba(255, 59, 48, 0.02);
+}
+.settings-card .card-header {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.blue-card .card-header {
+    color: #0056b3;
+    border-bottom: 1px solid rgba(0, 122, 255, 0.2);
+    padding-bottom: 6px;
+}
+.red-card .card-header {
+    color: #d70015;
+    border-bottom: 1px solid rgba(255, 59, 48, 0.2);
+    padding-bottom: 6px;
 }
 .preview-target-badge {
     font-size: 12px;
@@ -216,47 +261,75 @@
     display: flex;
     align-items: center;
 }
-.track-timeline-bar {
+.track-active-segment {
     height: 100%;
     position: relative;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0 8px;
+    justify-content: flex-start;
+    padding: 0 6px;
     box-sizing: border-box;
     transition: width 0.3s ease, background 0.3s ease;
+    border-radius: 6px 0 0 6px;
+    z-index: 2;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.track-active-segment.full-width {
     border-radius: 6px;
 }
-.track-timeline-bar.blue-bar {
+.track-active-segment.blue-segment {
     background: linear-gradient(90deg, #007aff 0%, #0056b3 100%) !important;
     color: #ffffff !important;
 }
-.track-timeline-bar.red-bar {
+.track-active-segment.red-segment {
     background: linear-gradient(90deg, #ff3b30 0%, #d70015 100%) !important;
     color: #ffffff !important;
 }
-.track-timeline-bar.pale-red-bar {
+.track-end-segment {
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    box-sizing: border-box;
+    transition: width 0.3s ease;
+    border-radius: 0 6px 6px 0;
+    z-index: 2;
+    overflow: hidden;
+    white-space: nowrap;
+    border-left: 2px solid rgba(255,255,255,0.6);
+}
+.track-end-segment.pale-red-end {
     background: rgba(255, 59, 48, 0.35) !important;
-    border: 1px dashed #ff3b30;
     color: #990000 !important;
 }
-.track-timeline-bar.pale-blue-bar {
+.track-end-segment.pale-blue-end {
     background: rgba(0, 122, 255, 0.35) !important;
-    border: 1px dashed #007aff;
     color: #004085 !important;
 }
-.track-timeline-bar.black-bar {
+.track-end-segment.black-end {
     background: #2c2c2e !important;
     color: #8e8e93 !important;
 }
-.track-timeline-bar.loop-bar {
-    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.25), rgba(255,255,255,0.25) 8px, transparent 8px, transparent 16px) !important;
+.track-end-segment.loop-end {
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.3), rgba(255,255,255,0.3) 8px, transparent 8px, transparent 16px) !important;
+    color: #ffffff !important;
 }
-.timeline-label {
+.track-end-segment.stop-end {
+    background: rgba(0,0,0,0.05) !important;
+    border: 1px dashed #aaa;
+    color: #777 !important;
+}
+.segment-label {
     font-size: 10px;
     font-weight: 700;
-    z-index: 2;
+    z-index: 3;
     text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 .timeline-ticks {
     position: absolute;

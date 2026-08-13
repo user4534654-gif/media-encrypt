@@ -1,0 +1,42 @@
+
+<div class="audio-timeline-wrapper ios-group" id="audioTimelineWrapper">
+    <div class="audio-timeline-header">
+        <span>⏱️ Timeline Duration Preview<span class="help-tip">❔<span class="tooltip-text">Live video timeline duration preview. Visualizes active and end-action durations for both Background Video and Center Overlay Video.</span></span></span>
+    </div>
+    <div class="audio-track-line" id="trackLineL">
+        <div class="track-info">
+            <span class="channel-badge blue-badge" id="badgeL">BG</span>
+            <span style="font-size: 13px; font-weight: 600; color: #007aff;">Background Video</span>
+        </div>
+        <div class="track-timeline-bar-container" id="trackLContainer">
+            <div class="track-active-segment blue-segment" id="trackLActiveSeg">
+                <span class="segment-label" id="trackLActiveLabel">Background Video (10s)</span>
+            </div>
+            <div class="track-end-segment hidden" id="trackLEndSeg">
+                <span class="segment-label" id="trackLEndLabel"></span>
+            </div>
+            <div class="timeline-ticks" id="trackLTicks"></div>
+        </div>
+    </div>
+    <div class="audio-track-line" id="trackLineR">
+        <div class="track-info">
+            <span class="channel-badge red-badge" id="badgeR">CTR</span>
+            <span style="font-size: 13px; font-weight: 600; color: #ff3b30;">Center Overlay Video</span>
+        </div>
+        <div class="track-timeline-bar-container" id="trackRContainer">
+            <div class="track-active-segment red-segment" id="trackRActiveSeg">
+                <span class="segment-label" id="trackRActiveLabel">Center Overlay Video (3s)</span>
+            </div>
+            <div class="track-end-segment hidden" id="trackREndSeg">
+                <span class="segment-label" id="trackREndLabel"></span>
+            </div>
+            <div class="timeline-ticks" id="trackRTicks"></div>
+        </div>
+    </div>
+    <div class="timeline-legend">
+        <span class="legend-item"><span class="legend-box solid-box"></span> Active Video</span>
+        <span class="legend-item"><span class="legend-box loop-box"></span> Looped</span>
+        <span class="legend-item"><span class="legend-box freeze-box"></span> Frozen Frame</span>
+        <span class="legend-item"><span class="legend-box black-box"></span> Black Screen</span>
+    </div>
+</div>

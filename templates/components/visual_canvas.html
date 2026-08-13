@@ -1,0 +1,24 @@
+
+<div class="visual-canvas-container ios-group" id="visualCanvasContainer">
+    <div class="ios-group-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>🎨 Interactive Visual Preview & Encryption Target<span class="help-tip">❔<span class="tooltip-text">Interactive layout preview. Click on the Red box (Center Overlay) or Blue box (Background) to select it and configure its settings below.</span></span></span>
+        <span class="preview-target-badge" id="previewTargetBadge">Target: Background (Blue)</span>
+    </div>
+    <div class="preview-canvas-wrapper">
+        <div class="preview-background-box active-selection" id="previewBgBox" onclick="selectPreviewTarget('external', event)">
+            <div class="preview-bg-label">
+                <span class="color-dot blue-dot"></span> Background Video / Image
+                <span class="enc-status-badge" id="bgEncStatusBadge">🔒 Encrypted</span>
+            </div>
+            <div class="preview-center-box size-1-4" id="previewCenterBox" onclick="selectPreviewTarget('center', event)">
+                <div class="preview-center-label">
+                    <span class="color-dot red-dot"></span> Center Overlay
+                    <span class="enc-status-badge" id="centerEncStatusBadge">🔓 Untouched</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="preview-selection-hint">
+        💡 <i>Click on the <b>Red (Center)</b> box or <b>Blue (Background)</b> box above to select and edit individual settings!</i>
+    </div>
+</div>

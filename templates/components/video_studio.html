@@ -18,37 +18,45 @@
             <label class="ios-label" style="color: #007aff;">Upload Central Video (untouched)</label>
             <input type="file" id="centerVideoUpload" class="ios-file-input" accept="video/*">
             <div class="file-list" id="centerFileList"></div>
-            {% include 'components/visual_preview.html' %}
-            <label class="ios-label" style="margin-top: 10px;">Central Overlay Size</label>
-            <select id="center_size" class="ios-select">
-                <option value="1/4" selected>1/4 (Default)</option>
-                <option value="2/4">2/4 (Half Space)</option>
-                <option value="3/4">3/4 (Most Space)</option>
-            </select>
-            <label class="ios-label" style="margin-top: 10px;">Video Encryption Target</label>
-            <select id="video_encrypt_mode" class="ios-select">
-                <option value="external" selected>External Video (Background) Only</option>
-                <option value="center">Central Video Only</option>
-                <option value="both">Both (External & Center)</option>
-            </select>
-            <label class="ios-label" style="margin-top: 10px;">Outer Video End Action<span class="help-tip">❔<span class="tooltip-text">Action if outer video ends before center video. Stop: end video. Freeze: freeze last frame. Black: black frame. Loop: restart outer video.</span></span></label>
-            <select id="outer_end_action" class="ios-select">
-                <option value="stop" selected>Stop (Default)</option>
-                <option value="freeze">Freeze Last Frame</option>
-                <option value="black">Black Screen</option>
-                <option value="loop">Loop Video</option>
-            </select>
-            <label class="ios-label" style="margin-top: 10px;">Center Video End Action<span class="help-tip">❔<span class="tooltip-text">Action if center video ends before outer video. Loop: restart. Freeze: freeze last frame. Black: black screen.</span></span></label>
-            <select id="center_end_action" class="ios-select">
-                <option value="loop" selected>Loop Video (Default)</option>
-                <option value="freeze">Freeze Last Frame</option>
-                <option value="black">Black Screen</option>
-            </select>
-            <label class="ios-label" style="margin-top: 10px;">Center Audio End Action<span class="help-tip">❔<span class="tooltip-text">Action for center audio track. Silence: pad with zeros. Loop: repeat audio track.</span></span></label>
-            <select id="center_aud_action" class="ios-select">
-                <option value="silence" selected>Silence (Default)</option>
-                <option value="loop">Loop Audio</option>
-            </select>
+            {% include 'components/visual_canvas.html' %}
+            {% include 'components/audio_timeline.html' %}
+            <div class="symmetrical-settings-grid">
+                <div class="settings-card blue-card">
+                    <div class="card-header">
+                        <span class="color-dot blue-dot"></span> Background Video Settings
+                    </div>
+                    <label class="ios-label" style="margin-top: 8px;">Outer Video End Action<span class="help-tip">❔<span class="tooltip-text">Action if outer background video ends before central video. Stop: end video. Freeze: freeze last frame. Black: black screen. Loop: restart background video.</span></span></label>
+                    <select id="outer_end_action" class="ios-select">
+                        <option value="stop" selected>Stop (Default)</option>
+                        <option value="freeze">Freeze Last Frame</option>
+                        <option value="black">Black Screen</option>
+                        <option value="loop">Loop Video</option>
+                    </select>
+                </div>
+                <div class="settings-card red-card">
+                    <div class="card-header">
+                        <span class="color-dot red-dot"></span> Center Overlay Video Settings
+                    </div>
+                    <label class="ios-label" style="margin-top: 8px;">Central Overlay Size<span class="help-tip">❔<span class="tooltip-text">Size proportion of central video overlay (1/4 default, 2/4 half space, 3/4 most space).</span></span></label>
+                    <select id="center_size" class="ios-select">
+                        <option value="1/4" selected>1/4 (Default)</option>
+                        <option value="2/4">2/4 (Half Space)</option>
+                        <option value="3/4">3/4 (Most Space)</option>
+                    </select>
+                    <label class="ios-label" style="margin-top: 10px;">Video Encryption Target<span class="help-tip">❔<span class="tooltip-text">Choose which video layer is scrambled: Background Only, Central Video Only, or Both.</span></span></label>
+                    <select id="video_encrypt_mode" class="ios-select">
+                        <option value="external" selected>External Video (Background) Only</option>
+                        <option value="center">Central Video Only</option>
+                        <option value="both">Both (External & Center)</option>
+                    </select>
+                    <label class="ios-label" style="margin-top: 10px;">Center Video End Action<span class="help-tip">❔<span class="tooltip-text">Action if central video ends before background video. Loop: restart. Freeze: freeze last frame. Black: black screen.</span></span></label>
+                    <select id="center_end_action" class="ios-select">
+                        <option value="loop" selected>Loop Video (Default)</option>
+                        <option value="freeze">Freeze Last Frame</option>
+                        <option value="black">Black Screen</option>
+                    </select>
+                </div>
+            </div>
         </div>
         <div class="ios-group-row toggles" id="encToggles">
             <label class="ios-switch-label"><input type="checkbox" id="encVideo" checked> Scramble Video</label>
