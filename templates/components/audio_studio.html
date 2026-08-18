@@ -3,8 +3,25 @@
         <div class="ios-group-header">1. Upload Audio Files</div>
         <div class="ios-group-row">
             <label class="ios-label">Upload Audio Files (Batch Supported)</label>
-            <input type="file" id="audioUpload" multiple class="ios-file-input" accept="audio/*">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+                <input type="file" id="audioUpload" multiple class="ios-file-input" accept="audio/*" style="flex: 1;">
+                <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('audio', false)">📂 Pick from Vault</button>
+            </div>
             <div class="file-list" id="audioList"></div>
+            <div class="url-download-container" style="margin-top: 10px;">
+                <label class="ios-label" style="font-size: 12px; color: #555;">Or Download via URL / CLI (yt-dlp audio)<span class="help-tip">❔<span class="tooltip-text">Enter audio/video URL or yt-dlp arguments. Audio will be automatically extracted and saved to the input vault.</span></span></label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" id="audioUrlInput" class="ios-input url-cmd-input" placeholder="e.g. YouTube URL or direct audio link..." onkeydown="if(event.key==='Enter') triggerUrlDownload('audio', false)">
+                    <button type="button" class="ios-btn-small" onclick="triggerUrlDownload('audio', false)">⬇️ Download</button>
+                </div>
+                <div id="audioTerminal" class="mini-terminal hidden">
+                    <div class="mini-terminal-header">
+                        <span>🎵 yt-dlp audio terminal</span>
+                        <button type="button" class="mini-terminal-close" onclick="closeTerminal('audioTerminal')">✕</button>
+                    </div>
+                    <pre id="audioTerminalLog" class="mini-terminal-log"></pre>
+                </div>
+            </div>
         </div>
     </div>
     <div class="ios-group">
@@ -61,7 +78,7 @@
             </div>
             <div>
                 <label class="ios-label">Audio Codec<span class="help-tip">❔<span class="tooltip-text">AAC is compressed; MP3 is legacy; FLAC/WAV are lossless.</span></span></label>
-                <select id="audio_codec" class="ios-select">
+                <select id="audio_codec" class="ios-select" onchange="onAudioCodecChanged('audio')">
                     <option value="auto" selected>Auto (Match Input)</option>
                     <option value="aac">AAC</option>
                     <option value="libmp3lame">MP3</option>
@@ -71,13 +88,14 @@
                 </select>
             </div>
             <div>
-                <label class="ios-label">Audio Bitrate<span class="help-tip">❔<span class="tooltip-text">Higher audio bitrate improves sound quality.</span></span></label>
-                <select id="audio_bit" class="ios-select">
-                    <option value="auto" selected>Auto</option>
-                    <option value="128k">128k</option>
-                    <option value="192k">192k</option>
-                    <option value="320k">320k</option>
-                </select>
+                <div class="flex-row" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 2px;">
+                    <label class="ios-label" id="audio_bit_label" style="margin-bottom: 0;">Audio Bitrate: 320k (Max)<span class="help-tip">❔<span class="tooltip-text">Higher audio bitrate improves sound quality. Defaults to codec maximum.</span></span></label>
+                    <label class="ios-switch-label" style="font-size: 11px; margin-bottom: 0;"><input type="checkbox" id="audio_bit_auto" onchange="toggleAudioBitAuto(this.checked, 'audio')"> Auto</label>
+                </div>
+                <div id="audioBitSliderContainer" style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
+                    <input type="range" id="audio_bit_slider" min="32" max="320" step="32" value="320" style="flex: 1; accent-color: #007aff;">
+                    <span id="audio_bit_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">320k</span>
+                </div>
             </div>
         </div>
         <div class="ios-group-row" style="border-top: 1px solid #e0e0e0;">

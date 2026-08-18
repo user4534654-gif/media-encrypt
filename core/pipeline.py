@@ -39,13 +39,20 @@ def process_media(input_path, output_path, options, progress_dict, task_id):
                 aud_track=options.get('aud_track', 'both')
             )
         progress_dict[task_id] = 50
+        from core.metadata_prober import sanitize_audio_bitrate
         out_lower = output_path.lower()
         if out_lower.endswith('.wav'):
             codec_args = ['-c:a', 'pcm_s16le']
         elif out_lower.endswith('.mp3'):
-            codec_args = ['-c:a', 'libmp3lame', '-b:a', options.get('aud_bitrate', '192k')]
+            aud_b = sanitize_audio_bitrate(options.get('aud_bitrate', '192k'), 'libmp3lame') or '192k'
+            codec_args = ['-c:a', 'libmp3lame', '-b:a', aud_b]
         else:
-            codec_args = ['-c:a', options.get('aud_codec', 'aac'), '-b:a', options.get('aud_bitrate', '192k')]
+            target_codec = options.get('aud_codec', 'aac')
+            aud_b = sanitize_audio_bitrate(options.get('aud_bitrate', '192k'), target_codec)
+            if aud_b and target_codec not in ['pcm_s16le', 'flac']:
+                codec_args = ['-c:a', target_codec, '-b:a', aud_b]
+            else:
+                codec_args = ['-c:a', target_codec]
         LiveDebugger.log("AUDIO_ENCODE", f"Encoding final audio output -> '{output_path}' with args: {codec_args}", level="DEBUG", module="PIPELINE")
         subprocess.run([ffmpeg_exe, '-y', '-i', temp_wav] + codec_args + ['-ar', options.get('aud_sr', '48000'), output_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags)
         if os.path.exists(temp_wav): 

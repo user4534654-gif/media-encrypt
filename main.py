@@ -9,6 +9,14 @@ import platform
 import traceback
 import argparse
 import logging
+import shlex
+import subprocess
+import shutil
+import json
+import io
+import urllib.parse
+import requests
+from PIL import Image
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response, send_file
 from core.crypto import clean_key, hash_str
 from core.pipeline import process_media
@@ -163,6 +171,8 @@ def resolve_auto_quality(file_path, options):
                 options['aud_codec'] = 'aac'
     if options.get('aud_bitrate') == 'auto':
         options['aud_bitrate'] = info.get('audio_bitrate') or '320k'
+    from core.metadata_prober import sanitize_audio_bitrate
+    options['aud_bitrate'] = sanitize_audio_bitrate(options.get('aud_bitrate', '320k'), options.get('aud_codec', 'aac')) or '320k'
     if options.get('aud_method') == 'auto':
         options['aud_method'] = 'inversion'
     if options.get('aud_splits') == 'auto':
@@ -177,17 +187,245 @@ def index():
 @app.route('/api/progress')
 def get_progress():
     return jsonify({"progress": task_progress.get(request.args.get('task_id'), 0)})
+@app.route('/api/download/stream')
+def download_stream():
+    raw_cmd = request.args.get('cmd', '').strip()
+    media_type = request.args.get('media_type', 'video').strip().lower()
+    is_center = request.args.get('is_center', 'false').lower() == 'true'
+    if not raw_cmd:
+        def error_gen():
+            yield "data: " + json.dumps({"type": "stderr", "line": "Error: Empty URL or command.\n"}) + "\n\n"
+            yield "data: " + json.dumps({"type": "completed", "status": "error", "error": "Empty command"}) + "\n\n"
+        return Response(error_gen(), mimetype='text/event-stream')
+    def generate():
+        abs_input_dir = os.path.abspath(INPUT_FOLDER)
+        before_files = set(os.listdir(INPUT_FOLDER)) if os.path.exists(INPUT_FOLDER) else set()
+        if media_type == 'image':
+            cleaned_url = raw_cmd
+            url_match = re.search(r'https?://[^\s]+', cleaned_url)
+            if url_match:
+                img_url = url_match.group(0)
+            else:
+                img_url = cleaned_url.strip().strip('"\'')
+            yield "data: " + json.dumps({"type": "stdout", "line": f"[Image Downloader] Connecting to: {img_url}\n"}) + "\n\n"
+            LiveDebugger.log("Image Download", f"Fetching image via requests+Pillow from: {img_url}", level="INFO", module="HTTP")
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+                resp = requests.get(img_url, headers=headers, timeout=30)
+                resp.raise_for_status()
+                yield "data: " + json.dumps({"type": "stdout", "line": f"[Image Downloader] Downloaded {len(resp.content)} bytes. Validating image with Pillow...\n"}) + "\n\n"
+                img = Image.open(io.BytesIO(resp.content))
+                img_format = (img.format or 'png').lower()
+                if img_format == 'jpeg':
+                    img_format = 'jpg'
+                parsed = urllib.parse.urlparse(img_url)
+                path_part = os.path.basename(parsed.path)
+                if path_part and '.' in path_part:
+                    clean_name = re.sub(r'[^a-zA-Z0-9_\.\-]', '_', path_part)
+                else:
+                    clean_name = f"downloaded_image_{int(time.time())}.{img_format}"
+                if not any(clean_name.lower().endswith(f".{ext}") for ext in ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'avif']):
+                    clean_name = f"{clean_name}.{img_format}"
+                target_file_path = os.path.join(abs_input_dir, clean_name)
+                counter = 1
+                base_stem, ext = os.path.splitext(clean_name)
+                while os.path.exists(target_file_path):
+                    clean_name = f"{base_stem}_{counter}{ext}"
+                    target_file_path = os.path.join(abs_input_dir, clean_name)
+                    counter += 1
+                with open(target_file_path, 'wb') as f:
+                    f.write(resp.content)
+                yield "data: " + json.dumps({"type": "stdout", "line": f"[Image Downloader] Verified image: {img.size[0]}x{img.size[1]} ({img.format}).\n"}) + "\n\n"
+                yield "data: " + json.dumps({"type": "stdout", "line": f"[SUCCESS] Saved image to input vault: '{clean_name}'\n"}) + "\n\n"
+                yield "data: " + json.dumps({
+                    "type": "completed",
+                    "status": "success",
+                    "files": [clean_name],
+                    "media_type": media_type,
+                    "is_center": is_center
+                }) + "\n\n"
+            except Exception as e:
+                err_msg = f"\n[ERROR] Failed to download image: {str(e)}\n"
+                yield "data: " + json.dumps({"type": "stderr", "line": err_msg}) + "\n\n"
+                yield "data: " + json.dumps({
+                    "type": "completed",
+                    "status": "error",
+                    "files": [],
+                    "media_type": media_type,
+                    "is_center": is_center,
+                    "error": str(e)
+                }) + "\n\n"
+            return
+        cleaned_cmd = raw_cmd
+        if cleaned_cmd.startswith('yt-dlp '):
+            cleaned_cmd = cleaned_cmd[7:].strip()
+        elif cleaned_cmd.startswith('ytdlp '):
+            cleaned_cmd = cleaned_cmd[6:].strip()
+        try:
+            tokens = shlex.split(cleaned_cmd, posix=False)
+        except Exception:
+            tokens = cleaned_cmd.split()
+        extra_args = []
+        if media_type == 'audio' and not any(arg in cleaned_cmd for arg in ['-x', '--extract-audio', '-f']):
+            extra_args = ['-x', '--audio-format', 'mp3']
+        if not any(arg in cleaned_cmd for arg in ['--no-playlist', '--yes-playlist']):
+            extra_args.append('--no-playlist')
+        is_frozen = getattr(sys, 'frozen', False)
+        yt_dlp_cli = shutil.which('yt-dlp') or shutil.which('yt-dlp.exe')
+        use_subprocess = False
+        if not is_frozen:
+            cmd_list = [sys.executable, '-m', 'yt_dlp', '-P', abs_input_dir, '-o', '%(title)s.%(ext)s'] + extra_args + tokens
+            use_subprocess = True
+        elif yt_dlp_cli:
+            cmd_list = [yt_dlp_cli, '-P', abs_input_dir, '-o', '%(title)s.%(ext)s'] + extra_args + tokens
+            use_subprocess = True
+        display_cmd = f"yt-dlp {' '.join(tokens)}"
+        LiveDebugger.log("URL Download", f"Executing yt-dlp: {display_cmd} (mode={'subprocess' if use_subprocess else 'in-process'})", level="INFO", module="HTTP")
+        yield "data: " + json.dumps({"type": "stdout", "line": f"$ {display_cmd}\n"}) + "\n\n"
+        try:
+            if use_subprocess:
+                env = os.environ.copy()
+                env['PYTHONIOENCODING'] = 'utf-8'
+                env['PYTHONUNBUFFERED'] = '1'
+                proc = subprocess.Popen(
+                    cmd_list,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    bufsize=1,
+                    universal_newlines=True,
+                    env=env,
+                    creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+                )
+                for line in iter(proc.stdout.readline, ''):
+                    if line:
+                        yield "data: " + json.dumps({"type": "stdout", "line": line}) + "\n\n"
+                proc.stdout.close()
+                return_code = proc.wait()
+            else:
+                import queue
+                import threading
+                import yt_dlp
+                full_args = ['-P', abs_input_dir, '-o', '%(title)s.%(ext)s'] + extra_args + tokens
+                log_q = queue.Queue()
+                thread_done = threading.Event()
+                result_holder = {'code': 0, 'error': None}
+                class StreamLogger:
+                    def debug(self, msg):
+                        if not msg.startswith('[debug] '):
+                            log_q.put(('stdout', msg + '\n'))
+                    def info(self, msg):
+                        log_q.put(('stdout', msg + '\n'))
+                    def warning(self, msg):
+                        log_q.put(('stderr', f"[WARNING] {msg}\n"))
+                    def error(self, msg):
+                        log_q.put(('stderr', f"[ERROR] {msg}\n"))
+                def progress_hook(d):
+                    if d.get('status') == 'downloading':
+                        pct = d.get('_percent_str', '').strip()
+                        speed = d.get('_speed_str', '').strip()
+                        eta = d.get('_eta_str', '').strip()
+                        total = d.get('_total_bytes_str', '') or d.get('_total_bytes_estimate_str', '')
+                        log_q.put(('stdout', f"[download] {pct} of {total} at {speed} ETA {eta}\n"))
+                    elif d.get('status') == 'finished':
+                        log_q.put(('stdout', f"[download] 100% finished: '{os.path.basename(d.get('filename', ''))}'\n"))
+                def run_yt_dlp():
+                    try:
+                        parser, opts, urls = yt_dlp.parse_options(full_args)
+                        opts['logger'] = StreamLogger()
+                        opts['progress_hooks'] = [progress_hook]
+                        opts['outtmpl'] = {'default': os.path.join(abs_input_dir, '%(title)s.%(ext)s')}
+                        opts['paths'] = {'home': abs_input_dir}
+                        with yt_dlp.YoutubeDL(opts) as ydl:
+                            result_holder['code'] = ydl.download(urls)
+                    except Exception as ex:
+                        result_holder['code'] = 1
+                        result_holder['error'] = str(ex)
+                        log_q.put(('stderr', f"[ERROR] {str(ex)}\n"))
+                    finally:
+                        thread_done.set()
+                worker = threading.Thread(target=run_yt_dlp, daemon=True)
+                worker.start()
+                while not thread_done.is_set() or not log_q.empty():
+                    try:
+                        stream_type, text = log_q.get(timeout=0.1)
+                        yield "data: " + json.dumps({"type": stream_type, "line": text}) + "\n\n"
+                    except queue.Empty:
+                        pass
+                worker.join()
+                return_code = result_holder['code']
+            after_files = set(os.listdir(INPUT_FOLDER)) if os.path.exists(INPUT_FOLDER) else set()
+            new_files = [f for f in (after_files - before_files) if os.path.isfile(os.path.join(INPUT_FOLDER, f))]
+            new_files.sort(key=lambda x: os.path.getmtime(os.path.join(INPUT_FOLDER, x)), reverse=True)
+            if return_code == 0:
+                msg = f"\n[SUCCESS] Download completed. {len(new_files)} new file(s) saved to input vault.\n"
+                yield "data: " + json.dumps({"type": "stdout", "line": msg}) + "\n\n"
+                yield "data: " + json.dumps({
+                    "type": "completed",
+                    "status": "success",
+                    "files": new_files,
+                    "media_type": media_type,
+                    "is_center": is_center
+                }) + "\n\n"
+            else:
+                msg = f"\n[ERROR] Process exited with code {return_code}\n"
+                yield "data: " + json.dumps({"type": "stderr", "line": msg}) + "\n\n"
+                yield "data: " + json.dumps({
+                    "type": "completed",
+                    "status": "error",
+                    "files": new_files,
+                    "media_type": media_type,
+                    "is_center": is_center
+                }) + "\n\n"
+        except Exception as e:
+            err_msg = f"\n[EXCEPTION] {str(e)}\n{traceback.format_exc()}\n"
+            yield "data: " + json.dumps({"type": "stderr", "line": err_msg}) + "\n\n"
+            yield "data: " + json.dumps({"type": "completed", "status": "error", "error": str(e), "files": []}) + "\n\n"
+    response = Response(generate(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+@app.route('/api/vault_file_info', methods=['GET'])
+def vault_file_info():
+    filename = request.args.get('filename')
+    folder = request.args.get('folder', 'input')
+    if not filename:
+        return jsonify({"error": "filename required"}), 400
+    target_dir = INPUT_FOLDER if folder == 'input' else (ENCRYPTED_FOLDER if folder == 'encrypted' else DECRYPTED_FOLDER)
+    safe_filename = os.path.basename(filename)
+    path = os.path.join(target_dir, safe_filename)
+    if not os.path.exists(path):
+        return jsonify({"error": "file not found"}), 404
+    info = probe_media_file(path)
+    return jsonify({"info": info, "filename": safe_filename, "url": f"/vault/{folder}/{safe_filename}"})
 @app.route('/api/process', methods=['POST'])
 def process_api():
     try:
-        file = request.files['file']
         action = request.form['action']
         task_id = request.form['task_id']
         task_progress[task_id] = 0
-        filename = file.filename
-        base_name, _ = os.path.splitext(filename)
-        path = os.path.join(INPUT_FOLDER, filename)
-        file.save(path)
+        if 'file' in request.files and request.files['file'].filename:
+            file = request.files['file']
+            filename = file.filename
+            base_name, _ = os.path.splitext(filename)
+            path = os.path.join(INPUT_FOLDER, filename)
+            file.save(path)
+        elif request.form.get('vault_filename'):
+            filename = os.path.basename(request.form.get('vault_filename'))
+            base_name, _ = os.path.splitext(filename)
+            vault_src = request.form.get('vault_folder', 'input')
+            target_dir = ENCRYPTED_FOLDER if vault_src == 'encrypted' else (DECRYPTED_FOLDER if vault_src == 'decrypted' else INPUT_FOLDER)
+            path = os.path.join(target_dir, filename)
+            if not os.path.exists(path):
+                path = os.path.join(INPUT_FOLDER, filename)
+                if not os.path.exists(path):
+                    return jsonify({"error": f"File not found: {filename}"}), 404
+        else:
+            return jsonify({"error": "No file provided"}), 400
         info = probe_media_file(path)
         meta_str = f"Format: {info.get('format', 'unknown')} | Size: {info.get('file_size_mb', 'unknown')} MB"
         if info.get('resolution'): meta_str += f" | Res: {info.get('resolution')}"
@@ -249,13 +487,19 @@ def process_api():
             options['aud_key'] = hash_str(sid)
             center_path = None
             is_center = request.form.get('center_mode') == 'true'
-            if is_center and 'center_file' in request.files:
-                center_file = request.files['center_file']
-                if center_file.filename:
+            if is_center:
+                if 'center_file' in request.files and request.files['center_file'].filename:
+                    center_file = request.files['center_file']
                     center_path = os.path.join(INPUT_FOLDER, f"center_{center_file.filename}")
                     center_file.save(center_path)
                     options['center'] = True
                     options['center_path'] = center_path
+                elif request.form.get('center_vault_filename'):
+                    c_name = os.path.basename(request.form.get('center_vault_filename'))
+                    center_path = os.path.join(INPUT_FOLDER, c_name)
+                    if os.path.exists(center_path):
+                        options['center'] = True
+                        options['center_path'] = center_path
             method_tag = 'ainv'
             if options['aud_method'] == 'band_scramble':
                 method_tag = 'abs'

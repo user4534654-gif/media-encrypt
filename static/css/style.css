@@ -822,3 +822,129 @@ body.ios-dark-theme .collapse-trigger {
     margin: 0;
     display: inline-block;
 }
+.url-download-container {
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px dashed #b0b8c0;
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+body.ios-dark-theme .url-download-container {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: #3f444e;
+}
+.mini-terminal {
+    margin-top: 8px;
+    background: #121316;
+    border: 1px solid #2a2c32;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    animation: terminalFadeIn 0.2s ease-out;
+}
+@keyframes terminalFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.mini-terminal-header {
+    background: linear-gradient(to bottom, #2b2d33 0%, #1c1d22 100%);
+    color: #9da3af;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #141518;
+    user-select: none;
+}
+.mini-terminal-close {
+    background: transparent;
+    border: none;
+    color: #8c93a0;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+.mini-terminal-close:hover {
+    color: #ff453a;
+}
+.mini-terminal-log {
+    margin: 0;
+    padding: 8px;
+    height: 130px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #38ef7d;
+    background: #0f1012;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+.vault-picker-modal-box {
+    max-width: 520px;
+    width: 90%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+.modal-header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: linear-gradient(to bottom, #f7f7f7 0%, #ebebeb 100%);
+    border-bottom: 1px solid #c8c7cc;
+}
+body.ios-dark-theme .modal-header-flex {
+    background: linear-gradient(to bottom, #34373d 0%, #25272c 100%);
+    border-bottom-color: #404348;
+}
+.vault-picker-list {
+    padding: 8px 12px;
+    overflow-y: auto;
+    max-height: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: #fff;
+}
+body.ios-dark-theme .vault-picker-list {
+    background: #1c1d20;
+}
+.vault-picker-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #f8f9fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+}
+body.ios-dark-theme .vault-picker-item {
+    background: #25272c;
+    border-color: #3c3f46;
+}
+.vault-picker-item:hover {
+    background: #eef3f9;
+}
+body.ios-dark-theme .vault-picker-item:hover {
+    background: #2f323a;
+}
+.vault-picker-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 320px;
+}
+body.ios-dark-theme .vault-picker-name {
+    color: #e5e7eb;
+}

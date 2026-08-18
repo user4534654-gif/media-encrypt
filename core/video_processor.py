@@ -222,11 +222,12 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     if has_audio:
         aud_c = options.get('aud_codec', 'aac')
         aud_sr = str(options.get('aud_sr', '48000'))
-        if aud_c in ['pcm_s16le', 'flac']:
-            cmd.extend(['-c:a', aud_c, '-ar', aud_sr])
-        else:
-            aud_b = options.get('aud_bitrate', '320k')
+        from core.metadata_prober import sanitize_audio_bitrate
+        aud_b = sanitize_audio_bitrate(options.get('aud_bitrate', '320k'), aud_c)
+        if aud_b and aud_c not in ['pcm_s16le', 'flac']:
             cmd.extend(['-c:a', aud_c, '-b:a', aud_b, '-ar', aud_sr])
+        else:
+            cmd.extend(['-c:a', aud_c, '-ar', aud_sr])
     else:
         cmd.extend(['-an'])
     cmd.append(output_path)
@@ -250,11 +251,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         if has_center_aud_out:
             aud_c = options.get('aud_codec', 'aac')
             aud_sr = str(options.get('aud_sr', '48000'))
-            if aud_c in ['pcm_s16le', 'flac']:
-                cmd_center.extend(['-c:a', aud_c, '-ar', aud_sr])
-            else:
-                aud_b = options.get('aud_bitrate', '320k')
+            aud_b = sanitize_audio_bitrate(options.get('aud_bitrate', '320k'), aud_c)
+            if aud_b and aud_c not in ['pcm_s16le', 'flac']:
                 cmd_center.extend(['-c:a', aud_c, '-b:a', aud_b, '-ar', aud_sr])
+            else:
+                cmd_center.extend(['-c:a', aud_c, '-ar', aud_sr])
         else:
             cmd_center.extend(['-an'])
         cmd_center.append(output_path_center)

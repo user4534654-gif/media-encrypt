@@ -1,26 +1,42 @@
 async function startBatch(action) {
-    let files;
+    let rawFiles = [];
     if (action === 'scramble') {
         if (activeMediaType === 'video') {
-            files = upload.files;
-            if (!files.length) return alert("Select video files to encrypt first!");
+            if (upload.files && upload.files.length > 0) {
+                rawFiles = Array.from(upload.files);
+            } else if (selectedVaultMedia.video) {
+                rawFiles = [{ isVault: true, name: selectedVaultMedia.video, folder: 'input' }];
+            }
+            if (!rawFiles.length) return alert("Select video files to encrypt first!");
             if (!encVideo.checked && !encAudio.checked) return alert("Select at least one encryption method!");
-            if (encryptionMode === 'center' && !centerUpload.files.length) {
+            if (encryptionMode === 'center' && !centerUpload.files.length && !selectedVaultMedia.videoCenter) {
                 return alert("Select a central video file!");
             }
         } else if (activeMediaType === 'image') {
-            files = imageUpload.files;
-            if (!files.length) return alert("Select image files to encrypt first!");
-            if (imgEncryptionMode === 'center' && !centerImageUpload.files.length) {
+            if (imageUpload.files && imageUpload.files.length > 0) {
+                rawFiles = Array.from(imageUpload.files);
+            } else if (selectedVaultMedia.image) {
+                rawFiles = [{ isVault: true, name: selectedVaultMedia.image, folder: 'input' }];
+            }
+            if (!rawFiles.length) return alert("Select image files to encrypt first!");
+            if (imgEncryptionMode === 'center' && !centerImageUpload.files.length && !selectedVaultMedia.imageCenter) {
                 return alert("Select a central image file!");
             }
         } else if (activeMediaType === 'audio') {
-            files = audioUpload.files;
-            if (!files.length) return alert("Select audio files to encrypt first!");
+            if (audioUpload.files && audioUpload.files.length > 0) {
+                rawFiles = Array.from(audioUpload.files);
+            } else if (selectedVaultMedia.audio) {
+                rawFiles = [{ isVault: true, name: selectedVaultMedia.audio, folder: 'input' }];
+            }
+            if (!rawFiles.length) return alert("Select audio files to encrypt first!");
         }
     } else {
-        files = decryptUpload.files;
-        if (!files.length) return alert("Select encrypted files to decrypt first!");
+        if (decryptUpload.files && decryptUpload.files.length > 0) {
+            rawFiles = Array.from(decryptUpload.files);
+        } else if (selectedVaultMedia.decrypt && selectedVaultMedia.decrypt.length > 0) {
+            rawFiles = selectedVaultMedia.decrypt.map(name => ({ isVault: true, name: name, folder: 'encrypted' }));
+        }
+        if (!rawFiles.length) return alert("Select encrypted files to decrypt first!");
         if (!document.getElementById('decKey').value.trim()) return alert("Please enter the decryption key!");
     }
     const progBox = document.getElementById('progBox');
@@ -32,9 +48,11 @@ async function startBatch(action) {
     }
     const keysOut = document.getElementById('keysOutput');
     if (keysOut) keysOut.innerHTML = '';
-    for (let i = 0; i < files.length; i++) {
+    for (let i = 0; i < rawFiles.length; i++) {
+        const item = rawFiles[i];
+        const itemName = item.isVault ? item.name : item.name;
         const progTitle = document.getElementById('progTitle');
-        if (progTitle) progTitle.innerText = `Processing ${i+1}/${files.length}: ${files[i].name}`;
+        if (progTitle) progTitle.innerText = `Processing ${i+1}/${rawFiles.length}: ${itemName}`;
         const fileStartTime = Date.now();
         let lastEta = '';
         const progFill = document.getElementById('progFill');
@@ -44,7 +62,12 @@ async function startBatch(action) {
             progFill.classList.remove('indeterminate');
         }
         const fd = new FormData();
-        fd.append('file', files[i]); 
+        if (item.isVault) {
+            fd.append('vault_filename', item.name);
+            fd.append('vault_folder', item.folder || 'input');
+        } else {
+            fd.append('file', item); 
+        }
         fd.append('action', action); 
         fd.append('task_id', `task_${Date.now()}`);
         if (action === 'scramble') {
@@ -62,13 +85,19 @@ async function startBatch(action) {
                 const aSrAuto = document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true;
                 fd.append('aud_sr', aSrAuto ? 'auto' : document.getElementById('a_sr_slider').value);
                 fd.append('aud_codec', document.getElementById('a_codec').value);
-                fd.append('aud_bitrate', document.getElementById('a_bit').value);
+                const aBitAuto = document.getElementById('a_bit_auto') ? document.getElementById('a_bit_auto').checked : false;
+                const aBitVal = document.getElementById('a_bit_slider') ? document.getElementById('a_bit_slider').value + 'k' : '320k';
+                fd.append('aud_bitrate', aBitAuto ? 'auto' : aBitVal);
                 fd.append('resize_w', document.getElementById('resW').value); 
                 fd.append('resize_h', document.getElementById('resH').value);
                 fd.append('no_scale', document.getElementById('noScale').checked);
                 fd.append('center_mode', encryptionMode === 'center');
-                if (encryptionMode === 'center' && centerUpload.files.length) {
-                    fd.append('center_file', centerUpload.files[0]);
+                if (encryptionMode === 'center') {
+                    if (centerUpload.files.length) {
+                        fd.append('center_file', centerUpload.files[0]);
+                    } else if (selectedVaultMedia.videoCenter) {
+                        fd.append('center_vault_filename', selectedVaultMedia.videoCenter);
+                    }
                 }
                 fd.append('aud_method', document.getElementById('v_aud_method').value);
                 const volBgElem = document.getElementById('vol_factor_bg_slider') || document.getElementById('vol_factor_slider');
@@ -96,8 +125,12 @@ async function startBatch(action) {
                 fd.append('sid', document.getElementById('img_sid').value); 
                 fd.append('img_format', activeImageFormat);
                 fd.append('center_mode', imgEncryptionMode === 'center');
-                if (imgEncryptionMode === 'center' && centerImageUpload.files.length) {
-                    fd.append('center_file', centerImageUpload.files[0]);
+                if (imgEncryptionMode === 'center') {
+                    if (centerImageUpload.files.length) {
+                        fd.append('center_file', centerImageUpload.files[0]);
+                    } else if (selectedVaultMedia.imageCenter) {
+                        fd.append('center_vault_filename', selectedVaultMedia.imageCenter);
+                    }
                 }
                 fd.append('center_size', document.getElementById('img_center_size').value);
                 fd.append('video_encrypt_mode', document.getElementById('img_video_encrypt_mode').value);
@@ -109,7 +142,9 @@ async function startBatch(action) {
                 const audioSrAuto = document.getElementById('audio_sr_auto') ? document.getElementById('audio_sr_auto').checked : true;
                 fd.append('aud_sr', audioSrAuto ? 'auto' : document.getElementById('audio_sr_slider').value); 
                 fd.append('aud_codec', document.getElementById('audio_codec').value);
-                fd.append('aud_bitrate', document.getElementById('audio_bit').value);
+                const audioBitAuto = document.getElementById('audio_bit_auto') ? document.getElementById('audio_bit_auto').checked : false;
+                const audioBitVal = document.getElementById('audio_bit_slider') ? document.getElementById('audio_bit_slider').value + 'k' : '320k';
+                fd.append('aud_bitrate', audioBitAuto ? 'auto' : audioBitVal);
                 fd.append('aud_format', document.getElementById('audio_fmt').value);
                 fd.append('aud_method', document.getElementById('aud_method').value);
                 fd.append('aud_splits', document.getElementById('aud_splits').value);
@@ -167,12 +202,12 @@ async function startBatch(action) {
             }
             if (txt) txt.innerText = `100%`;
             if (result.status === 'error') {
-                openDebugger(`Error processing ${files[i].name}: ${result.message}`, result.traceback, result.diagnostic);
+                openDebugger(`Error processing ${itemName}: ${result.message}`, result.traceback, result.diagnostic);
             } else if (result.key && keysOut) {
                 const outFile = result.file ? result.file.split(/[\\/]/).pop() : '';
                 keysOut.innerHTML += `
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; background: rgba(0,0,0,0.03); padding: 5px 8px; border-radius: 6px; border: 1px solid #e1e4e8; word-break: break-all;">
-                        <span style="font-weight: 500; color: #333; font-size: 12px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${files[i].name}">${files[i].name}</span>
+                        <span style="font-weight: 500; color: #333; font-size: 12px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${itemName}">${itemName}</span>
                         <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                             <code style="background: #e1f5fe; color: #0288d1; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 12px; border: 1px dashed #0288d1; font-family: monospace;">${result.key}</code>
                             <button type="button" class="ios-btn-small" onclick="saveKeyToFile('${result.key}', '${outFile}', this)" style="padding: 2px 6px; font-size: 11px; margin: 0; background: linear-gradient(to bottom, #ffffff 0%, #eaeaea 100%); cursor: pointer; border-radius: 4px; font-weight: bold; border: 1px solid #b0b0b0;">💾 Save</button>
@@ -183,7 +218,7 @@ async function startBatch(action) {
             }
         } catch (err) {
             clearInterval(poll);
-            openDebugger(`Network error processing ${files[i].name}`, err.stack || err.toString());
+            openDebugger(`Network error processing ${itemName}`, err.stack || err.toString());
         }
     }
     const title = document.getElementById('progTitle');

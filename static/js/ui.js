@@ -306,6 +306,84 @@ function toggleAudioSrAuto(isAuto, which) {
     if (container) container.style.display = isAuto ? 'none' : 'flex';
     if (typeof saveAllSettings === 'function') saveAllSettings();
 }
+function getCodecBitrateConfig(codec) {
+    const c = (codec || '').toLowerCase();
+    if (c === 'libopus') {
+        return { min: 32, max: 512, step: 32, def: 512, lossless: false };
+    } else if (c === 'libmp3lame') {
+        return { min: 32, max: 320, step: 32, def: 320, lossless: false };
+    } else if (c === 'aac') {
+        return { min: 32, max: 320, step: 32, def: 320, lossless: false };
+    } else if (c === 'flac' || c === 'pcm_s16le') {
+        return { min: 0, max: 0, step: 0, def: 0, lossless: true };
+    } else {
+        return { min: 32, max: 320, step: 32, def: 320, lossless: false };
+    }
+}
+function onAudioCodecChanged(which) {
+    const codecSelect = which === 'video' ? document.getElementById('a_codec') : document.getElementById('audio_codec');
+    const slider = which === 'video' ? document.getElementById('a_bit_slider') : document.getElementById('audio_bit_slider');
+    const valSpan = which === 'video' ? document.getElementById('a_bit_val') : document.getElementById('audio_bit_val');
+    const label = which === 'video' ? document.getElementById('a_bit_label') : document.getElementById('audio_bit_label');
+    const autoCheck = which === 'video' ? document.getElementById('a_bit_auto') : document.getElementById('audio_bit_auto');
+    if (!codecSelect || !slider) return;
+    const config = getCodecBitrateConfig(codecSelect.value);
+    if (config.lossless) {
+        slider.disabled = true;
+        if (valSpan) valSpan.innerText = 'Lossless';
+        if (label) label.innerHTML = 'Audio Bitrate: Lossless<span class="help-tip">❔<span class="tooltip-text">Selected codec is lossless/uncompressed (bitrate is N/A).</span></span>';
+        if (autoCheck) autoCheck.disabled = true;
+    } else {
+        slider.disabled = false;
+        slider.min = config.min;
+        slider.max = config.max;
+        slider.step = config.step;
+        if (parseInt(slider.value) > config.max || parseInt(slider.value) < config.min || slider.value === '0') {
+            slider.value = config.def;
+        }
+        if (valSpan) valSpan.innerText = slider.value + 'k';
+        const isMax = parseInt(slider.value) === config.max;
+        if (label) label.innerHTML = `Audio Bitrate: ${slider.value}k${isMax ? ' (Max)' : ''}<span class="help-tip">❔<span class="tooltip-text">Higher audio bitrate improves sound quality. Defaults to codec maximum.</span></span>`;
+        if (autoCheck) autoCheck.disabled = false;
+    }
+    if (typeof saveAllSettings === 'function') saveAllSettings();
+}
+function syncAudioBitLabel(which) {
+    const codecSelect = which === 'video' ? document.getElementById('a_codec') : document.getElementById('audio_codec');
+    const slider = which === 'video' ? document.getElementById('a_bit_slider') : document.getElementById('audio_bit_slider');
+    const valSpan = which === 'video' ? document.getElementById('a_bit_val') : document.getElementById('audio_bit_val');
+    const label = which === 'video' ? document.getElementById('a_bit_label') : document.getElementById('audio_bit_label');
+    if (!slider || !valSpan) return;
+    valSpan.innerText = slider.value + 'k';
+    const config = getCodecBitrateConfig(codecSelect ? codecSelect.value : 'auto');
+    const isMax = parseInt(slider.value) === config.max;
+    if (label) {
+        label.innerHTML = `Audio Bitrate: ${slider.value}k${isMax ? ' (Max)' : ''}<span class="help-tip">❔<span class="tooltip-text">Higher audio bitrate improves sound quality. Defaults to codec maximum.</span></span>`;
+    }
+}
+function toggleAudioBitAuto(isAuto, which) {
+    const container = which === 'video' ? document.getElementById('aBitSliderContainer') : document.getElementById('audioBitSliderContainer');
+    const label = which === 'video' ? document.getElementById('a_bit_label') : document.getElementById('audio_bit_label');
+    if (container) container.style.display = isAuto ? 'none' : 'flex';
+    if (label && isAuto) {
+        label.innerHTML = `Audio Bitrate: Auto (Match Input)<span class="help-tip">❔<span class="tooltip-text">Preserves input audio bitrate or uses safe format defaults.</span></span>`;
+    } else if (label) {
+        syncAudioBitLabel(which);
+    }
+    if (typeof saveAllSettings === 'function') saveAllSettings();
+}
+const aBitSlider = document.getElementById('a_bit_slider');
+if (aBitSlider) {
+    aBitSlider.addEventListener('input', function() {
+        syncAudioBitLabel('video');
+    });
+}
+const audioBitSlider = document.getElementById('audio_bit_slider');
+if (audioBitSlider) {
+    audioBitSlider.addEventListener('input', function() {
+        syncAudioBitLabel('audio');
+    });
+}
 const aSrSlider = document.getElementById('a_sr_slider');
 if (aSrSlider) {
     aSrSlider.addEventListener('input', function() {
@@ -476,4 +554,89 @@ function toggleSection(triggerId, contentId) {
         content.classList.remove('hidden');
     }
     saveAllSettings();
+}
+let activeDownloadEventSources = {};
+function closeTerminal(terminalId) {
+    const term = document.getElementById(terminalId);
+    if (term) term.classList.add('hidden');
+    if (activeDownloadEventSources[terminalId]) {
+        try { activeDownloadEventSources[terminalId].close(); } catch(e) {}
+        delete activeDownloadEventSources[terminalId];
+    }
+}
+function triggerUrlDownload(mediaType, isCenter = false) {
+    let inputId = 'videoUrlInput';
+    let termId = 'videoTerminal';
+    let logId = 'videoTerminalLog';
+    let defaultTool = 'yt-dlp';
+    if (mediaType === 'video') {
+        inputId = isCenter ? 'centerVideoUrlInput' : 'videoUrlInput';
+        termId = isCenter ? 'centerVideoTerminal' : 'videoTerminal';
+        logId = isCenter ? 'centerVideoTerminalLog' : 'videoTerminalLog';
+        defaultTool = 'yt-dlp';
+    } else if (mediaType === 'image') {
+        inputId = isCenter ? 'centerImageUrlInput' : 'imageUrlInput';
+        termId = isCenter ? 'centerImageTerminal' : 'imageTerminal';
+        logId = isCenter ? 'centerImageTerminalLog' : 'imageTerminalLog';
+        defaultTool = 'requests';
+    } else if (mediaType === 'audio') {
+        inputId = 'audioUrlInput';
+        termId = 'audioTerminal';
+        logId = 'audioTerminalLog';
+        defaultTool = 'yt-dlp';
+    }
+    const inputEl = document.getElementById(inputId);
+    const termEl = document.getElementById(termId);
+    const logEl = document.getElementById(logId);
+    if (!inputEl || !inputEl.value.trim()) {
+        alert("Please enter a URL or command arguments.");
+        return;
+    }
+    const rawCmd = inputEl.value.trim();
+    if (termEl) termEl.classList.remove('hidden');
+    if (logEl) {
+        logEl.textContent = `[Connecting to download stream for ${mediaType} (${isCenter ? 'Center' : 'Primary'})...]\n`;
+    }
+    if (activeDownloadEventSources[termId]) {
+        try { activeDownloadEventSources[termId].close(); } catch(e) {}
+    }
+    const streamUrl = `/api/download/stream?cmd=${encodeURIComponent(rawCmd)}&tool=${defaultTool}&media_type=${mediaType}&is_center=${isCenter}`;
+    const es = new EventSource(streamUrl);
+    activeDownloadEventSources[termId] = es;
+    es.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'stdout' || data.type === 'stderr') {
+                if (logEl) {
+                    logEl.textContent += data.line;
+                    logEl.scrollTop = logEl.scrollHeight;
+                }
+            } else if (data.type === 'completed') {
+                es.close();
+                delete activeDownloadEventSources[termId];
+                if (data.status === 'success' && data.files && data.files.length > 0) {
+                    const firstFile = data.files[0];
+                    if (logEl) {
+                        logEl.textContent += `\n>> Auto-selected '${firstFile}' for encryption.\n`;
+                        logEl.scrollTop = logEl.scrollHeight;
+                    }
+                    inputEl.value = '';
+                    selectVaultFileDirectly(firstFile, mediaType, isCenter);
+                }
+                if (typeof loadVault === 'function' && activeFolder === 'input') {
+                    loadVault();
+                }
+            }
+        } catch (err) {
+            console.error("Error parsing download stream message:", err);
+        }
+    };
+    es.onerror = function(err) {
+        if (logEl) {
+            logEl.textContent += "\n[Stream disconnected]\n";
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        es.close();
+        delete activeDownloadEventSources[termId];
+    };
 }

@@ -10,14 +10,48 @@
         </div>
         <div class="ios-group-row">
             <label class="ios-label" id="uploadLabel">Upload Video Files (Batch Supported)<span class="help-tip">❔<span class="tooltip-text">You can select multiple files to encrypt them in sequence. The encryption keys will be printed sequentially.</span></span></label>
-            <input type="file" id="mediaUpload" multiple class="ios-file-input" accept="video/*">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+                <input type="file" id="mediaUpload" multiple class="ios-file-input" accept="video/*" style="flex: 1;">
+                <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('video', false)">📂 Pick from Vault</button>
+            </div>
             <div class="file-list" id="fileList"></div>
             <div class="ios-group-info" id="uploadVideoBitrateInfo" style="display: none; margin-top: 6px;"></div>
+            <div class="url-download-container" style="margin-top: 10px;">
+                <label class="ios-label" style="font-size: 12px; color: #555;">Or Download via URL / CLI (yt-dlp)<span class="help-tip">❔<span class="tooltip-text">Enter URL or custom arguments (without 'yt-dlp'). Press Enter to download directly to input vault.</span></span></label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" id="videoUrlInput" class="ios-input url-cmd-input" placeholder="e.g. https://youtu.be/... or -f bestvideo+bestaudio URL" onkeydown="if(event.key==='Enter') triggerUrlDownload('video', false)">
+                    <button type="button" class="ios-btn-small" onclick="triggerUrlDownload('video', false)">⬇️ Download</button>
+                </div>
+                <div id="videoTerminal" class="mini-terminal hidden">
+                    <div class="mini-terminal-header">
+                        <span>📺 yt-dlp terminal</span>
+                        <button type="button" class="mini-terminal-close" onclick="closeTerminal('videoTerminal')">✕</button>
+                    </div>
+                    <pre id="videoTerminalLog" class="mini-terminal-log"></pre>
+                </div>
+            </div>
         </div>
         <div class="ios-group-row hidden" id="centerVideoSection">
             <label class="ios-label" style="color: #007aff;">Upload Central Video (untouched)</label>
-            <input type="file" id="centerVideoUpload" class="ios-file-input" accept="video/*">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+                <input type="file" id="centerVideoUpload" class="ios-file-input" accept="video/*" style="flex: 1;">
+                <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('video', true)">📂 Pick from Vault</button>
+            </div>
             <div class="file-list" id="centerFileList"></div>
+            <div class="url-download-container" style="margin-top: 10px;">
+                <label class="ios-label" style="font-size: 12px; color: #007aff;">Or Download Center Video via URL (yt-dlp)</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" id="centerVideoUrlInput" class="ios-input url-cmd-input" placeholder="e.g. https://youtu.be/... (Center video)" onkeydown="if(event.key==='Enter') triggerUrlDownload('video', true)">
+                    <button type="button" class="ios-btn-small" onclick="triggerUrlDownload('video', true)">⬇️ Download</button>
+                </div>
+                <div id="centerVideoTerminal" class="mini-terminal hidden">
+                    <div class="mini-terminal-header">
+                        <span>📺 yt-dlp terminal (Center)</span>
+                        <button type="button" class="mini-terminal-close" onclick="closeTerminal('centerVideoTerminal')">✕</button>
+                    </div>
+                    <pre id="centerVideoTerminalLog" class="mini-terminal-log"></pre>
+                </div>
+            </div>
             {% include 'components/visual_canvas.html' %}
             {% include 'components/audio_timeline.html' %}
             <div class="symmetrical-settings-grid">
@@ -134,7 +168,7 @@
                     </div>
                     <div>
                         <label class="ios-label">Audio Codec<span class="help-tip">❔<span class="tooltip-text">AAC is the standard for video audio; MP3 is legacy; FLAC is lossless.</span></span></label>
-                        <select id="a_codec" class="ios-select">
+                        <select id="a_codec" class="ios-select" onchange="onAudioCodecChanged('video')">
                             <option value="auto" selected>Auto (Match Input)</option>
                             <option value="aac">AAC</option>
                             <option value="libmp3lame">MP3</option>
@@ -144,13 +178,14 @@
                         </select>
                     </div>
                     <div>
-                        <label class="ios-label">Audio Bitrate<span class="help-tip">❔<span class="tooltip-text">Higher audio bitrate improves sound quality.</span></span></label>
-                        <select id="a_bit" class="ios-select">
-                            <option value="auto" selected>Auto</option>
-                            <option value="128k">128k</option>
-                            <option value="192k">192k</option>
-                            <option value="320k">320k</option>
-                        </select>
+                        <div class="flex-row" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 2px;">
+                            <label class="ios-label" id="a_bit_label" style="margin-bottom: 0;">Audio Bitrate: 320k (Max)<span class="help-tip">❔<span class="tooltip-text">Higher audio bitrate improves sound quality. Defaults to codec maximum.</span></span></label>
+                            <label class="ios-switch-label" style="font-size: 11px; margin-bottom: 0;"><input type="checkbox" id="a_bit_auto" onchange="toggleAudioBitAuto(this.checked, 'video')"> Auto</label>
+                        </div>
+                        <div id="aBitSliderContainer" style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
+                            <input type="range" id="a_bit_slider" min="32" max="320" step="32" value="320" style="flex: 1; accent-color: #007aff;">
+                            <span id="a_bit_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">320k</span>
+                        </div>
                     </div>
                 </div>
                 <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">

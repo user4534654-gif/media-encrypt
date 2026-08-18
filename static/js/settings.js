@@ -27,7 +27,8 @@ function saveAllSettings() {
         a_sr_auto: document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true,
         a_sr_slider: document.getElementById('a_sr_slider') ? document.getElementById('a_sr_slider').value : '48000',
         a_codec: document.getElementById('a_codec') ? document.getElementById('a_codec').value : 'auto',
-        a_bit: document.getElementById('a_bit') ? document.getElementById('a_bit').value : 'auto',
+        a_bit_slider: document.getElementById('a_bit_slider') ? document.getElementById('a_bit_slider').value : '320',
+        a_bit_auto: document.getElementById('a_bit_auto') ? document.getElementById('a_bit_auto').checked : false,
         cols: document.getElementById('cols') ? document.getElementById('cols').value : '10',
         rows: document.getElementById('rows') ? document.getElementById('rows').value : '10',
         sid: document.getElementById('sid') ? document.getElementById('sid').value : '',
@@ -42,7 +43,8 @@ function saveAllSettings() {
         audio_sr_auto: document.getElementById('audio_sr_auto') ? document.getElementById('audio_sr_auto').checked : true,
         audio_sr_slider: document.getElementById('audio_sr_slider') ? document.getElementById('audio_sr_slider').value : '48000',
         audio_codec: document.getElementById('audio_codec') ? document.getElementById('audio_codec').value : 'auto',
-        audio_bit: document.getElementById('audio_bit') ? document.getElementById('audio_bit').value : 'auto',
+        audio_bit_slider: document.getElementById('audio_bit_slider') ? document.getElementById('audio_bit_slider').value : '320',
+        audio_bit_auto: document.getElementById('audio_bit_auto') ? document.getElementById('audio_bit_auto').checked : false,
         audio_fmt: document.getElementById('audio_fmt') ? document.getElementById('audio_fmt').value : 'auto',
         decKey: document.getElementById('decKey') ? document.getElementById('decKey').value : '',
         aud_method: document.getElementById('aud_method') ? document.getElementById('aud_method').value : 'inversion',
@@ -104,7 +106,17 @@ function loadAllSettings() {
         syncAudioSrLabel('video');
         if (typeof toggleAudioSrAuto === 'function') toggleAudioSrAuto(document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true, 'video');
         setVal('a_codec', settings.a_codec);
-        setVal('a_bit', settings.a_bit);
+        if (typeof onAudioCodecChanged === 'function') onAudioCodecChanged('video');
+        const aBitSliderEl = document.getElementById('a_bit_slider');
+        if (aBitSliderEl && settings.a_bit_slider) {
+            aBitSliderEl.value = settings.a_bit_slider;
+        }
+        if (settings.a_bit_auto !== undefined) {
+            setChecked('a_bit_auto', settings.a_bit_auto);
+            if (typeof toggleAudioBitAuto === 'function') toggleAudioBitAuto(settings.a_bit_auto, 'video');
+        } else {
+            if (typeof syncAudioBitLabel === 'function') syncAudioBitLabel('video');
+        }
         setVal('cols', settings.cols);
         setVal('rows', settings.rows);
         setVal('sid', settings.sid);
@@ -131,7 +143,17 @@ function loadAllSettings() {
         syncAudioSrLabel('audio');
         if (typeof toggleAudioSrAuto === 'function') toggleAudioSrAuto(document.getElementById('audio_sr_auto') ? document.getElementById('audio_sr_auto').checked : true, 'audio');
         setVal('audio_codec', settings.audio_codec);
-        setVal('audio_bit', settings.audio_bit);
+        if (typeof onAudioCodecChanged === 'function') onAudioCodecChanged('audio');
+        const audioBitSliderEl = document.getElementById('audio_bit_slider');
+        if (audioBitSliderEl && settings.audio_bit_slider) {
+            audioBitSliderEl.value = settings.audio_bit_slider;
+        }
+        if (settings.audio_bit_auto !== undefined) {
+            setChecked('audio_bit_auto', settings.audio_bit_auto);
+            if (typeof toggleAudioBitAuto === 'function') toggleAudioBitAuto(settings.audio_bit_auto, 'audio');
+        } else {
+            if (typeof syncAudioBitLabel === 'function') syncAudioBitLabel('audio');
+        }
         setVal('audio_fmt', settings.audio_fmt);
         setVal('decKey', settings.decKey);
         setVal('aud_method', settings.aud_method || 'inversion');
@@ -145,7 +167,8 @@ function loadAllSettings() {
             if (audVolVal) audVolVal.innerText = settings.aud_vol_factor + '%';
             if (audVolLabel) audVolLabel.innerText = 'Encrypted Audio Volume: ' + settings.aud_vol_factor + '%';
         }
-        setVal('v_aud_method', settings.v_aud_method || 'inversion');
+        const vAudMethod = document.getElementById('v_aud_method');
+        if (vAudMethod && settings.v_aud_method) vAudMethod.value = settings.v_aud_method;
         setVal('v_aud_splits', settings.v_aud_splits || '10');
         const volSlider = document.getElementById('vol_factor_slider');
         const volVal = document.getElementById('vol_factor_val');
@@ -153,7 +176,7 @@ function loadAllSettings() {
         if (settings.vol_factor && volSlider) {
             volSlider.value = settings.vol_factor;
             if (volVal) volVal.innerText = settings.vol_factor + '%';
-            if (volLabel) volLabel.innerText = 'Encrypted Audio Volume: ' + settings.vol_factor + '%';
+            if (volLabel) volLabel.innerText = 'Volume Factor: ' + settings.vol_factor + '%';
         }
         setChecked('dual_track', settings.dual_track || false);
         setVal('center_size', settings.center_size || '1/4');
@@ -173,9 +196,9 @@ function loadAllSettings() {
 function initAutoSave() {
     const inputs = [
         'themeToggle', 'encVideo', 'encAudio', 'v_fmt', 'v_codec', 'v_preset', 'v_bit_slider', 'autoVidBitrate',
-        'a_sr_slider', 'a_sr_auto', 'a_codec', 'a_bit', 'cols', 'rows', 'sid', 'aspectLock', 'noScale', 'resW', 'resH',
+        'a_sr_slider', 'a_sr_auto', 'a_codec', 'a_bit_slider', 'a_bit_auto', 'cols', 'rows', 'sid', 'aspectLock', 'noScale', 'resW', 'resH',
         'img_cols', 'img_rows', 'img_sid', 'carrier_freq_slider', 'audio_sr_slider', 'audio_sr_auto', 'audio_codec',
-        'audio_bit', 'audio_fmt', 'decKey', 'aud_method', 'aud_splits', 'aud_seed', 'aud_vol_factor_slider',
+        'audio_bit_slider', 'audio_bit_auto', 'audio_fmt', 'decKey', 'aud_method', 'aud_splits', 'aud_seed', 'aud_vol_factor_slider',
         'v_aud_method', 'v_aud_splits', 'vol_factor_slider', 'dual_track', 'center_size', 'img_center_size',
         'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg'
     ];

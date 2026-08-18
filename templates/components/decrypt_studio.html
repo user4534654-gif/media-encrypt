@@ -3,7 +3,10 @@
         <div class="ios-group-header">1. Select Encrypted Files</div>
         <div class="ios-group-row">
             <label class="ios-label">Upload Encrypted Media (Batch Supported)</label>
-            <input type="file" id="decryptUpload" multiple class="ios-file-input">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+                <input type="file" id="decryptUpload" multiple class="ios-file-input" style="flex: 1;">
+                <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('decrypt', false)">📂 Pick from Vault</button>
+            </div>
             <div class="file-list" id="decryptFileList"></div>
         </div>
     </div>

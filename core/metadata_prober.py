@@ -51,9 +51,10 @@ def _probe_with_pyav(file_path, info):
             if stream_bitrate:
                 info['audio_bitrate_bps'] = int(stream_bitrate)
         if not info['video_bitrate_bps'] and container_bitrate and video_streams:
-            info['video_bitrate_bps'] = int(container_bitrate)
-        if not info['audio_bitrate_bps'] and container_bitrate and audio_streams:
-            info['audio_bitrate_bps'] = int(container_bitrate)
+            est_audio_bps = 160000 if audio_streams else 0
+            info['video_bitrate_bps'] = max(100000, int(container_bitrate - est_audio_bps))
+        if not info['audio_bitrate_bps'] and audio_streams:
+            info['audio_bitrate_bps'] = 192000
     finally:
         container.close()
     if info.get('video_bitrate_bps'):
@@ -61,6 +62,28 @@ def _probe_with_pyav(file_path, info):
     if info.get('audio_bitrate_bps'):
         info['audio_bitrate'] = f"{max(1, round(info['audio_bitrate_bps'] / 1000))}k"
     return info
+def sanitize_audio_bitrate(bitrate_str, codec=None):
+    if not bitrate_str or bitrate_str == 'auto':
+        return '320k'
+    codec_lower = str(codec).lower() if codec else ''
+    if codec_lower in ['flac', 'pcm_s16le', 'pcm_s24le', 'alac']:
+        return None
+    try:
+        val_str = str(bitrate_str).lower().replace('k', '').replace('bps', '').strip()
+        val = int(val_str)
+        if val > 10000:
+            val = round(val / 1000)
+    except Exception:
+        val = 192
+    if 'opus' in codec_lower:
+        val = max(32, min(val, 512))
+    elif 'mp3' in codec_lower:
+        val = max(32, min(val, 320))
+    elif 'aac' in codec_lower:
+        val = max(32, min(val, 320))
+    else:
+        val = max(32, min(val, 320))
+    return f"{val}k"
 def _probe_with_ffmpeg(file_path, info):
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     result = subprocess.run(

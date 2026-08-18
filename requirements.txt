@@ -8,6 +8,8 @@ imageio-ffmpeg
 pillow
 pywebview
 av
+yt-dlp
+requests
 
 # ── Build / packaging dependencies ────────────────────────────────────────────
 # These are only needed when building the Windows .exe with PyInstaller.

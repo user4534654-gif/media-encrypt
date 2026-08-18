@@ -10,13 +10,47 @@
         </div>
         <div class="ios-group-row">
             <label class="ios-label">Upload Image Files (Batch Supported)</label>
-            <input type="file" id="imageUpload" multiple class="ios-file-input" accept="image/*">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+                <input type="file" id="imageUpload" multiple class="ios-file-input" accept="image/*" style="flex: 1;">
+                <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('image', false)">📂 Pick from Vault</button>
+            </div>
             <div class="file-list" id="imageList"></div>
+            <div class="url-download-container" style="margin-top: 10px;">
+                <label class="ios-label" style="font-size: 12px; color: #555;">Or Download via URL (requests + Pillow)<span class="help-tip">❔<span class="tooltip-text">Enter image URL (PNG, JPG, WEBP, etc.). Press Enter to download directly to input vault.</span></span></label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" id="imageUrlInput" class="ios-input url-cmd-input" placeholder="e.g. https://example.com/photo.jpg..." onkeydown="if(event.key==='Enter') triggerUrlDownload('image', false)">
+                    <button type="button" class="ios-btn-small" onclick="triggerUrlDownload('image', false)">⬇️ Download</button>
+                </div>
+                <div id="imageTerminal" class="mini-terminal hidden">
+                    <div class="mini-terminal-header">
+                        <span>🖼️ Image Downloader</span>
+                        <button type="button" class="mini-terminal-close" onclick="closeTerminal('imageTerminal')">✕</button>
+                    </div>
+                    <pre id="imageTerminalLog" class="mini-terminal-log"></pre>
+                </div>
+            </div>
         </div>
         <div class="ios-group-row hidden" id="centerImageSection">
             <label class="ios-label" style="color: #007aff;">Upload Central Image (untouched)</label>
-            <input type="file" id="centerImageUpload" class="ios-file-input" accept="image/*">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+                <input type="file" id="centerImageUpload" class="ios-file-input" accept="image/*" style="flex: 1;">
+                <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('image', true)">📂 Pick from Vault</button>
+            </div>
             <div class="file-list" id="centerImageList"></div>
+            <div class="url-download-container" style="margin-top: 10px;">
+                <label class="ios-label" style="font-size: 12px; color: #007aff;">Or Download Center Image via URL</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" id="centerImageUrlInput" class="ios-input url-cmd-input" placeholder="e.g. https://example.com/center.png..." onkeydown="if(event.key==='Enter') triggerUrlDownload('image', true)">
+                    <button type="button" class="ios-btn-small" onclick="triggerUrlDownload('image', true)">⬇️ Download</button>
+                </div>
+                <div id="centerImageTerminal" class="mini-terminal hidden">
+                    <div class="mini-terminal-header">
+                        <span>🖼️ Image Downloader (Center)</span>
+                        <button type="button" class="mini-terminal-close" onclick="closeTerminal('centerImageTerminal')">✕</button>
+                    </div>
+                    <pre id="centerImageTerminalLog" class="mini-terminal-log"></pre>
+                </div>
+            </div>
             {% include 'components/visual_canvas.html' %}
             <label class="ios-label" style="margin-top: 10px;">Central Overlay Size</label>
             <select id="img_center_size" class="ios-select">
