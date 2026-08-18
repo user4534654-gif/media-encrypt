@@ -5,6 +5,12 @@
             <div class="ios-progress-fill" id="progFill"></div>
         </div>
         <div id="progText" style="text-align: center; font-size: 13px; font-weight: bold; color: #555; margin-top: 8px;">0%</div>
-        <div id="keysOutput" style="margin-top: 10px; font-family: monospace; color: #007aff; font-size: 13px; background: #f0f0f2; padding: 8px; border-radius: 6px; border: 1px solid #dcdcdc; word-break: break-all;"></div>
+        <div id="progCancelContainer" style="text-align: center; margin-top: 10px; display: none;">
+            <button type="button" id="progCancelBtn" onclick="cancelProcessing()" style="padding: 5px 14px; font-size: 12px; font-weight: 600; color: #d32f2f; background: #ffebee; border: 1px solid #ffcdd2; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                ✕ Cancel Processing
+            </button>
+        </div>
+        <div id="progStatusMessage" style="display: none; text-align: center; font-size: 13px; font-weight: 600; margin-top: 10px; padding: 6px 10px; border-radius: 6px;"></div>
+        <div id="keysOutput" style="margin-top: 10px; font-family: monospace; color: #007aff; font-size: 13px; background: #f0f0f2; padding: 8px; border-radius: 6px; border: 1px solid #dcdcdc; word-break: break-all; display: none;"></div>
     </div>
 </div>

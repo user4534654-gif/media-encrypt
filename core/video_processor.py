@@ -412,6 +412,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             else:
                 write_pipe_frame(proc, frame.tobytes())
             frame_count += 1
+            if frame_count % 3 == 0:
+                is_cancelled_cb = options.get('is_cancelled')
+                if is_cancelled_cb and is_cancelled_cb():
+                    LiveDebugger.log("CANCEL", f"Video processing cancelled by user at frame {frame_count}/{max(output_total_frames, 1)}", level="WARNING", module="VIDEO")
+                    raise RuntimeError("Processing cancelled by user")
             if total_frames > 0 and frame_count % 5 == 0:
                 progress_dict[task_id] = int((frame_count / max(output_total_frames, 1)) * 100)
     finally:
@@ -431,4 +436,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 os.remove(temp_center_aud_out)
             except Exception:
                 pass
+        is_cancelled_cb = options.get('is_cancelled')
+        if (is_cancelled_cb and is_cancelled_cb()) or (output_total_frames > 0 and frame_count < output_total_frames):
+            if os.path.exists(output_path):
+                try:
+                    os.remove(output_path)
+                except Exception:
+                    pass
     progress_dict[task_id] = 100

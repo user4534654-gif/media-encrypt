@@ -22,6 +22,7 @@ from core.crypto import clean_key, hash_str
 from core.pipeline import process_media
 from core.metadata_prober import probe_media_file
 from core.logger import LiveDebugger
+from core.job_manager import JobManager
 from static.icons.icons import ICON_MAPPINGS
 werkzeug_log = logging.getLogger('werkzeug')
 werkzeug_log.setLevel(logging.ERROR)
@@ -58,7 +59,19 @@ DECRYPTED_FOLDER = os.path.join(VAULT_FOLDER, 'decrypted')
 for folder in [INPUT_FOLDER, ENCRYPTED_FOLDER, DECRYPTED_FOLDER]:
     if not os.path.exists(folder):
         os.makedirs(folder)
+def save_key_file(filename, key):
+    try:
+        base_name, _ = os.path.splitext(filename)
+        key_path = os.path.join(ENCRYPTED_FOLDER, f"{base_name}.key.txt")
+        with open(key_path, 'w', encoding='utf-8') as f:
+            f.write(f"Media-Encrypt Studio Key\n")
+            f.write(f"File: {filename}\n")
+            f.write(f"Key: {key}\n")
+        return key_path
+    except Exception as e:
+        return None
 task_progress = {}
+job_manager = None                                                     
 class WebviewApi:
     def __init__(self):
         self._window = None
@@ -181,6 +194,10 @@ def resolve_auto_quality(file_path, options):
         options['vol_factor'] = 1.0
     options['aud_sr'] = sanitize_audio_sr(options.get('aud_sr', '48000'), options.get('aud_codec', 'aac'))
     return options
+job_manager = JobManager(
+    INPUT_FOLDER, ENCRYPTED_FOLDER, DECRYPTED_FOLDER,
+    save_key_file, resolve_auto_quality, sanitize_audio_sr
+)
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -661,17 +678,83 @@ def process_api():
             "traceback": tb,
             "diagnostic": diagnostic
         })
-def save_key_file(filename, key):
+@app.route('/api/job/start', methods=['POST'])
+def start_job_api():
     try:
-        base_name, _ = os.path.splitext(filename)
-        key_path = os.path.join(ENCRYPTED_FOLDER, f"{base_name}.key.txt")
-        with open(key_path, 'w', encoding='utf-8') as f:
-            f.write(f"Media-Encrypt Studio Key\n")
-            f.write(f"File: {filename}\n")
-            f.write(f"Key: {key}\n")
-        return key_path
+        action = request.form.get('action', 'scramble')
+        files_info = []
+        uploaded_files = request.files.getlist('files')
+        if not uploaded_files and 'file' in request.files:
+            uploaded_files = [request.files['file']]
+        for f in uploaded_files:
+            if f and f.filename:
+                safe_name = os.path.basename(f.filename)
+                save_path = os.path.join(INPUT_FOLDER, safe_name)
+                f.save(save_path)
+                files_info.append({
+                    'filename': safe_name,
+                    'path': save_path,
+                    'display_name': safe_name
+                })
+        vault_raw = request.form.get('vault_filenames')
+        if vault_raw:
+            try:
+                v_list = json.loads(vault_raw)
+            except Exception:
+                v_list = [s.strip() for s in vault_raw.split(',') if s.strip()]
+            v_folder = request.form.get('vault_folder', 'input')
+            target_dir = ENCRYPTED_FOLDER if v_folder == 'encrypted' else (DECRYPTED_FOLDER if v_folder == 'decrypted' else INPUT_FOLDER)
+            for v_name in v_list:
+                safe_vname = os.path.basename(v_name)
+                v_path = os.path.join(target_dir, safe_vname)
+                if os.path.exists(v_path):
+                    files_info.append({
+                        'filename': safe_vname,
+                        'path': v_path,
+                        'display_name': safe_vname
+                    })
+        elif request.form.get('vault_filename'):
+            v_name = os.path.basename(request.form.get('vault_filename'))
+            v_folder = request.form.get('vault_folder', 'input')
+            target_dir = ENCRYPTED_FOLDER if v_folder == 'encrypted' else (DECRYPTED_FOLDER if v_folder == 'decrypted' else INPUT_FOLDER)
+            v_path = os.path.join(target_dir, v_name)
+            if os.path.exists(v_path):
+                files_info.append({
+                    'filename': v_name,
+                    'path': v_path,
+                    'display_name': v_name
+                })
+        if not files_info:
+            return jsonify({"status": "error", "message": "No media files provided to process."}), 400
+        center_path = None
+        if 'center_file' in request.files and request.files['center_file'].filename:
+            c_file = request.files['center_file']
+            center_path = os.path.join(INPUT_FOLDER, f"center_{os.path.basename(c_file.filename)}")
+            c_file.save(center_path)
+        elif request.form.get('center_vault_filename'):
+            c_name = os.path.basename(request.form.get('center_vault_filename'))
+            cp = os.path.join(INPUT_FOLDER, c_name)
+            if os.path.exists(cp):
+                center_path = cp
+        form_data = dict(request.form)
+        if center_path:
+            form_data['center_path'] = center_path
+        ok, msg, jid = job_manager.start_job(action, files_info, form_data)
+        if not ok:
+            return jsonify({"status": "error", "message": msg, "job_id": jid}), 409
+        return jsonify({"status": "ok", "job_id": jid, "total_files": len(files_info)})
     except Exception as e:
-        return None
+        tb = traceback.format_exc()
+        diag = LiveDebugger.analyze_exception(e, module_name="HTTP", func_name="start_job_api")
+        return jsonify({"status": "error", "message": str(e), "traceback": tb, "diagnostic": diag}), 500
+@app.route('/api/job/status', methods=['GET'])
+def get_job_status_api():
+    status = job_manager.get_status()
+    return jsonify(status)
+@app.route('/api/job/cancel', methods=['POST'])
+def cancel_job_api():
+    ok, msg = job_manager.cancel_job()
+    return jsonify({"status": "ok" if ok else "error", "message": msg})
 @app.route('/api/save_key', methods=['POST'])
 def save_key_api():
     data = request.json or {}

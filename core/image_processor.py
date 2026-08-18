@@ -26,6 +26,10 @@ def save_image(path, img):
     cv2.imwrite(path, img)
 @LiveDebugger.trace(module_name="IMAGE")
 def process_image_file(input_path, output_path, options, progress_dict, task_id):
+    is_cancelled_cb = options.get('is_cancelled')
+    if is_cancelled_cb and is_cancelled_cb():
+        LiveDebugger.log("CANCEL", f"Image processing cancelled for task {task_id}", level="WARNING", module="IMAGE")
+        raise RuntimeError("Processing cancelled by user")
     proc_vid = options.get('process_video')
     reverse = options.get('reverse')
     cols, rows, seed = options.get('cols', 1), options.get('rows', 1), options.get('seed', 0)
