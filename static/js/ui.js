@@ -102,15 +102,19 @@ function setImageFormat(format) {
 function setMediaTypeTab(type) {
     activeMediaType = type;
     const vTab = document.getElementById('mediaTabVideo');
+    const pTab = document.getElementById('mediaTabPatch');
     const iTab = document.getElementById('mediaTabImage');
     const aTab = document.getElementById('mediaTabAudio');
     if (vTab) vTab.classList.toggle('active', type === 'video');
+    if (pTab) pTab.classList.toggle('active', type === 'patch');
     if (iTab) iTab.classList.toggle('active', type === 'image');
     if (aTab) aTab.classList.toggle('active', type === 'audio');
     const vStudio = document.getElementById('videoStudio');
+    const pStudio = document.getElementById('patchStudio');
     const iStudio = document.getElementById('imageStudio');
     const aStudio = document.getElementById('audioStudio');
     if (vStudio) vStudio.classList.toggle('hidden', type !== 'video');
+    if (pStudio) pStudio.classList.toggle('hidden', type !== 'patch');
     if (iStudio) iStudio.classList.toggle('hidden', type !== 'image');
     if (aStudio) aStudio.classList.toggle('hidden', type !== 'audio');
     saveAllSettings();
@@ -167,12 +171,20 @@ if (decKeyInput) {
     decKeyInput.addEventListener('input', function() {
         const val = this.value || '';
         const badge = document.getElementById('decKeyModeBadge');
+        const patchBadge = document.getElementById('decKeyPatchBadge');
+        const cleanVal = val.replace(/\s+/g, '');
         if (badge) {
-            const cleanVal = val.replace(/\s+/g, '');
             if (cleanVal.includes('|c') || cleanVal.includes('|c|')) {
                 badge.classList.remove('hidden');
             } else {
                 badge.classList.add('hidden');
+            }
+        }
+        if (patchBadge) {
+            if (cleanVal.includes('|patch:') || cleanVal.includes('|p:')) {
+                patchBadge.classList.remove('hidden');
+            } else {
+                patchBadge.classList.add('hidden');
             }
         }
     });

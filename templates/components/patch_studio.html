@@ -1,0 +1,122 @@
+<div id="patchStudio" class="hidden">
+    <div class="ios-group">
+        <div class="ios-group-header">1. Select Video for Selective Patch Encryption</div>
+        <div class="ios-group-row">
+            <label class="ios-label">Choose Base Video File</label>
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+                <input type="file" id="patchVideoUpload" accept="video/*" class="ios-file-input" style="flex: 1;">
+                <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('patch_video', false)">📂 Pick from Vault</button>
+            </div>
+            <div class="file-list" id="patchFileList"></div>
+        </div>
+    </div>
+    <div class="ios-group" id="patchEditorGroup" style="display: none;">
+        <div class="ios-group-header">2. Interactive Timeline & Patch Segments Editor<span class="help-tip">❔<span class="tooltip-text">Scrub through the video, add one or more time segments, and adjust boundaries with millisecond precision. Only highlighted segments will be encrypted.</span></span></div>
+        <div class="patch-player-container" style="background: #000; border-radius: 8px; overflow: hidden; position: relative; max-width: 640px; margin: 0 auto 12px auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+            <video id="patchVideoPlayer" playsinline style="width: 100%; display: block; max-height: 360px;"></video>
+            <div id="patchPlayerOverlay" style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.65); color: #fff; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 13px;">
+                00:00.000 / 00:00.000
+            </div>
+        </div>
+        <div style="display: flex; gap: 6px; justify-content: center; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
+            <button type="button" class="ios-btn-small" onclick="patchSeekRelative(-5)">⏪ -5s</button>
+            <button type="button" class="ios-btn-small" onclick="patchSeekRelative(-1)">◀ -1s</button>
+            <button type="button" class="ios-btn-small" onclick="patchSeekRelative(-0.1)">-0.1s</button>
+            <button type="button" class="ios-btn-small" id="patchPlayPauseBtn" onclick="patchTogglePlay()" style="min-width: 70px; font-weight: 700;">▶ Play</button>
+            <button type="button" class="ios-btn-small" onclick="patchSeekRelative(0.1)">+0.1s</button>
+            <button type="button" class="ios-btn-small" onclick="patchSeekRelative(1)">+1s ▶</button>
+            <button type="button" class="ios-btn-small" onclick="patchSeekRelative(5)">+5s ⏩</button>
+        </div>
+        <div class="ios-group-row" style="background: #f4f6f8; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-bottom: 4px; font-family: monospace;">
+                <span>00:00.000</span>
+                <span id="patchDurationLabel">00:00.000</span>
+            </div>
+            <div id="patchTimelineTrack" class="patch-timeline-track" style="position: relative; height: 36px; background: #dfe3e8; border-radius: 6px; cursor: pointer; overflow: hidden; border: 1px solid #c4cdd5; user-select: none;">
+                <div id="patchSegmentsVisualContainer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+                <div id="patchPlayhead" style="position: absolute; top: 0; left: 0%; width: 3px; height: 100%; background: #ff3b30; z-index: 10; pointer-events: none;">
+                    <div style="width: 9px; height: 9px; background: #ff3b30; border-radius: 50%; margin-left: -3px; margin-top: -3px;"></div>
+                </div>
+            </div>
+            <div style="font-size: 11px; color: #777; margin-top: 6px; text-align: center;">
+                💡 <em>Click timeline to jump playhead. Red regions represent encrypted patch segments.</em>
+            </div>
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-weight: 600; font-size: 14px;">Configured Patch Segments:</span>
+            <div style="display: flex; gap: 6px;">
+                <button type="button" class="ios-btn-small" onclick="addPatchSegmentAtCurrent()">📍 Add At Current Time (+3s)</button>
+                <button type="button" class="ios-btn-small ios-btn-green" onclick="addPatchSegmentCustom()">➕ Add Segment</button>
+            </div>
+        </div>
+        <div id="patchSegmentsList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;">
+        </div>
+    </div>
+    <div class="ios-group">
+        <div class="ios-group-header">3. Encryption & Video Overlay Mode</div>
+        <div class="ios-group-row">
+            <label class="ios-label">Encryption Layout Mode</label>
+            <div class="segmented-control" style="margin-top: 4px;">
+                <button type="button" id="patchModeNormal" class="segment-btn active" onclick="setPatchMode('normal')">🔲 Normal Full Grid</button>
+                <button type="button" id="patchModeCenter" class="segment-btn" onclick="setPatchMode('center')">🎯 Center Overlay Video</button>
+            </div>
+        </div>
+        <div id="patchCenterSection" class="hidden">
+            <div class="ios-group-row" style="background: rgba(255, 59, 48, 0.05); border-left: 3px solid #ff3b30; margin-top: 6px;">
+                <label class="ios-label" style="color: #d32f2f;">Center Video (Plays & overlays ONLY during patched intervals)</label>
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+                    <input type="file" id="patchCenterUpload" accept="video/*" class="ios-file-input" style="flex: 1;">
+                    <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('patch_center', false)">📂 Pick from Vault</button>
+                </div>
+                <div class="file-list" id="patchCenterFileList"></div>
+            </div>
+            <div class="ios-group-row">
+                <label class="ios-label">Center Box Size Ratio</label>
+                <select id="patchCenterSize" class="ios-select">
+                    <option value="1/4" selected>1/4 Video Size (Default Standard)</option>
+                    <option value="2/4">2/4 Video Size (Medium Center)</option>
+                    <option value="3/4">3/4 Video Size (Large Center)</option>
+                </select>
+            </div>
+            <div class="ios-group-row">
+                <label class="ios-label">Overlay Encryption Target</label>
+                <select id="patchVideoEncryptMode" class="ios-select">
+                    <option value="external" selected>Scramble Outer Background Only</option>
+                    <option value="center">Scramble Center Overlay Only</option>
+                    <option value="both">Scramble Both Background & Center</option>
+                </select>
+            </div>
+        </div>
+        <div class="ios-group-row" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <label class="ios-label" style="margin: 0; font-weight: 600;">Audio Encryption in Segments</label>
+                <div style="font-size: 11px; color: #666;">Encrypt audio only during the patched intervals; outside intervals remain untouched</div>
+            </div>
+            <input type="checkbox" id="patchEncAudio" checked class="ios-switch">
+        </div>
+        <div class="ios-group-row">
+            <label class="ios-label">Patch Processing Engine</label>
+            <select id="patchEngine" class="ios-select">
+                <option value="seamless" selected>Seamless Re-encode (Frame-Accurate & Millisecond-Precise)</option>
+                <option value="keyframe_concat">Keyframe Fast Concat (Lossless Cut)</option>
+            </select>
+        </div>
+        <div class="ios-group-row">
+            <label class="ios-label">Grid Partition (Cols x Rows)</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="number" id="patchCols" value="10" min="1" max="100" class="ios-input" style="flex: 1;" placeholder="Cols">
+                <span>✕</span>
+                <input type="number" id="patchRows" value="10" min="1" max="100" class="ios-input" style="flex: 1;" placeholder="Rows">
+            </div>
+        </div>
+        <div class="ios-group-row">
+            <label class="ios-label">Custom Passphrase / Seed</label>
+            <input type="text" id="patchSeed" placeholder="Optional Custom Seed (Leave blank for random)" class="ios-input">
+        </div>
+        <div class="ios-group-row" style="border-top: 1px solid #c8c7cc; padding-top: 14px; margin-top: 8px;">
+            <button type="button" onclick="startPatchEncryption()" class="ios-btn ios-btn-blue" style="font-weight: 700; font-size: 15px;">
+                🩹 ENCRYPT PATCHED VIDEO
+            </button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,36 @@
+<svg width="320" height="240" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="320" height="240" fill="white" stroke="black" stroke-width="2" />
+  <rect x="0" y="0" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="40.0" y="30.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">1</text>
+  <rect x="80" y="0" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="120.0" y="30.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">2</text>
+  <rect x="160" y="0" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="200.0" y="30.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">3</text>
+  <rect x="240" y="0" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="280.0" y="30.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">4</text>
+  <rect x="0" y="60" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="40.0" y="90.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">5</text>
+  <rect x="80" y="60" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="120.0" y="90.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">6</text>
+  <rect x="160" y="60" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="200.0" y="90.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">7</text>
+  <rect x="240" y="60" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="280.0" y="90.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">8</text>
+  <rect x="0" y="120" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="40.0" y="150.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">9</text>
+  <rect x="80" y="120" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="120.0" y="150.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">10</text>
+  <rect x="160" y="120" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="200.0" y="150.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">11</text>
+  <rect x="240" y="120" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="280.0" y="150.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">12</text>
+  <rect x="0" y="180" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="40.0" y="210.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">13</text>
+  <rect x="80" y="180" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="120.0" y="210.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">14</text>
+  <rect x="160" y="180" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="200.0" y="210.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">15</text>
+  <rect x="240" y="180" width="80" height="60" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="280.0" y="210.0" font-family="Arial" font-size="24.0" fill="black" text-anchor="middle" dominant-baseline="central">16</text>
+</svg>

@@ -135,15 +135,16 @@ async function startBatch(action) {
             fd.append('video_encrypt_mode', document.getElementById('video_encrypt_mode').value);
             fd.append('aud_track', document.getElementById('aud_track') ? document.getElementById('aud_track').value : 'both');
             fd.append('outer_end_action', document.getElementById('outer_end_action').value);
-            fd.append('center_end_action', document.getElementById('center_end_action').value);
-            const centerAudActionElem = document.getElementById('center_aud_action');
+            fd.append('center_end_action', document.getElementById('center_end_action').value);            const centerAudActionElem = document.getElementById('center_aud_action');
             fd.append('center_aud_action', centerAudActionElem ? centerAudActionElem.value : 'silence');
             fd.append('export_svg', document.getElementById('exportSvg').checked);
+            fd.append('use_gpu', document.getElementById('useGpu') ? document.getElementById('useGpu').checked : false);
+            fd.append('save_key_file', document.getElementById('saveKeyFile') ? document.getElementById('saveKeyFile').checked : true);
         } else if (activeMediaType === 'image') {
             fd.append('enc_video', 'true'); 
             fd.append('enc_audio', 'false');
             fd.append('cols', document.getElementById('img_cols').value); 
-            fd.append('rows', document.getElementById('img_rows').value);
+            fd.append('rows', document.getElementById('img_rows').value); 
             fd.append('sid', document.getElementById('img_sid').value); 
             fd.append('img_format', activeImageFormat);
             fd.append('center_mode', imgEncryptionMode === 'center');
@@ -157,6 +158,7 @@ async function startBatch(action) {
             fd.append('center_size', document.getElementById('img_center_size').value);
             fd.append('video_encrypt_mode', document.getElementById('img_video_encrypt_mode').value);
             fd.append('export_svg', document.getElementById('imgExportSvg').checked);
+            fd.append('save_key_file', document.getElementById('imgSaveKeyFile') ? document.getElementById('imgSaveKeyFile').checked : true);
         } else if (activeMediaType === 'audio') {
             fd.append('enc_video', 'false'); 
             fd.append('enc_audio', 'true');
@@ -173,6 +175,7 @@ async function startBatch(action) {
             fd.append('sid', document.getElementById('aud_seed').value);
             fd.append('vol_factor', parseFloat(document.getElementById('aud_vol_factor_slider').value) / 100.0);
             fd.append('aud_track', document.getElementById('audio_track_select').value);
+            fd.append('save_key_file', document.getElementById('audSaveKeyFile') ? document.getElementById('audSaveKeyFile').checked : true);
         }
     } else {
         fd.append('key', document.getElementById('decKey').value);
@@ -183,6 +186,7 @@ async function startBatch(action) {
         fd.append('aud_sr', 'auto'); 
         fd.append('aud_codec', 'auto');
         fd.append('aud_bitrate', 'auto');
+        fd.append('use_gpu', document.getElementById('useGpu') ? document.getElementById('useGpu').checked : false);
     }
     try {
         const res = await fetch('/api/job/start', { method: 'POST', body: fd });
@@ -381,8 +385,8 @@ function renderKeysOutput(keys) {
         const keyVal = item.key || '';
         const outFile = item.out_file || '';
         keysOut.innerHTML += `
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; background: rgba(0,0,0,0.03); padding: 5px 8px; border-radius: 6px; border: 1px solid #e1e4e8; word-break: break-all;">
-                <span style="font-weight: 500; color: #333; font-size: 12px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${itemName}">${itemName}</span>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; background: rgba(0,0,0,0.03); padding: 5px 8px; border-radius: 6px; border: 1px solid #e1e4e8; min-width: 0; overflow: hidden; box-sizing: border-box;">
+                <span style="font-weight: 500; color: #333; font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; word-break: break-all; overflow-wrap: anywhere;" title="${itemName}">${itemName}</span>
                 <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                     <code style="background: #e1f5fe; color: #0288d1; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 12px; border: 1px dashed #0288d1; font-family: monospace;">${keyVal}</code>
                     <button type="button" class="ios-btn-small" onclick="saveKeyToFile('${keyVal}', '${outFile}', this)" style="padding: 2px 6px; font-size: 11px; margin: 0; background: linear-gradient(to bottom, #ffffff 0%, #eaeaea 100%); cursor: pointer; border-radius: 4px; font-weight: bold; border: 1px solid #b0b0b0;">💾 Save</button>
@@ -521,4 +525,55 @@ function copyKeyToClipboard(text, btn) {
         console.error('Failed to copy key: ', err);
         alert('Failed to copy key to clipboard.');
     });
+}
+async function startBatchWithFormData(fd, action) {
+    const progBox = document.getElementById('progBox');
+    const spinner = document.getElementById('progSpinner');
+    const cancelCont = document.getElementById('progCancelContainer');
+    const cancelBtn = document.getElementById('progCancelBtn');
+    const statusMsg = document.getElementById('progStatusMessage');
+    const keysOut = document.getElementById('keysOutput');
+    const progTitle = document.getElementById('progTitle');
+    const progFill = document.getElementById('progFill');
+    const progText = document.getElementById('progText');
+    if (progBox) progBox.style.display = 'block';
+    if (spinner) {
+        spinner.style.display = 'inline-block';
+        spinner.style.animationPlayState = 'running';
+    }
+    if (cancelCont) cancelCont.style.display = 'block';
+    if (cancelBtn) {
+        cancelBtn.disabled = false;
+        cancelBtn.innerText = '✕ Cancel Processing';
+        cancelBtn.style.opacity = '1';
+    }
+    if (statusMsg) {
+        statusMsg.style.display = 'none';
+        statusMsg.innerText = '';
+    }
+    if (keysOut) {
+        keysOut.style.display = 'none';
+        keysOut.innerHTML = '';
+    }
+    if (progFill) {
+        progFill.style.width = '0%';
+        progFill.classList.remove('complete');
+        progFill.classList.remove('indeterminate');
+    }
+    if (progText) progText.innerText = '0%';
+    if (progTitle) progTitle.innerText = `Starting batch job...`;
+    currentJobStartTime = Date.now();
+    try {
+        const res = await fetch('/api/job/start', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            startJobPolling();
+        } else {
+            alert(data.error || "Failed to start job");
+            if (progBox) progBox.style.display = 'none';
+        }
+    } catch (e) {
+        alert("Error starting job: " + e.message);
+        if (progBox) progBox.style.display = 'none';
+    }
 }

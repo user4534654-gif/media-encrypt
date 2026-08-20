@@ -230,6 +230,31 @@ async function selectVaultFileDirectly(filename, mediaType, isCenter) {
             if (typeof loadAudioPreview === 'function') {
                 loadAudioPreview(fileUrl, filename);
             }
+        } else if (mediaType === 'patch_video') {
+            const pList = document.getElementById('patchFileList');
+            if (pList) pList.innerHTML = `<span class="badge" style="background:#34c759; color:#fff;">📁 Vault: ${filename}</span>`;
+            const player = document.getElementById('patchVideoPlayer');
+            const editorGroup = document.getElementById('patchEditorGroup');
+            if (player) {
+                player.src = fileUrl;
+                player.load();
+            }
+            if (editorGroup) {
+                editorGroup.style.display = 'block';
+            }
+            fetch(fileUrl).then(r => r.blob()).then(blob => {
+                patchBaseFile = new File([blob], filename, { type: blob.type || 'video/mp4' });
+            }).catch(() => {
+                patchBaseFile = { name: filename, isVault: true };
+            });
+        } else if (mediaType === 'patch_center') {
+            const cList = document.getElementById('patchCenterFileList');
+            if (cList) cList.innerHTML = `<span class="badge" style="background:#ff3b30; color:#fff;">📁 Vault: ${filename}</span>`;
+            fetch(fileUrl).then(r => r.blob()).then(blob => {
+                patchCenterFile = new File([blob], filename, { type: blob.type || 'video/mp4' });
+            }).catch(() => {
+                patchCenterFile = { name: filename, isVault: true };
+            });
         } else if (mediaType === 'decrypt') {
             selectedVaultMedia.decrypt = [filename];
             const dList = document.getElementById('decryptFileList');

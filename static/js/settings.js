@@ -61,7 +61,11 @@ function saveAllSettings() {
         center_end_action: document.getElementById('center_end_action') ? document.getElementById('center_end_action').value : 'loop',
         center_aud_action: document.getElementById('center_aud_action') ? document.getElementById('center_aud_action').value : 'silence',
         exportSvg: document.getElementById('exportSvg') ? document.getElementById('exportSvg').checked : true,
-        imgExportSvg: document.getElementById('imgExportSvg') ? document.getElementById('imgExportSvg').checked : true
+        imgExportSvg: document.getElementById('imgExportSvg') ? document.getElementById('imgExportSvg').checked : true,
+        useGpu: document.getElementById('useGpu') ? document.getElementById('useGpu').checked : false,
+        saveKeyFile: document.getElementById('saveKeyFile') ? document.getElementById('saveKeyFile').checked : true,
+        imgSaveKeyFile: document.getElementById('imgSaveKeyFile') ? document.getElementById('imgSaveKeyFile').checked : true,
+        audSaveKeyFile: document.getElementById('audSaveKeyFile') ? document.getElementById('audSaveKeyFile').checked : true
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
@@ -186,6 +190,10 @@ function loadAllSettings() {
         setVal('center_aud_action', settings.center_aud_action || 'silence');
         setChecked('exportSvg', settings.exportSvg !== false);
         setChecked('imgExportSvg', settings.imgExportSvg !== false);
+        setChecked('useGpu', settings.useGpu === true);
+        setChecked('saveKeyFile', settings.saveKeyFile !== false);
+        setChecked('imgSaveKeyFile', settings.imgSaveKeyFile !== false);
+        setChecked('audSaveKeyFile', settings.audSaveKeyFile !== false);
         updateVisibility();
         if (typeof toggleAudioMethodFields === 'function') toggleAudioMethodFields();
         if (typeof toggleVideoAudioMethodFields === 'function') toggleVideoAudioMethodFields();
@@ -200,7 +208,7 @@ function initAutoSave() {
         'img_cols', 'img_rows', 'img_sid', 'carrier_freq_slider', 'audio_sr_slider', 'audio_sr_auto', 'audio_codec',
         'audio_bit_slider', 'audio_bit_auto', 'audio_fmt', 'decKey', 'aud_method', 'aud_splits', 'aud_seed', 'aud_vol_factor_slider',
         'v_aud_method', 'v_aud_splits', 'vol_factor_slider', 'dual_track', 'center_size', 'img_center_size',
-        'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg'
+        'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg', 'useGpu', 'saveKeyFile', 'imgSaveKeyFile', 'audSaveKeyFile'
     ];
     inputs.forEach(id => {
         const el = document.getElementById(id);

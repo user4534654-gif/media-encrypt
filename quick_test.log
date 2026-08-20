@@ -1,64 +1,64 @@
-[2026-08-17 17:27:11.004] [GDB-DBGR] [INFO ] [TEST] TEST_START - Starting Media-Encrypt Studio Diagnostic Suite
-[2026-08-17 17:27:11.008] [GDB-DBGR] [DEBUG] [TEST] TEMP_DIR - Isolated test directory created: C:\Users\DELL\AppData\Local\Temp\media_encrypt_diag_y0jv9uxq
-[2026-08-17 17:27:11.008] [GDB-DBGR] [INFO ] [TEST] TEST_1 - Testing Crypto, PRNG Determinism & Key Parsing...
-[2026-08-17 17:27:11.009] [GDB-DBGR] [INFO ] [TEST] TEST_1_PASS - Crypto & Key Parser verified (0.000s)
-[2026-08-17 17:27:11.009] [GDB-DBGR] [INFO ] [TEST] TEST_2 - Testing Grid Math & Prime Dimension Partitioning...
-[2026-08-17 17:27:11.011] [GDB-DBGR] [INFO ] [TEST] TEST_2_PASS - Grid Math & Partitioning verified (0.002s)
-[2026-08-17 17:27:11.011] [GDB-DBGR] [INFO ] [TEST] TEST_3 - Testing SVG Grid Exporters...
-[2026-08-17 17:27:11.015] [GDB-DBGR] [INFO ] [TEST] TEST_3_PASS - SVG Generators verified (0.004s)
-[2026-08-17 17:27:11.015] [GDB-DBGR] [INFO ] [TEST] TEST_4 - Testing Image Lossless & Center-Overlay Roundtrips...
-[2026-08-17 17:27:11.043] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\img_bg_orig.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\img_bg_enc.png', {'process_video': True, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 8888, 'export_svg': False}, {}, 'task_img_enc')
-[2026-08-17 17:27:11.043] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'img_bg_orig.png' | grid=4x4, seed=8888, reverse=False
-[2026-08-17 17:27:11.062] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.019s
-[2026-08-17 17:27:11.062] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\img_bg_enc.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\img_bg_dec.png', {'process_video': True, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 8888, 'export_svg': False}, {'task_img_enc': 100}, 'task_img_dec')
-[2026-08-17 17:27:11.062] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'img_bg_enc.png' | grid=4x4, seed=8888, reverse=True
-[2026-08-17 17:27:11.079] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.017s
-[2026-08-17 17:27:11.101] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\odd_orig.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\odd_enc.png', {'process_video': True, 'reverse': False, 'cols': 5, 'rows': 7, 'seed': 1234, 'export_svg': False}, {'task_img_enc': 100, 'task_img_dec': 100}, 'task_odd_enc')
-[2026-08-17 17:27:11.101] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'odd_orig.png' | grid=5x7, seed=1234, reverse=False
-[2026-08-17 17:27:11.122] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.021s
-[2026-08-17 17:27:11.122] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\odd_enc.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\odd_dec.png', {'process_video': True, 'reverse': True, 'cols': 5, 'rows': 7, 'seed': 1234, 'export_svg': False}, {'task_img_enc': 100, 'task_img_dec': 100, 'task_odd_enc': 100}, 'task_odd_dec')
-[2026-08-17 17:27:11.122] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'odd_enc.png' | grid=5x7, seed=1234, reverse=True
-[2026-08-17 17:27:11.126] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.004s
-[2026-08-17 17:27:11.128] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\bg_pip.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\pip_enc.png', {'process_video': True, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 1234, 'center': True, 'center_size': '1/4', 'center_path': 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\cnt_pip.png', 'video_encrypt_mode': 'both', 'export_svg': False}, {'task_img_enc': 100, 'task_img_dec': 100, 'task_odd_enc': 100, 'task_odd_dec': 100}, 'task_pip_enc')
-[2026-08-17 17:27:11.128] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'bg_pip.png' | grid=4x4, seed=1234, reverse=False
-[2026-08-17 17:27:11.156] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.028s
-[2026-08-17 17:27:11.156] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\pip_enc.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\pip_dec.png', {'process_video': True, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 1234, 'center': True, 'center_size': '1/4', 'video_encrypt_mode': 'both', 'export_svg': False}, {'task_img_enc': 100, 'task_img_dec': 100, 'task_odd_enc': 100, 'task_odd_dec': 100, 'task_pip_enc': 100}, 'task_pip_dec')
-[2026-08-17 17:27:11.156] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'pip_enc.png' | grid=4x4, seed=1234, reverse=True
-[2026-08-17 17:27:11.172] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.015s
-[2026-08-17 17:27:11.172] [GDB-DBGR] [INFO ] [TEST] TEST_4_PASS - Image roundtrips verified (0.157s)
-[2026-08-17 17:27:11.172] [GDB-DBGR] [INFO ] [TEST] TEST_5 - Testing Audio DSP Scrambling & Signal Fidelity...
-[2026-08-17 17:27:11.180] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_orig.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_enc.wav', is_decrypt=False, method='inversion', key=777, carrier_freq=8000)
-[2026-08-17 17:27:11.201] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.022s
-[2026-08-17 17:27:11.202] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_enc.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_dec.wav', is_decrypt=True, method='inversion', key=777, carrier_freq=8000)
-[2026-08-17 17:27:11.306] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.105s
-[2026-08-17 17:27:11.324] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_orig.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_enc.wav', is_decrypt=False, method='band_scramble', key=777, carrier_freq=8000)
-[2026-08-17 17:27:11.997] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.673s
-[2026-08-17 17:27:11.997] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_enc.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_dec.wav', is_decrypt=True, method='band_scramble', key=777, carrier_freq=8000)
-[2026-08-17 17:27:12.216] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.219s
-[2026-08-17 17:27:12.230] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_orig.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_enc.wav', is_decrypt=False, method='combined', key=777, carrier_freq=8000)
-[2026-08-17 17:27:12.370] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.140s
-[2026-08-17 17:27:12.370] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_enc.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_dec.wav', is_decrypt=True, method='combined', key=777, carrier_freq=8000)
-[2026-08-17 17:27:12.526] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.156s
-[2026-08-17 17:27:12.546] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\mono_orig.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\mono_dec.wav', is_decrypt=False, method='inversion')
-[2026-08-17 17:27:12.565] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.019s
-[2026-08-17 17:27:12.565] [GDB-DBGR] [INFO ] [TEST] TEST_5_PASS - Audio DSP verified (1.393s)
-[2026-08-17 17:27:12.565] [GDB-DBGR] [INFO ] [TEST] TEST_6 - Testing Video Encrypt & Decrypt Roundtrip...
-[2026-08-17 17:27:12.642] [GDB-DBGR] [TRACE] [PIPELINE] ENTER - -> process_media('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_orig.mp4', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_enc.mp4', {'process_video': True, 'process_audio': False, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_svg': False, 'vid_format': '.mp4', 'vid_codec': 'libx264', 'vid_bitrate': '2000k', 'vid_preset': 'ultrafast'}, {}, 'task_v_enc')
-[2026-08-17 17:27:12.642] [GDB-DBGR] [INFO ] [PIPELINE] ROUTE - Routing 'vid_orig.mp4' to VIDEO processing pipeline
-[2026-08-17 17:27:12.642] [GDB-DBGR] [TRACE] [VIDEO] ENTER - -> process_video_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_orig.mp4', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_enc.mp4', {'process_video': True, 'process_audio': False, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_svg': False, 'vid_format': '.mp4', 'vid_codec': 'libx264', 'vid_bitrate': '2000k', 'vid_preset': 'ultrafast'}, {}, 'task_v_enc')
-[2026-08-17 17:27:12.892] [GDB-DBGR] [INFO ] [VIDEO] START_VIDEO - Processing video 'vid_orig.mp4' | grid=4x4, seed=1840802157, mode=external, reverse=False
-[2026-08-17 17:27:13.142] [GDB-DBGR] [TRACE] [VIDEO] EXIT - <- process_video_file completed in 0.500s
-[2026-08-17 17:27:13.142] [GDB-DBGR] [TRACE] [PIPELINE] EXIT - <- process_media completed in 0.500s
-[2026-08-17 17:27:13.142] [GDB-DBGR] [TRACE] [PIPELINE] ENTER - -> process_media('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_enc.mp4', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_dec.mp4', {'process_video': True, 'process_audio': False, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_svg': False, 'vid_format': '.mp4', 'vid_codec': 'libx264', 'vid_bitrate': '2000k', 'vid_preset': 'ultrafast'}, {'task_v_enc': 100}, 'task_v_dec')
-[2026-08-17 17:27:13.142] [GDB-DBGR] [INFO ] [PIPELINE] ROUTE - Routing 'vid_enc.mp4' to VIDEO processing pipeline
-[2026-08-17 17:27:13.142] [GDB-DBGR] [TRACE] [VIDEO] ENTER - -> process_video_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_enc.mp4', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_dec.mp4', {'process_video': True, 'process_audio': False, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_svg': False, 'vid_format': '.mp4', 'vid_codec': 'libx264', 'vid_bitrate': '2000k', 'vid_preset': 'ultrafast'}, {'task_v_enc': 100}, 'task_v_dec')
-[2026-08-17 17:27:13.142] [GDB-DBGR] [INFO ] [VIDEO] START_VIDEO - Processing video 'vid_enc.mp4' | grid=4x4, seed=1840802157, mode=external, reverse=True
-[2026-08-17 17:27:13.365] [GDB-DBGR] [TRACE] [VIDEO] EXIT - <- process_video_file completed in 0.223s
-[2026-08-17 17:27:13.366] [GDB-DBGR] [TRACE] [PIPELINE] EXIT - <- process_media completed in 0.224s
-[2026-08-17 17:27:13.398] [GDB-DBGR] [INFO ] [TEST] TEST_6_PASS - Video Roundtrip verified (0.833s)
-[2026-08-17 17:27:13.398] [GDB-DBGR] [INFO ] [TEST] TEST_7 - Testing Media Metadata Prober...
-[2026-08-17 17:27:13.684] [GDB-DBGR] [INFO ] [TEST] TEST_7_PASS - Metadata Prober verified (0.286s)
-[2026-08-17 17:27:13.684] [GDB-DBGR] [INFO ] [TEST] TEST_8 - Testing Temp Resource Cleanup & LiveDebugger Engine...
+[2026-08-19 22:27:46.105] [GDB-DBGR] [INFO ] [TEST] TEST_START - Starting Media-Encrypt Studio Diagnostic Suite
+[2026-08-19 22:27:46.107] [GDB-DBGR] [DEBUG] [TEST] TEMP_DIR - Isolated test directory created: C:\Users\DELL\AppData\Local\Temp\media_encrypt_diag_qi4l06mt
+[2026-08-19 22:27:46.107] [GDB-DBGR] [INFO ] [TEST] TEST_1 - Testing Crypto, PRNG Determinism & Key Parsing...
+[2026-08-19 22:27:46.107] [GDB-DBGR] [INFO ] [TEST] TEST_1_PASS - Crypto & Key Parser verified (0.000s)
+[2026-08-19 22:27:46.107] [GDB-DBGR] [INFO ] [TEST] TEST_2 - Testing Grid Math & Prime Dimension Partitioning...
+[2026-08-19 22:27:46.109] [GDB-DBGR] [INFO ] [TEST] TEST_2_PASS - Grid Math & Partitioning verified (0.002s)
+[2026-08-19 22:27:46.109] [GDB-DBGR] [INFO ] [TEST] TEST_3 - Testing SVG Grid Exporters...
+[2026-08-19 22:27:46.112] [GDB-DBGR] [INFO ] [TEST] TEST_3_PASS - SVG Generators verified (0.003s)
+[2026-08-19 22:27:46.112] [GDB-DBGR] [INFO ] [TEST] TEST_4 - Testing Image Lossless & Center-Overlay Roundtrips...
+[2026-08-19 22:27:46.131] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\img_bg_orig.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\img_bg_enc.png', {'process_video': True, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 8888, 'export_svg': False}, {}, 'task_img_enc')
+[2026-08-19 22:27:46.131] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'img_bg_orig.png' | grid=4x4, seed=8888, reverse=False
+[2026-08-19 22:27:46.146] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.015s
+[2026-08-19 22:27:46.146] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\img_bg_enc.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\img_bg_dec.png', {'process_video': True, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 8888, 'export_svg': False}, {'task_img_enc': 100}, 'task_img_dec')
+[2026-08-19 22:27:46.146] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'img_bg_enc.png' | grid=4x4, seed=8888, reverse=True
+[2026-08-19 22:27:46.158] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.012s
+[2026-08-19 22:27:46.170] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\odd_orig.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\odd_enc.png', {'process_video': True, 'reverse': False, 'cols': 5, 'rows': 7, 'seed': 1234, 'export_svg': False}, {'task_img_enc': 100, 'task_img_dec': 100}, 'task_odd_enc')
+[2026-08-19 22:27:46.170] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'odd_orig.png' | grid=5x7, seed=1234, reverse=False
+[2026-08-19 22:27:46.182] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.012s
+[2026-08-19 22:27:46.182] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\odd_enc.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\odd_dec.png', {'process_video': True, 'reverse': True, 'cols': 5, 'rows': 7, 'seed': 1234, 'export_svg': False}, {'task_img_enc': 100, 'task_img_dec': 100, 'task_odd_enc': 100}, 'task_odd_dec')
+[2026-08-19 22:27:46.183] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'odd_enc.png' | grid=5x7, seed=1234, reverse=True
+[2026-08-19 22:27:46.186] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.004s
+[2026-08-19 22:27:46.188] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\bg_pip.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\pip_enc.png', {'process_video': True, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 1234, 'center': True, 'center_size': '1/4', 'center_path': 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\cnt_pip.png', 'video_encrypt_mode': 'both', 'export_svg': False}, {'task_img_enc': 100, 'task_img_dec': 100, 'task_odd_enc': 100, 'task_odd_dec': 100}, 'task_pip_enc')
+[2026-08-19 22:27:46.188] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'bg_pip.png' | grid=4x4, seed=1234, reverse=False
+[2026-08-19 22:27:46.199] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.011s
+[2026-08-19 22:27:46.199] [GDB-DBGR] [TRACE] [IMAGE] ENTER - -> process_image_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\pip_enc.png', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\pip_dec.png', {'process_video': True, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 1234, 'center': True, 'center_size': '1/4', 'video_encrypt_mode': 'both', 'export_svg': False}, {'task_img_enc': 100, 'task_img_dec': 100, 'task_odd_enc': 100, 'task_odd_dec': 100, 'task_pip_enc': 100}, 'task_pip_dec')
+[2026-08-19 22:27:46.199] [GDB-DBGR] [DEBUG] [IMAGE] LOAD_IMAGE - Loading 'pip_enc.png' | grid=4x4, seed=1234, reverse=True
+[2026-08-19 22:27:46.204] [GDB-DBGR] [TRACE] [IMAGE] EXIT - <- process_image_file completed in 0.004s
+[2026-08-19 22:27:46.204] [GDB-DBGR] [INFO ] [TEST] TEST_4_PASS - Image roundtrips verified (0.092s)
+[2026-08-19 22:27:46.204] [GDB-DBGR] [INFO ] [TEST] TEST_5 - Testing Audio DSP Scrambling & Signal Fidelity...
+[2026-08-19 22:27:46.214] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_orig.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_enc.wav', is_decrypt=False, method='inversion', key=777, carrier_freq=8000)
+[2026-08-19 22:27:46.230] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.017s
+[2026-08-19 22:27:46.230] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_enc.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_dec.wav', is_decrypt=True, method='inversion', key=777, carrier_freq=8000)
+[2026-08-19 22:27:46.294] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.064s
+[2026-08-19 22:27:46.311] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_orig.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_enc.wav', is_decrypt=False, method='band_scramble', key=777, carrier_freq=8000)
+[2026-08-19 22:27:46.864] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.553s
+[2026-08-19 22:27:46.865] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_enc.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_dec.wav', is_decrypt=True, method='band_scramble', key=777, carrier_freq=8000)
+[2026-08-19 22:27:47.047] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.183s
+[2026-08-19 22:27:47.062] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_orig.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_enc.wav', is_decrypt=False, method='combined', key=777, carrier_freq=8000)
+[2026-08-19 22:27:47.180] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.118s
+[2026-08-19 22:27:47.180] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_enc.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_dec.wav', is_decrypt=True, method='combined', key=777, carrier_freq=8000)
+[2026-08-19 22:27:47.307] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.127s
+[2026-08-19 22:27:47.323] [GDB-DBGR] [TRACE] [AUDIO] ENTER - -> process_audio_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\mono_orig.wav', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\mono_dec.wav', is_decrypt=False, method='inversion')
+[2026-08-19 22:27:47.339] [GDB-DBGR] [TRACE] [AUDIO] EXIT - <- process_audio_file completed in 0.015s
+[2026-08-19 22:27:47.339] [GDB-DBGR] [INFO ] [TEST] TEST_5_PASS - Audio DSP verified (1.135s)
+[2026-08-19 22:27:47.339] [GDB-DBGR] [INFO ] [TEST] TEST_6 - Testing Video Encrypt & Decrypt Roundtrip...
+[2026-08-19 22:27:47.352] [GDB-DBGR] [TRACE] [PIPELINE] ENTER - -> process_media('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_orig.mp4', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_enc.mp4', {'process_video': True, 'process_audio': False, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_svg': False, 'vid_format': '.mp4', 'vid_codec': 'libx264', 'vid_bitrate': '2000k', 'vid_preset': 'ultrafast'}, {}, 'task_v_enc')
+[2026-08-19 22:27:47.352] [GDB-DBGR] [INFO ] [PIPELINE] ROUTE - Routing 'vid_orig.mp4' to VIDEO processing pipeline
+[2026-08-19 22:27:47.352] [GDB-DBGR] [TRACE] [VIDEO] ENTER - -> process_video_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_orig.mp4', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_enc.mp4', {'process_video': True, 'process_audio': False, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_svg': False, 'vid_format': '.mp4', 'vid_codec': 'libx264', 'vid_bitrate': '2000k', 'vid_preset': 'ultrafast'}, {}, 'task_v_enc')
+[2026-08-19 22:27:47.448] [GDB-DBGR] [INFO ] [VIDEO] START_VIDEO - Processing video 'vid_orig.mp4' | grid=4x4, seed=1840802157, mode=external, patch_intervals=None, reverse=False
+[2026-08-19 22:27:47.617] [GDB-DBGR] [TRACE] [VIDEO] EXIT - <- process_video_file completed in 0.265s
+[2026-08-19 22:27:47.617] [GDB-DBGR] [TRACE] [PIPELINE] EXIT - <- process_media completed in 0.265s
+[2026-08-19 22:27:47.617] [GDB-DBGR] [TRACE] [PIPELINE] ENTER - -> process_media('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_enc.mp4', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_dec.mp4', {'process_video': True, 'process_audio': False, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_svg': False, 'vid_format': '.mp4', 'vid_codec': 'libx264', 'vid_bitrate': '2000k', 'vid_preset': 'ultrafast'}, {'task_v_enc': 100}, 'task_v_dec')
+[2026-08-19 22:27:47.617] [GDB-DBGR] [INFO ] [PIPELINE] ROUTE - Routing 'vid_enc.mp4' to VIDEO processing pipeline
+[2026-08-19 22:27:47.617] [GDB-DBGR] [TRACE] [VIDEO] ENTER - -> process_video_file('C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_enc.mp4', 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_dec.mp4', {'process_video': True, 'process_audio': False, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_svg': False, 'vid_format': '.mp4', 'vid_codec': 'libx264', 'vid_bitrate': '2000k', 'vid_preset': 'ultrafast'}, {'task_v_enc': 100}, 'task_v_dec')
+[2026-08-19 22:27:47.618] [GDB-DBGR] [INFO ] [VIDEO] START_VIDEO - Processing video 'vid_enc.mp4' | grid=4x4, seed=1840802157, mode=external, patch_intervals=None, reverse=True
+[2026-08-19 22:27:47.793] [GDB-DBGR] [TRACE] [VIDEO] EXIT - <- process_video_file completed in 0.175s
+[2026-08-19 22:27:47.793] [GDB-DBGR] [TRACE] [PIPELINE] EXIT - <- process_media completed in 0.175s
+[2026-08-19 22:27:47.817] [GDB-DBGR] [INFO ] [TEST] TEST_6_PASS - Video Roundtrip verified (0.478s)
+[2026-08-19 22:27:47.817] [GDB-DBGR] [INFO ] [TEST] TEST_7 - Testing Media Metadata Prober...
+[2026-08-19 22:27:48.093] [GDB-DBGR] [INFO ] [TEST] TEST_7_PASS - Metadata Prober verified (0.276s)
+[2026-08-19 22:27:48.093] [GDB-DBGR] [INFO ] [TEST] TEST_8 - Testing Temp Resource Cleanup & LiveDebugger Engine...
 ================================================================================
 [GDB-DBGR] CRASH DIAGNOSTIC REPORT
 Exception:  ZeroDivisionError: division by zero
@@ -67,15 +67,15 @@ Code Line:  _ = 100 / 0
 Root Cause: Grid calculation mismatch or invalid row/column dimensions for media size.
 Fix Hint:   Ensure columns and rows > 1 and dimensions are divisible or large enough for chosen layout.
 Local Variables Snapshot:
-  * start_time = 1786976831.0043314
+  * start_time = 1787167666.1050916
   * test_results = {'Crypto, PRNG & Key Parser': 'PASS (0.000s)', 'Grid Math & Partitioning': 'PASS (0.002s)', 'SVG Grid Generators': 'P...
-  * temp_dir = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq'
-  * t1_start = 1786976831.0086987
+  * temp_dir = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt'
+  * t1_start = 1787167666.107231
   * h_apple = 3141262829
   * base_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
   * shuffled_1 = [11, 4, 1, 7, 5, 9, 2, 6, 8, 0, 3, 10, 15, 12, 13, 14]
   * shuffled_2 = [11, 4, 1, 7, 5, 9, 2, 6, 8, 0, 3, 10, 15, 12, 13, 14]
-  * prng = <function mulberry32.<locals>.prng at 0x000001F2E5606CF0>
+  * prng = <function mulberry32.<locals>.prng at 0x000001A553A96CF0>
   * val1 = 0.17061792965978384
   * val2 = 0.8889230492059141
   * perm = [4, 6, 1, 14, 15, 8, 11, 0, 7, 3, 12, 16, 10, 18, 17, 5, 13, 2, 19, 9]
@@ -85,8 +85,8 @@ Local Variables Snapshot:
   * complex_key = '8x6|my_secret_seed|c_2/4|em_both|a|acb|as_15|cf_10000|dm|v_0.8|at_l'
   * opts = {'process_audio': True, 'process_video': True, 'reverse': True, 'center': True, 'center_size': '2/4', 'aud_method': '...
   * bad_key = '|a|'
-  * t1_dur = 0.00041484832763671875
-  * t2_start = 1786976831.0091803
+  * t1_dur = 0.000247955322265625
+  * t2_start = 1787167666.1075227
   * c = 3
   * r = 4
   * W = 127
@@ -112,13 +112,13 @@ Local Variables Snapshot:
   * cy1 = 37
   * cx2 = 76
   * cy2 = 94
-  * t2_dur = 0.002116680145263672
-  * t3_start = 1786976831.0113826
-  * svg_normal = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\grid_normal.svg'
-  * svg_center = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\grid_center.svg'
-  * svg_scrambled = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\grid_scrambled.svg'
-  * t3_dur = 0.003975391387939453
-  * t4_start = 1786976831.0154526
+  * t2_dur = 0.0018038749694824219
+  * t3_start = 1787167666.1093824
+  * svg_normal = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\grid_normal.svg'
+  * svg_center = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\grid_center.svg'
+  * svg_scrambled = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\grid_scrambled.svg'
+  * t3_dur = 0.003118276596069336
+  * t4_start = 1787167666.1125712
   * prog = {'task_v_enc': 100, 'task_v_dec': 100}
   * W_img = 120
   * H_img = 120
@@ -130,9 +130,9 @@ Local Variables Snapshot:
     ...
   * y = 119
   * x = 119
-  * img_bg_in = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\img_bg_orig.png'
-  * img_bg_enc = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\img_bg_enc.png'
-  * img_bg_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\img_bg_dec.png'
+  * img_bg_in = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\img_bg_orig.png'
+  * img_bg_enc = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\img_bg_enc.png'
+  * img_bg_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\img_bg_dec.png'
   * enc_opts = {'process_video': True, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 8888, 'export_svg': False}
   * dec_opts = {'process_video': True, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 8888, 'export_svg': False}
   * restored_bg = array([[[  0,   0,   0],
@@ -149,9 +149,9 @@ Local Variables Snapshot:
         [0, 0, 0],
         [0, 0, 0],
         [...
-  * odd_in = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\odd_orig.png'
-  * odd_enc = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\odd_enc.png'
-  * odd_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\odd_dec.png'
+  * odd_in = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\odd_orig.png'
+  * odd_enc = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\odd_enc.png'
+  * odd_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\odd_dec.png'
   * bg_pip = array([[[40, 40, 40],
         [40, 40, 40],
         [40, 40, 40],
@@ -164,15 +164,15 @@ Local Variables Snapshot:
         ...,
         [200, 200, 200],
     ...
-  * bg_pip_path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\bg_pip.png'
-  * cnt_pip_path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\cnt_pip.png'
-  * pip_enc_path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\pip_enc.png'
-  * pip_dec_path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\pip_dec.png'
+  * bg_pip_path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\bg_pip.png'
+  * cnt_pip_path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\cnt_pip.png'
+  * pip_enc_path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\pip_enc.png'
+  * pip_dec_path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\pip_dec.png'
   * pip_enc_opts = {'process_video': True, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 1234, 'center': True, 'center_size': '1/4', '...
   * pip_dec_opts = {'process_video': True, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 1234, 'center': True, 'center_size': '1/4', 'v...
-  * pip_cnt_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\pip_dec_center.png'
-  * t4_dur = 0.15717744827270508
-  * t5_start = 1786976831.172705
+  * pip_cnt_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\pip_dec_center.png'
+  * t4_dur = 0.09175300598144531
+  * t5_start = 1787167666.2043653
   * sr = 48000
   * t_sig = array([0.00000000e+00, 2.08333333e-05, 4.16666667e-05, ...,
        4.99937500e-01, 4.99958333e-01, 4.99979167e-01], s...
@@ -183,9 +183,9 @@ Local Variables Snapshot:
        [ 0.10777826,  0.10777826],
        ...,
 ...
-  * aud_orig = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_orig.wav'
-  * aud_enc = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_enc.wav'
-  * aud_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\audio_dec.wav'
+  * aud_orig = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_orig.wav'
+  * aud_enc = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_enc.wav'
+  * aud_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\audio_dec.wav'
   * method = 'combined'
   * orig_data = array([[ 0.        ,  0.        ],
        [ 0.05429077,  0.05429077],
@@ -202,15 +202,15 @@ Local Variables Snapshot:
   * corr_enc = np.float64(-1.2441752867827642e-05)
   * corr_dec = np.float64(0.9251678824105557)
   * min_expected_corr = 0.85
-  * aud_mono_in = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\mono_orig.wav'
-  * aud_mono_out = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\mono_dec.wav'
-  * t5_dur = 1.3925695419311523
-  * t6_start = 1786976832.5653377
-  * vid_orig = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_orig.mp4'
-  * vid_enc = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_enc.mp4'
-  * vid_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_y0jv9uxq\\vid_dec.mp4'
+  * aud_mono_in = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\mono_orig.wav'
+  * aud_mono_out = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\mono_dec.wav'
+  * t5_dur = 1.1347973346710205
+  * t6_start = 1787167667.3392088
+  * vid_orig = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_orig.mp4'
+  * vid_enc = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_enc.mp4'
+  * vid_dec = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_diag_qi4l06mt\\vid_dec.mp4'
   * fourcc = 1983148141
-  * writer = < cv2.VideoWriter 000001F2E55AE290>
+  * writer = < cv2.VideoWriter 000001A553A3E230>
   * frame = array([[[225, 120,  60],
         [225, 120,  60],
         [225, 120,  60],
@@ -220,8 +220,8 @@ Local Variables Snapshot:
   * vid_seed = 1840802157
   * enc_options = {'process_video': True, 'process_audio': False, 'reverse': False, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_s...
   * dec_options = {'process_video': True, 'process_audio': False, 'reverse': True, 'cols': 4, 'rows': 4, 'seed': 1840802157, 'export_sv...
-  * cap_orig = < cv2.VideoCapture 000001F2E55AF510>
-  * cap_dec = < cv2.VideoCapture 000001F2E55AF570>
+  * cap_orig = < cv2.VideoCapture 000001A553A3F510>
+  * cap_dec = < cv2.VideoCapture 000001A553A3F570>
   * orig_fc = 10
   * dec_fc = 10
   * dec_w = 160
@@ -241,16 +241,16 @@ Local Variables Snapshot:
         [  0, 115, 235],
     ...
   * mse = np.float64(12.435121527777778)
-  * t6_dur = 0.8333561420440674
-  * t7_start = 1786976833.3988252
+  * t6_dur = 0.4783627986907959
+  * t7_start = 1787167667.8176703
   * v_info = {'format': 'mov,mp4,m4a,3gp,3g2,mj2', 'file_size_mb': 0.01, 'video_codec': 'mpeg4', 'video_bitrate': '38k', 'video_bi...
   * v_fmt = 'mov,mp4,m4a,3gp,3g2,mj2'
   * a_info = {'format': 'wav', 'file_size_mb': 0.09, 'video_codec': None, 'video_bitrate': None, 'video_bitrate_bps': None, 'resol...
   * a_fmt = 'wav'
   * dummy_info = {'format': '.xyz', 'file_size_mb': 0, 'video_codec': None, 'video_bitrate': None, 'video_bitrate_bps': None, 'resolut...
-  * t7_dur = 0.2856152057647705
-  * t8_start = 1786976833.6845183
-  * p_temp = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_studio_3u1kapni'
+  * t7_dur = 0.2759242057800293
+  * t8_start = 1787167668.0936618
+  * p_temp = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\media_encrypt_studio_e28xgk58'
   * err = ZeroDivisionError('division by zero')
 ================================================================================
-[2026-08-17 17:27:13.696] [GDB-DBGR] [INFO ] [TEST] TEST_8_PASS - Temp Cleanup & Debugger verified (0.012s)
+[2026-08-19 22:27:48.103] [GDB-DBGR] [INFO ] [TEST] TEST_8_PASS - Temp Cleanup & Debugger verified (0.010s)

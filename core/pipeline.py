@@ -43,7 +43,8 @@ def process_media(input_path, output_path, options, progress_dict, task_id):
                     num_splits=options.get('aud_splits', 10),
                     carrier_freq=carrier_freq,
                     vol_factor=options.get('vol_factor', 1.0),
-                    aud_track=options.get('aud_track', 'both')
+                    aud_track=options.get('aud_track', 'both'),
+                    patch_intervals=options.get('patch_intervals')
                 )
             progress_dict[task_id] = 50
             if is_cancelled_cb and is_cancelled_cb():

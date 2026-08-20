@@ -149,6 +149,15 @@
                         <span id="v_bit_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">3000k</span>
                     </div>
                 </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <div>
+                        <label class="ios-label" style="margin-bottom: 2px;">Hardware / GPU Acceleration<span class="help-tip">❔<span class="tooltip-text">Use GPU hardware encoder (NVIDIA NVENC, Apple VideoToolbox, Intel QuickSync, AMD AMF) for significantly faster encoding. Auto-falls back to CPU if unavailable.</span></span></label>
+                        <span style="font-size: 11px; color: #888;">Auto-detect: NVIDIA / Apple / Intel / AMD / Colab</span>
+                    </div>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="useGpu">
+                    </label>
+                </div>
             </div>
         </div>
         <div class="collapse-trigger" id="audCollapseHeader" onclick="toggleSection('audCollapseHeader', 'audCollapseContent')">
@@ -249,6 +258,12 @@
                     <label class="ios-label" style="margin-bottom: 0;">Export SVG Visual Grid<span class="help-tip">❔<span class="tooltip-text">Generates SVG files showing the original and permuted block grids for visualization/debugging.</span></span></label>
                     <label class="ios-switch-label">
                         <input type="checkbox" id="exportSvg" checked>
+                    </label>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <label class="ios-label" style="margin-bottom: 0;">Save Key File (.key.txt)<span class="help-tip">❔<span class="tooltip-text">Saves the encryption key to a companion .key.txt file in the vault.</span></span></label>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="saveKeyFile" checked>
                     </label>
                 </div>
                 <div class="ios-group-header" style="margin-top: 10px; text-transform: uppercase; font-size: 11px; margin-left: 14px;">Resolution & Aspect Ratio</div>

@@ -30,11 +30,13 @@
                 <div class="ios-group" style="padding: 5px; margin-bottom: 12px; border-color: #b0b5ba;">
                     <div class="segmented-control">
                         <button type="button" id="mediaTabVideo" class="segment-btn active" onclick="setMediaTypeTab('video')">🎬 Video</button>
+                        <button type="button" id="mediaTabPatch" class="segment-btn" onclick="setMediaTypeTab('patch')">🩹 Patch Video</button>
                         <button type="button" id="mediaTabImage" class="segment-btn" onclick="setMediaTypeTab('image')">🖼️ Image</button>
                         <button type="button" id="mediaTabAudio" class="segment-btn" onclick="setMediaTypeTab('audio')">🎵 Audio</button>
                     </div>
                 </div>
                 {% include 'components/video_studio.html' %}
+                {% include 'components/patch_studio.html' %}
                 {% include 'components/image_studio.html' %}
                 {% include 'components/audio_studio.html' %}
             </div>
@@ -70,6 +72,7 @@
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
     <script src="{{ url_for('static', filename='js/vault.js') }}"></script>
     <script src="{{ url_for('static', filename='js/process.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/patch.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
 </body>
 </html>

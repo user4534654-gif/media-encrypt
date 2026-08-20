@@ -137,12 +137,22 @@ def process_inversion(y, sr, carrier_freq=8000, reverse=False):
         processed = numpy_lowpass_filter(processed, cutoff, sr) * 2.0
     return processed
 @LiveDebugger.trace(module_name="AUDIO")
-def process_audio_file(in_wav, out_wav, is_decrypt=False, method="inversion", key=42, num_splits=10, carrier_freq=8000, vol_factor=1.0, aud_track="both"):
+def process_audio_file(in_wav, out_wav, is_decrypt=False, method="inversion", key=42, num_splits=10, carrier_freq=8000, vol_factor=1.0, aud_track="both", patch_intervals=None):
     try:
         y, sr = sf.read(in_wav)
         if len(y.shape) == 1:
             y = np.vstack((y, y)).T
-        processed = np.zeros_like(y)
+        total_samples = len(y)
+        processed = y.copy()
+        def _process_slice(slice_data):
+            if len(slice_data) == 0:
+                return slice_data
+            if method == "band_scramble":
+                return process_band_scramble(slice_data, sr, key, num_splits, is_decrypt)
+            elif method == "combined":
+                return process_combined(slice_data, sr, key, num_splits, carrier_freq, is_decrypt)
+            else:
+                return process_inversion(slice_data, sr, carrier_freq, is_decrypt)
         for ch in range(y.shape[1]):
             ch_signal = y[:, ch]
             should_process_ch = True
@@ -150,26 +160,40 @@ def process_audio_file(in_wav, out_wav, is_decrypt=False, method="inversion", ke
                 should_process_ch = False
             elif aud_track == "right" and ch != 1:
                 should_process_ch = False
-            if should_process_ch:
+            if not should_process_ch:
+                processed[:, ch] = ch_signal
+                continue
+            if patch_intervals and len(patch_intervals) > 0:
+                ch_out = ch_signal.copy()
+                for start_sec, end_sec in patch_intervals:
+                    idx_start = max(0, min(total_samples, int(round(start_sec * sr))))
+                    idx_end = max(0, min(total_samples, int(round(end_sec * sr))))
+                    if idx_end <= idx_start:
+                        continue
+                    seg = ch_signal[idx_start:idx_end]
+                    if is_decrypt and vol_factor > 0.001:
+                        seg = seg * (1.0 / vol_factor)
+                    seg_proc = _process_slice(seg)
+                    if not is_decrypt:
+                        seg_proc = seg_proc * vol_factor
+                    if len(seg_proc) > len(seg):
+                        seg_proc = seg_proc[:len(seg)]
+                    elif len(seg_proc) < len(seg):
+                        seg_proc = np.pad(seg_proc, (0, len(seg) - len(seg_proc)))
+                    ch_out[idx_start:idx_end] = seg_proc
+                processed[:, ch] = ch_out
+            else:
                 ch_signal_in = ch_signal
-                if is_decrypt:
-                    if vol_factor > 0.001:
-                        ch_signal_in = ch_signal * (1.0 / vol_factor)
-                if method == "band_scramble":
-                    ch_processed = process_band_scramble(ch_signal_in, sr, key, num_splits, is_decrypt)
-                elif method == "combined":
-                    ch_processed = process_combined(ch_signal_in, sr, key, num_splits, carrier_freq, is_decrypt)
-                else:
-                    ch_processed = process_inversion(ch_signal_in, sr, carrier_freq, is_decrypt)
+                if is_decrypt and vol_factor > 0.001:
+                    ch_signal_in = ch_signal * (1.0 / vol_factor)
+                ch_processed = _process_slice(ch_signal_in)
                 if not is_decrypt:
                     ch_processed = ch_processed * vol_factor
-            else:
-                ch_processed = ch_signal
-            if len(ch_processed) > len(ch_signal):
-                ch_processed = ch_processed[:len(ch_signal)]
-            elif len(ch_processed) < len(ch_signal):
-                ch_processed = np.pad(ch_processed, (0, len(ch_signal) - len(ch_processed)))
-            processed[:, ch] = ch_processed
+                if len(ch_processed) > len(ch_signal):
+                    ch_processed = ch_processed[:len(ch_signal)]
+                elif len(ch_processed) < len(ch_signal):
+                    ch_processed = np.pad(ch_processed, (0, len(ch_signal) - len(ch_processed)))
+                processed[:, ch] = ch_processed
         out_audio = processed
         out_audio = np.clip(out_audio, -1.0, 1.0)
         sf.write(out_wav, out_audio, sr, subtype='PCM_16')

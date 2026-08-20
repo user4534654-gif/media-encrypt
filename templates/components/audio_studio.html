@@ -109,6 +109,12 @@
                 <option value=".m4a">.m4a</option>
             </select>
         </div>
+        <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+            <label class="ios-label" style="margin-bottom: 0;">Save Key File (.key.txt)<span class="help-tip">❔<span class="tooltip-text">Saves the encryption key to a companion .key.txt file in the vault.</span></span></label>
+            <label class="ios-switch-label">
+                <input type="checkbox" id="audSaveKeyFile" checked>
+            </label>
+        </div>
     </div>
     <div class="ios-group">
         <button onclick="startBatch('scramble')" class="ios-btn ios-btn-blue">🔒 ENCRYPT AUDIO</button>

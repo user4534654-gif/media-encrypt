@@ -393,16 +393,26 @@ body.ios-linen-bg {
     align-items: center;
     justify-content: space-between;
     min-height: 160px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 .vault-item span {
     display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    word-break: break-all;
+    overflow-wrap: anywhere;
     font-size: 11px;
     font-weight: bold;
     color: #444;
     margin: 8px 0;
+    box-sizing: border-box;
 }
 .vault-actions {
     display: flex;
@@ -479,6 +489,57 @@ body.ios-linen-bg {
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+.file-list {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #007aff;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    min-width: 0;
+    line-height: 1.4;
+    max-height: 100px;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+.file-list .badge {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    vertical-align: middle;
+    box-sizing: border-box;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba(0, 122, 255, 0.08);
+    border-radius: 6px;
+    margin-top: 4px;
+    font-size: 12px;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+.file-item span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    min-width: 0;
+    flex: 1;
 }
 body.ios-dark-theme {
     background-color: var(--metal-shadow);
@@ -925,6 +986,9 @@ body.ios-dark-theme .vault-picker-list {
     border: 1px solid #e1e4e8;
     border-radius: 6px;
     transition: background 0.15s ease;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 body.ios-dark-theme .vault-picker-item {
     background: #25272c;
@@ -943,7 +1007,11 @@ body.ios-dark-theme .vault-picker-item:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 320px;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    min-width: 0;
+    max-width: 100%;
+    flex: 1;
 }
 body.ios-dark-theme .vault-picker-name {
     color: #e5e7eb;

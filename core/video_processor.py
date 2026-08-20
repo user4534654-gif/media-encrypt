@@ -13,6 +13,59 @@ from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks
 from core.svg_generator import export_grid_to_svg, export_scrambled_grid_to_svg
 from core.tempdir import get_temp_file_path
 from core.logger import LiveDebugger
+_AVAILABLE_HW_ENCODERS = None
+def get_available_hw_encoders():
+    global _AVAILABLE_HW_ENCODERS
+    if _AVAILABLE_HW_ENCODERS is not None:
+        return _AVAILABLE_HW_ENCODERS
+    encoders = set()
+    try:
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        res = subprocess.run(
+            [ffmpeg_exe, '-encoders'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            creationflags=creation_flags
+        )
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 2 and parts[0].startswith('V'):
+                    encoders.add(parts[1].lower())
+    except Exception as e:
+        LiveDebugger.log("GPU_PROBE_WARN", f"Failed to probe FFmpeg encoders: {e}", level="WARNING", module="VIDEO")
+    _AVAILABLE_HW_ENCODERS = encoders
+    return _AVAILABLE_HW_ENCODERS
+def resolve_video_encoder(requested_codec, use_gpu=False):
+    if not use_gpu:
+        return requested_codec, 'software', {}
+    hw_encoders = get_available_hw_encoders()
+    req = (requested_codec or '').lower()
+    is_h264 = req in ['libx264', 'h264', 'auto', '']
+    is_h265 = req in ['libx265', 'hevc', 'h265']
+    candidate_chain = []
+    if is_h264:
+        candidate_chain = [
+            ('h264_nvenc', 'NVIDIA NVENC'),
+            ('h264_videotoolbox', 'Apple VideoToolbox'),
+            ('h264_qsv', 'Intel QuickSync'),
+            ('h264_amf', 'AMD AMF')
+        ]
+    elif is_h265:
+        candidate_chain = [
+            ('hevc_nvenc', 'NVIDIA NVENC'),
+            ('hevc_videotoolbox', 'Apple VideoToolbox'),
+            ('hevc_qsv', 'Intel QuickSync'),
+            ('hevc_amf', 'AMD AMF')
+        ]
+    for enc_name, hw_type in candidate_chain:
+        if enc_name in hw_encoders:
+            extra_args = {}
+            if 'nvenc' in enc_name:
+                extra_args['preset'] = 'p4'
+            return enc_name, hw_type, extra_args
+    return requested_codec, 'software', {}
 def _adjust_audio_length(y, target_len, action='silence'):
     if len(y) >= target_len:
         return y[:target_len]
@@ -51,7 +104,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     no_scale = options.get('no_scale', False)
     carrier_freq = options.get('carrier_freq', 8000)
     video_encrypt_mode = options.get('video_encrypt_mode', 'external')                               
-    LiveDebugger.log("START_VIDEO", f"Processing video '{os.path.basename(input_path)}' | grid={cols}x{rows}, seed={seed}, mode={video_encrypt_mode}, reverse={reverse}", level="INFO", module="VIDEO")
+    patch_intervals = options.get('patch_intervals')                                      
+    LiveDebugger.log("START_VIDEO", f"Processing video '{os.path.basename(input_path)}' | grid={cols}x{rows}, seed={seed}, mode={video_encrypt_mode}, patch_intervals={patch_intervals}, reverse={reverse}", level="INFO", module="VIDEO")
     center_end_action = options.get('center_end_action', 'loop')                              
     center_aud_action = options.get('center_aud_action', 'silence')                    
     outer_end_action  = options.get('outer_end_action',  'stop')                                      
@@ -78,7 +132,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 num_splits=options.get('aud_splits', 10),
                 carrier_freq=carrier_freq,
                 vol_factor=vol_bg,
-                aud_track=options.get('aud_track', 'both')
+                aud_track=options.get('aud_track', 'both'),
+                patch_intervals=patch_intervals
             )
             temp_center_aud = get_temp_file_path(os.path.basename(options['center_path']) + "_center_aud.wav")
             has_center_audio = subprocess.run([ffmpeg_exe, '-y', '-i', options['center_path'], '-vn', '-ar', str(main_sr), temp_center_aud], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags).returncode == 0
@@ -112,7 +167,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 num_splits=options.get('aud_splits', 10),
                 carrier_freq=carrier_freq,
                 vol_factor=options.get('vol_factor', 1.0),
-                aud_track='both'                                         
+                aud_track='both',                                         
+                patch_intervals=patch_intervals
             )
             dec_data, dec_sr = sf.read(temp_aud)
             if len(dec_data.shape) == 1:
@@ -126,7 +182,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 num_splits=options.get('aud_splits', 10),
                 carrier_freq=carrier_freq,
                 vol_factor=options.get('vol_factor', 1.0),
-                aud_track=options.get('aud_track', 'both')
+                aud_track=options.get('aud_track', 'both'),
+                patch_intervals=patch_intervals
             )
     cap = cv2.VideoCapture(input_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -208,16 +265,28 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         output_total_frames = total_frames                                
     vid_codec = options.get('vid_codec', 'libx264')
     vid_preset = options.get('vid_preset', 'medium')
+    use_gpu = options.get('use_gpu', False)
+    chosen_codec, hw_type, extra_hw_args = resolve_video_encoder(vid_codec, use_gpu=use_gpu)
+    if hw_type != 'software':
+        LiveDebugger.log("GPU_ACCEL", f"Hardware acceleration enabled: using {chosen_codec} ({hw_type})", level="INFO", module="VIDEO")
     cmd = [ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
            '-s', f'{out_w}x{out_h}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
     if has_audio:
         cmd.extend(['-i', temp_aud])
-    cmd.extend(['-c:v', vid_codec, '-b:v', options.get('vid_bitrate', '3000k')])
-    if vid_codec in ['libvpx-vp9', 'libvpx', 'vp9']:
+    cmd.extend(['-c:v', chosen_codec, '-b:v', options.get('vid_bitrate', '3000k')])
+    if chosen_codec in ['libvpx-vp9', 'libvpx', 'vp9']:
         cmd.extend(['-deadline', 'good', '-cpu-used', '2'])
-    elif vid_codec != 'prores':
+    elif 'nvenc' in chosen_codec:
+        cmd.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
+    elif 'videotoolbox' in chosen_codec:
+        cmd.extend(['-pix_fmt', 'yuv420p'])
+    elif 'qsv' in chosen_codec:
+        cmd.extend(['-preset', 'medium', '-pix_fmt', 'nv12'])
+    elif 'amf' in chosen_codec:
+        cmd.extend(['-pix_fmt', 'yuv420p'])
+    elif chosen_codec != 'prores':
         cmd.extend(['-preset', vid_preset])
-    if vid_codec != 'prores':
+    if chosen_codec != 'prores' and 'qsv' not in chosen_codec:
         cmd.extend(['-pix_fmt', 'yuv420p'])
     if has_audio:
         aud_c = options.get('aud_codec', 'aac')
@@ -241,12 +310,20 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                       '-s', f'{cw}x{ch}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
         if has_center_aud_out:
             cmd_center.extend(['-i', temp_center_aud_out])
-        cmd_center.extend(['-c:v', vid_codec, '-b:v', options.get('vid_bitrate', '3000k')])
-        if vid_codec in ['libvpx-vp9', 'libvpx', 'vp9']:
+        cmd_center.extend(['-c:v', chosen_codec, '-b:v', options.get('vid_bitrate', '3000k')])
+        if chosen_codec in ['libvpx-vp9', 'libvpx', 'vp9']:
             cmd_center.extend(['-deadline', 'good', '-cpu-used', '2'])
-        elif vid_codec != 'prores':
+        elif 'nvenc' in chosen_codec:
+            cmd_center.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
+        elif 'videotoolbox' in chosen_codec:
+            cmd_center.extend(['-pix_fmt', 'yuv420p'])
+        elif 'qsv' in chosen_codec:
+            cmd_center.extend(['-preset', 'medium', '-pix_fmt', 'nv12'])
+        elif 'amf' in chosen_codec:
+            cmd_center.extend(['-pix_fmt', 'yuv420p'])
+        elif chosen_codec != 'prores':
             cmd_center.extend(['-preset', vid_preset])
-        if vid_codec != 'prores':
+        if chosen_codec != 'prores' and 'qsv' not in chosen_codec:
             cmd_center.extend(['-pix_fmt', 'yuv420p'])
         if has_center_aud_out:
             aud_c = options.get('aud_codec', 'aac')
@@ -311,7 +388,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     frame = canvas
                 else:
                     frame = cv2.resize(frame, (out_w, out_h))
-            if proc_vid:
+            current_sec = frame_count / fps
+            is_in_patch = True
+            if patch_intervals is not None:
+                is_in_patch = any(start_s <= current_sec <= end_s for start_s, end_s in patch_intervals)
+            if proc_vid and is_in_patch:
                 if options.get('center'):
                     if reverse:
                         restored_frame = np.zeros((out_h, out_w, 3), dtype=np.uint8)
@@ -411,6 +492,9 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     write_pipe_frame(proc, new_frame.tobytes())
             else:
                 write_pipe_frame(proc, frame.tobytes())
+                if reverse and proc_center:
+                    center_blank = np.zeros((ch, cw, 3), dtype=np.uint8)
+                    write_pipe_frame(proc_center, center_blank.tobytes())
             frame_count += 1
             if frame_count % 3 == 0:
                 is_cancelled_cb = options.get('is_cancelled')
@@ -437,10 +521,15 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             except Exception:
                 pass
         is_cancelled_cb = options.get('is_cancelled')
-        if (is_cancelled_cb and is_cancelled_cb()) or (output_total_frames > 0 and frame_count < output_total_frames):
+        if is_cancelled_cb and is_cancelled_cb():
             if os.path.exists(output_path):
                 try:
                     os.remove(output_path)
+                except Exception:
+                    pass
+            if proc_center and 'output_path_center' in locals() and os.path.exists(output_path_center):
+                try:
+                    os.remove(output_path_center)
                 except Exception:
                     pass
     progress_dict[task_id] = 100

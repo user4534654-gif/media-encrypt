@@ -142,6 +142,7 @@ class JobManager:
                     'center_end_action': form_data.get('center_end_action', 'loop'),
                     'center_aud_action': form_data.get('center_aud_action', 'silence'),
                     'outer_end_action': form_data.get('outer_end_action', 'stop'),
+                    'use_gpu': form_data.get('use_gpu') in [True, 'true', 'True', '1'],
                     'is_cancelled': lambda: self.cancel_event.is_set()
                 }
                 options = self.resolve_quality_fn(file_path, options)
@@ -168,6 +169,35 @@ class JobManager:
                         'rows': int(form_data.get('rows', 10)) if form_data.get('rows') and str(form_data.get('rows')).isdigit() else 10,
                         'export_svg': form_data.get('export_svg') in [True, 'true', 'True', '1', None]
                     })
+                    raw_patch = form_data.get('patch_intervals')
+                    parsed_patch = []
+                    if raw_patch:
+                        if isinstance(raw_patch, str):
+                            try:
+                                import json
+                                parsed_patch = json.loads(raw_patch)
+                            except Exception:
+                                for seg in raw_patch.split(','):
+                                    seg = seg.strip()
+                                    if '-' in seg:
+                                        p_s, p_e = seg.split('-', 1)
+                                        try:
+                                            parsed_patch.append([float(p_s.strip()), float(p_e.strip())])
+                                        except ValueError:
+                                            pass
+                        elif isinstance(raw_patch, (list, tuple)):
+                            parsed_patch = list(raw_patch)
+                    if parsed_patch:
+                        valid_intervals = []
+                        for item in parsed_patch:
+                            try:
+                                s_val, e_val = float(item[0]), float(item[1])
+                                if e_val > s_val:
+                                    valid_intervals.append((s_val, e_val))
+                            except Exception:
+                                pass
+                        if valid_intervals:
+                            options['patch_intervals'] = valid_intervals
                     sid = str(form_data.get('sid', '')).strip() or secrets.token_hex(4)
                     options['seed'] = hash_str(sid)
                     options['aud_key'] = hash_str(sid)
@@ -180,8 +210,12 @@ class JobManager:
                         method_tag = 'abs'
                     elif options['aud_method'] == 'combined':
                         method_tag = 'acb'
+                    patch_tag = ""
+                    if options.get('patch_intervals'):
+                        patch_str = ",".join(f"{s:.3f}-{e:.3f}" for s, e in options['patch_intervals'])
+                        patch_tag = f"|patch:{patch_str}"
                     if options['process_video'] and options['process_audio']:
-                        key = f"{options['cols']}x{options['rows']}|{sid}"
+                        key = f"{options['cols']}x{options['rows']}|{sid}{patch_tag}"
                         if options.get('center'):
                             if options.get('center_size', '1/4') != '1/4':
                                 key += f"|c_{options['center_size']}"
@@ -204,7 +238,7 @@ class JobManager:
                         elif options['aud_track'] == 'right':
                             key += "|at_r"
                     elif options['process_audio']:
-                        key = f"|a|{sid}"
+                        key = f"|a|{sid}{patch_tag}"
                         key += f"|{method_tag}"
                         key += f"|as_{options['aud_splits']}"
                         key += f"|cf_{options['carrier_freq']}"
@@ -215,7 +249,7 @@ class JobManager:
                         elif options['aud_track'] == 'right':
                             key += "|at_r"
                     else:
-                        key = f"{options['cols']}x{options['rows']}|{sid}"
+                        key = f"{options['cols']}x{options['rows']}|{sid}{patch_tag}"
                         if options.get('center'):
                             if options.get('center_size', '1/4') != '1/4':
                                 key += f"|c_{options['center_size']}"
@@ -236,7 +270,10 @@ class JobManager:
                             self.status = "cancelled"
                             self.end_time = time.time()
                         return
-                    key_path = self.save_key_fn(os.path.basename(out_path), key)
+                    save_key_enabled = form_data.get('save_key_file') in [True, 'true', 'True', '1', None]
+                    key_path = None
+                    if save_key_enabled:
+                        key_path = self.save_key_fn(os.path.basename(out_path), key)
                     with self.lock:
                         self.keys.append({
                             "name": display_name,
@@ -260,12 +297,26 @@ class JobManager:
                         'video_encrypt_mode': 'external',
                         'aud_track': 'both'
                     })
+                    def _parse_patch_tag(part_str):
+                        content = part_str.split(':', 1)[1] if ':' in part_str else ""
+                        parsed = []
+                        for item in content.split(','):
+                            item = item.strip()
+                            if '-' in item:
+                                s_part, e_part = item.split('-', 1)
+                                try:
+                                    s_f, e_f = float(s_part.strip()), float(e_part.strip())
+                                    if e_f > s_f:
+                                        parsed.append((s_f, e_f))
+                                except ValueError:
+                                    pass
+                        return parsed
                     if raw_key.startswith("|a"):
                         options['process_audio'] = True
                         parts = raw_key.split('|')
                         if len(parts) > 2:
                             p2 = parts[2]
-                            if not (p2.startswith('am_') or p2.startswith('as_') or p2.startswith('cf_') or p2.startswith('v_') or p2 in ['abs', 'acb', 'ainv', 'inversion', 'band_scramble', 'combined'] or p2.startswith('at_')):
+                            if not (p2.startswith('am_') or p2.startswith('as_') or p2.startswith('cf_') or p2.startswith('v_') or p2.startswith('patch:') or p2.startswith('p:') or p2 in ['abs', 'acb', 'ainv', 'inversion', 'band_scramble', 'combined'] or p2.startswith('at_')):
                                 options['seed'] = hash_str(p2)
                                 options['aud_key'] = hash_str(p2)
                         for part in parts[2:]:
@@ -287,6 +338,10 @@ class JobManager:
                                 options['aud_track'] = 'left'
                             elif part == 'at_r':
                                 options['aud_track'] = 'right'
+                            elif part.startswith('patch:') or part.startswith('p:'):
+                                p_intervals = _parse_patch_tag(part)
+                                if p_intervals:
+                                    options['patch_intervals'] = p_intervals
                     else:
                         parts = raw_key.split('|')
                         dim = parts[0]
@@ -316,6 +371,10 @@ class JobManager:
                                 options['aud_track'] = 'left'
                             elif part == 'at_r':
                                 options['aud_track'] = 'right'
+                            elif part.startswith('patch:') or part.startswith('p:'):
+                                p_intervals = _parse_patch_tag(part)
+                                if p_intervals:
+                                    options['patch_intervals'] = p_intervals
                             elif part.startswith('am_'):
                                 options['process_audio'] = True
                                 options['aud_method'] = part[3:]
