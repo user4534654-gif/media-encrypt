@@ -95,6 +95,95 @@ def _close_ffmpeg_proc(p, name="FFmpeg"):
     if p.returncode != 0 and stderr_bytes:
         err_text = stderr_bytes.decode('utf-8', errors='ignore')
         LiveDebugger.log("FFMPEG_ERROR", f"{name} encoding failed with returncode {p.returncode}: {err_text.strip()}", level="ERROR", module="VIDEO")
+def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode='off', rows=1, cols=1, extra_hw_args=None):
+    if extra_hw_args is None:
+        extra_hw_args = {}
+    args = ['-c:v', chosen_codec]
+    b_val = vid_bitrate or '3000k'
+    buf_val = '6000k'
+    try:
+        raw_num = int(''.join(filter(str.isdigit, str(b_val))))
+        unit = ''.join(filter(str.isalpha, str(b_val))) or 'k'
+        buf_val = f"{raw_num * 2}{unit}"
+    except Exception:
+        buf_val = '6000k'
+    codec_lower = (chosen_codec or '').lower()
+    is_h264 = any(x in codec_lower for x in ['x264', 'h264'])
+    is_h265 = any(x in codec_lower for x in ['x265', 'hevc', 'h265'])
+    is_vp9 = any(x in codec_lower for x in ['vp9', 'libvpx'])
+    is_nvenc = 'nvenc' in codec_lower
+    is_qsv = 'qsv' in codec_lower
+    is_vt = 'videotoolbox' in codec_lower
+    is_amf = 'amf' in codec_lower
+    is_prores = 'prores' in codec_lower
+    if spatial_mode == 'zone':
+        if is_nvenc:
+            args.extend(['-rc', 'vbr', '-cq', '19', '-b:v', b_val, '-maxrate', b_val, '-bufsize', buf_val])
+            args.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
+        elif is_h264:
+            args.extend(['-crf', '19', '-maxrate', b_val, '-bufsize', buf_val, '-aq-mode', '2'])
+            args.extend(['-preset', vid_preset, '-pix_fmt', 'yuv420p'])
+        elif is_h265:
+            args.extend(['-crf', '21', '-maxrate', b_val, '-bufsize', buf_val, '-aq-mode', '2'])
+            args.extend(['-preset', vid_preset, '-pix_fmt', 'yuv420p'])
+        elif is_vp9:
+            args.extend(['-crf', '22', '-b:v', b_val, '-deadline', 'good', '-cpu-used', '2', '-pix_fmt', 'yuv420p'])
+        elif is_qsv:
+            args.extend(['-b:v', b_val, '-maxrate', b_val, '-bufsize', buf_val, '-preset', 'medium', '-pix_fmt', 'nv12'])
+        elif is_vt or is_amf:
+            args.extend(['-b:v', b_val, '-maxrate', b_val, '-bufsize', buf_val, '-pix_fmt', 'yuv420p'])
+        elif is_prores:
+            args.extend(['-profile:v', '3'])
+        else:
+            args.extend(['-b:v', b_val, '-maxrate', b_val, '-bufsize', buf_val, '-preset', vid_preset, '-pix_fmt', 'yuv420p'])
+    elif spatial_mode == 'tiles':
+        n_slices = max(2, min(int(rows), 16))
+        if is_nvenc:
+            args.extend(['-slices', str(n_slices), '-rc', 'vbr', '-cq', '20', '-maxrate', b_val, '-bufsize', buf_val])
+            args.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
+        elif is_h264:
+            args.extend([
+                '-slices', str(n_slices),
+                '-flags', '-loop',
+                '-x264opts', 'no-deblock=1',
+                '-crf', '20',
+                '-maxrate', b_val,
+                '-bufsize', buf_val,
+                '-preset', vid_preset,
+                '-pix_fmt', 'yuv420p'
+            ])
+        elif is_h265:
+            args.extend([
+                '-x265-params', f'no-deblock=1:slices={n_slices}',
+                '-crf', '21',
+                '-maxrate', b_val,
+                '-bufsize', buf_val,
+                '-preset', vid_preset,
+                '-pix_fmt', 'yuv420p'
+            ])
+        elif is_qsv:
+            args.extend(['-slices', str(n_slices), '-b:v', b_val, '-preset', 'medium', '-pix_fmt', 'nv12'])
+        elif is_prores:
+            args.extend(['-profile:v', '3'])
+        else:
+            args.extend(['-slices', str(n_slices), '-flags', '-loop', '-b:v', b_val, '-preset', vid_preset, '-pix_fmt', 'yuv420p'])
+    else:
+        args.extend(['-b:v', b_val])
+        if is_vp9:
+            args.extend(['-deadline', 'good', '-cpu-used', '2'])
+        elif is_nvenc:
+            args.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
+        elif is_vt:
+            args.extend(['-pix_fmt', 'yuv420p'])
+        elif is_qsv:
+            args.extend(['-preset', 'medium', '-pix_fmt', 'nv12'])
+        elif is_amf:
+            args.extend(['-pix_fmt', 'yuv420p'])
+        elif not is_prores:
+            args.extend(['-preset', vid_preset])
+        if not is_prores and not is_qsv:
+            args.extend(['-pix_fmt', 'yuv420p'])
+    return args
 @LiveDebugger.trace(module_name="VIDEO")
 def process_video_file(input_path, output_path, options, progress_dict, task_id):
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
@@ -266,28 +355,26 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     vid_codec = options.get('vid_codec', 'libx264')
     vid_preset = options.get('vid_preset', 'medium')
     use_gpu = options.get('use_gpu', False)
+    spatial_mode = options.get('spatial_compression_mode', 'off')
     chosen_codec, hw_type, extra_hw_args = resolve_video_encoder(vid_codec, use_gpu=use_gpu)
     if hw_type != 'software':
         LiveDebugger.log("GPU_ACCEL", f"Hardware acceleration enabled: using {chosen_codec} ({hw_type})", level="INFO", module="VIDEO")
+    if spatial_mode != 'off':
+        LiveDebugger.log("SPATIAL_COMP", f"Spatial compression mode active: '{spatial_mode}' (rows={rows}, cols={cols})", level="INFO", module="VIDEO")
     cmd = [ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
            '-s', f'{out_w}x{out_h}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
     if has_audio:
         cmd.extend(['-i', temp_aud])
-    cmd.extend(['-c:v', chosen_codec, '-b:v', options.get('vid_bitrate', '3000k')])
-    if chosen_codec in ['libvpx-vp9', 'libvpx', 'vp9']:
-        cmd.extend(['-deadline', 'good', '-cpu-used', '2'])
-    elif 'nvenc' in chosen_codec:
-        cmd.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
-    elif 'videotoolbox' in chosen_codec:
-        cmd.extend(['-pix_fmt', 'yuv420p'])
-    elif 'qsv' in chosen_codec:
-        cmd.extend(['-preset', 'medium', '-pix_fmt', 'nv12'])
-    elif 'amf' in chosen_codec:
-        cmd.extend(['-pix_fmt', 'yuv420p'])
-    elif chosen_codec != 'prores':
-        cmd.extend(['-preset', vid_preset])
-    if chosen_codec != 'prores' and 'qsv' not in chosen_codec:
-        cmd.extend(['-pix_fmt', 'yuv420p'])
+    enc_args = build_video_encoder_args(
+        chosen_codec,
+        options.get('vid_bitrate', '3000k'),
+        vid_preset,
+        spatial_mode=spatial_mode,
+        rows=rows,
+        cols=cols,
+        extra_hw_args=extra_hw_args
+    )
+    cmd.extend(enc_args)
     if has_audio:
         aud_c = options.get('aud_codec', 'aac')
         aud_sr = str(options.get('aud_sr', '48000'))
@@ -310,21 +397,16 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                       '-s', f'{cw}x{ch}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
         if has_center_aud_out:
             cmd_center.extend(['-i', temp_center_aud_out])
-        cmd_center.extend(['-c:v', chosen_codec, '-b:v', options.get('vid_bitrate', '3000k')])
-        if chosen_codec in ['libvpx-vp9', 'libvpx', 'vp9']:
-            cmd_center.extend(['-deadline', 'good', '-cpu-used', '2'])
-        elif 'nvenc' in chosen_codec:
-            cmd_center.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
-        elif 'videotoolbox' in chosen_codec:
-            cmd_center.extend(['-pix_fmt', 'yuv420p'])
-        elif 'qsv' in chosen_codec:
-            cmd_center.extend(['-preset', 'medium', '-pix_fmt', 'nv12'])
-        elif 'amf' in chosen_codec:
-            cmd_center.extend(['-pix_fmt', 'yuv420p'])
-        elif chosen_codec != 'prores':
-            cmd_center.extend(['-preset', vid_preset])
-        if chosen_codec != 'prores' and 'qsv' not in chosen_codec:
-            cmd_center.extend(['-pix_fmt', 'yuv420p'])
+        enc_args_center = build_video_encoder_args(
+            chosen_codec,
+            options.get('vid_bitrate', '3000k'),
+            vid_preset,
+            spatial_mode=spatial_mode,
+            rows=rows_inner if options.get('center') else rows,
+            cols=cols_inner if options.get('center') else cols,
+            extra_hw_args=extra_hw_args
+        )
+        cmd_center.extend(enc_args_center)
         if has_center_aud_out:
             aud_c = options.get('aud_codec', 'aac')
             aud_sr = str(options.get('aud_sr', '48000'))

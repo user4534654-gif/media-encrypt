@@ -21,6 +21,7 @@ from flask import Flask, request, jsonify, render_template, send_from_directory,
 from core.crypto import clean_key, hash_str
 from core.pipeline import process_media
 from core.metadata_prober import probe_media_file
+from core.metadata import load_project_metadata
 from core.logger import LiveDebugger
 from core.job_manager import JobManager
 from static.icons.icons import ICON_MAPPINGS
@@ -52,6 +53,12 @@ else:
     vault_base_dir = base_dir
 app = Flask(__name__, template_folder=os.path.join(base_dir, 'templates'), static_folder=os.path.join(base_dir, 'static'))
 PORT = 5050
+@app.context_processor
+def inject_metadata():
+    return {'metadata': load_project_metadata()}
+@app.route('/api/metadata')
+def get_metadata():
+    return jsonify(load_project_metadata())
 VAULT_FOLDER = os.path.join(vault_base_dir, 'media_encrypt_vault')
 INPUT_FOLDER = os.path.join(VAULT_FOLDER, 'input')
 ENCRYPTED_FOLDER = os.path.join(VAULT_FOLDER, 'encrypted')
@@ -474,6 +481,7 @@ def process_api():
             'center_end_action': request.form.get('center_end_action', 'loop'),
             'center_aud_action': request.form.get('center_aud_action', 'silence'),
             'outer_end_action': request.form.get('outer_end_action', 'stop'),
+            'spatial_compression_mode': request.form.get('spatial_compression_mode', 'off'),
         }
         options = resolve_auto_quality(path, options)
         fn_lower = filename.lower()
@@ -513,7 +521,11 @@ def process_api():
                     options['center_path'] = center_path
                 elif request.form.get('center_vault_filename'):
                     c_name = os.path.basename(request.form.get('center_vault_filename'))
-                    center_path = os.path.join(INPUT_FOLDER, c_name)
+                    c_folder = request.form.get('center_vault_folder', 'input')
+                    c_dir = ENCRYPTED_FOLDER if c_folder == 'encrypted' else (DECRYPTED_FOLDER if c_folder == 'decrypted' else INPUT_FOLDER)
+                    center_path = os.path.join(c_dir, c_name)
+                    if not os.path.exists(center_path):
+                        center_path = os.path.join(INPUT_FOLDER, c_name)
                     if os.path.exists(center_path):
                         options['center'] = True
                         options['center_path'] = center_path
@@ -733,7 +745,11 @@ def start_job_api():
             c_file.save(center_path)
         elif request.form.get('center_vault_filename'):
             c_name = os.path.basename(request.form.get('center_vault_filename'))
-            cp = os.path.join(INPUT_FOLDER, c_name)
+            c_folder = request.form.get('center_vault_folder', 'input')
+            c_dir = ENCRYPTED_FOLDER if c_folder == 'encrypted' else (DECRYPTED_FOLDER if c_folder == 'decrypted' else INPUT_FOLDER)
+            cp = os.path.join(c_dir, c_name)
+            if not os.path.exists(cp):
+                cp = os.path.join(INPUT_FOLDER, c_name)
             if os.path.exists(cp):
                 center_path = cp
         form_data = dict(request.form)

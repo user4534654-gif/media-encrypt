@@ -115,21 +115,33 @@ async function deleteMedia(folder, filename) {
     loadVault();
 }
 let vaultPickerTarget = { mediaType: 'video', isCenter: false };
+let currentPickerFolder = 'input';
 let selectedVaultMedia = {
     video: null,
+    videoFolder: 'input',
     videoCenter: null,
+    videoCenterFolder: 'input',
     image: null,
+    imageFolder: 'input',
     imageCenter: null,
+    imageCenterFolder: 'input',
     audio: null,
-    decrypt: []
+    audioFolder: 'input',
+    decrypt: [],
+    decryptFolder: 'encrypted'
 };
 async function openInputVaultPicker(mediaType, isCenter = false) {
     vaultPickerTarget = { mediaType, isCenter };
     const titleEl = document.getElementById('vaultPickerTitle');
     if (titleEl) {
-        const folderName = mediaType === 'decrypt' ? 'Encrypted / Inputs' : 'Input Vault';
-        titleEl.innerText = `📂 Select ${isCenter ? 'Center ' : ''}${mediaType.toUpperCase()} from ${folderName}`;
+        titleEl.innerText = `📂 Select ${isCenter ? 'Center ' : ''}${mediaType.toUpperCase()} from Vault`;
     }
+    if (mediaType === 'decrypt') {
+        currentPickerFolder = 'encrypted';
+    } else {
+        currentPickerFolder = 'input';
+    }
+    switchPickerFolder(currentPickerFolder, false);
     const modal = document.getElementById('vaultPickerModal');
     if (modal) modal.classList.remove('hidden');
     await refreshVaultPicker();
@@ -138,22 +150,40 @@ function closeVaultPicker() {
     const modal = document.getElementById('vaultPickerModal');
     if (modal) modal.classList.add('hidden');
 }
+function switchPickerFolder(folder, doRefresh = true) {
+    currentPickerFolder = folder;
+    ['input', 'encrypted', 'decrypted'].forEach(f => {
+        const cap = f.charAt(0).toUpperCase() + f.slice(1);
+        const btn = document.getElementById('pickerTab' + cap);
+        if (btn) btn.classList.toggle('active', f === folder);
+    });
+    const badge = document.getElementById('vaultPickerFolderBadge');
+    if (badge) {
+        const labels = { 'input': 'Inputs', 'encrypted': 'Encrypted', 'decrypted': 'Decrypted' };
+        const colors = { 'input': '#007aff', 'encrypted': '#ff9500', 'decrypted': '#34c759' };
+        badge.innerText = labels[folder] || folder;
+        badge.style.color = colors[folder] || '#007aff';
+    }
+    if (doRefresh) {
+        refreshVaultPicker();
+    }
+}
 async function refreshVaultPicker() {
     const listEl = document.getElementById('vaultPickerList');
     if (!listEl) return;
     listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">Loading vault files...</div>';
-    const targetFolder = vaultPickerTarget.mediaType === 'decrypt' ? 'encrypted' : 'input';
+    const countEl = document.getElementById('vaultPickerCount');
+    const folderLabels = { 'input': 'Inputs', 'encrypted': 'Encrypted', 'decrypted': 'Decrypted' };
+    const folderColors = { 'input': '#007aff', 'encrypted': '#ff9500', 'decrypted': '#34c759' };
+    const currentFolderLabel = folderLabels[currentPickerFolder] || currentPickerFolder;
+    const currentFolderColor = folderColors[currentPickerFolder] || '#007aff';
     try {
-        const res = await fetch(`/api/vault?folder=${targetFolder}`);
+        const res = await fetch(`/api/vault?folder=${currentPickerFolder}`);
         const data = await res.json();
-        let files = data.files || [];
-        if (vaultPickerTarget.mediaType === 'decrypt' && files.length === 0) {
-            const resInput = await fetch(`/api/vault?folder=input`);
-            const dataInput = await resInput.json();
-            files = dataInput.files || [];
-        }
+        const files = data.files || [];
+        if (countEl) countEl.innerText = `${files.length} file(s)`;
         if (files.length === 0) {
-            listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No files found in this vault folder.</div>';
+            listEl.innerHTML = `<div style="padding: 25px; text-align: center; color: #888;">No files found in <b>${currentFolderLabel}</b> folder.</div>`;
             return;
         }
         listEl.innerHTML = '';
@@ -168,25 +198,32 @@ async function refreshVaultPicker() {
             const item = document.createElement('div');
             item.className = 'vault-picker-item';
             item.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; flex: 1; min-width: 0;">
                     <span style="font-size: 1.4em;">${icon}</span>
-                    <span class="vault-picker-name" title="${f}">${f}</span>
+                    <div style="display: flex; flex-direction: column; overflow: hidden; gap: 2px;">
+                        <span class="vault-picker-name" title="${f}" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">${f}</span>
+                        <span style="font-size: 10px; color: ${currentFolderColor}; font-weight: 600;">[${currentFolderLabel}]</span>
+                    </div>
                 </div>
-                <button type="button" class="ios-btn-small" style="padding: 4px 12px; font-weight: 600;" onclick="selectVaultFile('${f.replace(/'/g, "\\'")}')">Select</button>
+                <button type="button" class="ios-btn-small" style="padding: 4px 12px; font-weight: 600; white-space: nowrap;" onclick="selectVaultFile('${f.replace(/'/g, "\\'")}', '${currentPickerFolder}')">Select</button>
             `;
             listEl.appendChild(item);
         });
     } catch (e) {
         listEl.innerHTML = `<div style="padding: 20px; text-align: center; color: #ff3b30;">Error loading files: ${e.message}</div>`;
+        if (countEl) countEl.innerText = 'Error';
     }
 }
-async function selectVaultFile(filename) {
+async function selectVaultFile(filename, folder = 'input') {
     const { mediaType, isCenter } = vaultPickerTarget;
-    await selectVaultFileDirectly(filename, mediaType, isCenter);
+    await selectVaultFileDirectly(filename, mediaType, isCenter, folder);
     closeVaultPicker();
 }
-async function selectVaultFileDirectly(filename, mediaType, isCenter) {
-    const folder = mediaType === 'decrypt' ? 'encrypted' : 'input';
+async function selectVaultFileDirectly(filename, mediaType, isCenter, folder = 'input') {
+    const folderLabels = { 'input': 'Inputs', 'encrypted': 'Encrypted', 'decrypted': 'Decrypted' };
+    const folderColors = { 'input': '#007aff', 'encrypted': '#ff9500', 'decrypted': '#34c759' };
+    const folderLabel = folderLabels[folder] || folder;
+    const folderColor = folderColors[folder] || '#007aff';
     try {
         const res = await fetch(`/api/vault_file_info?filename=${encodeURIComponent(filename)}&folder=${folder}`);
         const data = await res.json();
@@ -194,15 +231,17 @@ async function selectVaultFileDirectly(filename, mediaType, isCenter) {
         if (mediaType === 'video') {
             if (isCenter) {
                 selectedVaultMedia.videoCenter = filename;
+                selectedVaultMedia.videoCenterFolder = folder;
                 const cList = document.getElementById('centerFileList');
-                if (cList) cList.innerHTML = `<span class="badge" style="background:#007aff; color:#fff;">📁 Vault: ${filename}</span>`;
+                if (cList) cList.innerHTML = `<span class="badge" style="background:${folderColor}; color:#fff;">📁 Vault [${folderLabel}] (Center): ${filename}</span>`;
                 if (typeof loadCenterVideoPreview === 'function') {
                     loadCenterVideoPreview(fileUrl, filename);
                 }
             } else {
                 selectedVaultMedia.video = filename;
+                selectedVaultMedia.videoFolder = folder;
                 const fList = document.getElementById('fileList');
-                if (fList) fList.innerHTML = `<span class="badge" style="background:#34c759; color:#fff;">📁 Vault: ${filename}</span>`;
+                if (fList) fList.innerHTML = `<span class="badge" style="background:${folderColor}; color:#fff;">📁 Vault [${folderLabel}]: ${filename}</span>`;
                 if (typeof loadVideoPreview === 'function') {
                     loadVideoPreview(fileUrl, filename, data.info);
                 }
@@ -210,29 +249,32 @@ async function selectVaultFileDirectly(filename, mediaType, isCenter) {
         } else if (mediaType === 'image') {
             if (isCenter) {
                 selectedVaultMedia.imageCenter = filename;
+                selectedVaultMedia.imageCenterFolder = folder;
                 const cList = document.getElementById('centerImageList');
-                if (cList) cList.innerHTML = `<span class="badge" style="background:#007aff; color:#fff;">📁 Vault: ${filename}</span>`;
+                if (cList) cList.innerHTML = `<span class="badge" style="background:${folderColor}; color:#fff;">📁 Vault [${folderLabel}] (Center): ${filename}</span>`;
                 if (typeof loadCenterImagePreview === 'function') {
                     loadCenterImagePreview(fileUrl, filename);
                 }
             } else {
                 selectedVaultMedia.image = filename;
+                selectedVaultMedia.imageFolder = folder;
                 const iList = document.getElementById('imageList');
-                if (iList) iList.innerHTML = `<span class="badge" style="background:#34c759; color:#fff;">📁 Vault: ${filename}</span>`;
+                if (iList) iList.innerHTML = `<span class="badge" style="background:${folderColor}; color:#fff;">📁 Vault [${folderLabel}]: ${filename}</span>`;
                 if (typeof loadImagePreview === 'function') {
                     loadImagePreview(fileUrl, filename);
                 }
             }
         } else if (mediaType === 'audio') {
             selectedVaultMedia.audio = filename;
+            selectedVaultMedia.audioFolder = folder;
             const aList = document.getElementById('audioList');
-            if (aList) aList.innerHTML = `<span class="badge" style="background:#34c759; color:#fff;">📁 Vault: ${filename}</span>`;
+            if (aList) aList.innerHTML = `<span class="badge" style="background:${folderColor}; color:#fff;">📁 Vault [${folderLabel}]: ${filename}</span>`;
             if (typeof loadAudioPreview === 'function') {
                 loadAudioPreview(fileUrl, filename);
             }
         } else if (mediaType === 'patch_video') {
             const pList = document.getElementById('patchFileList');
-            if (pList) pList.innerHTML = `<span class="badge" style="background:#34c759; color:#fff;">📁 Vault: ${filename}</span>`;
+            if (pList) pList.innerHTML = `<span class="badge" style="background:${folderColor}; color:#fff;">📁 Vault [${folderLabel}]: ${filename}</span>`;
             const player = document.getElementById('patchVideoPlayer');
             const editorGroup = document.getElementById('patchEditorGroup');
             if (player) {
@@ -245,20 +287,21 @@ async function selectVaultFileDirectly(filename, mediaType, isCenter) {
             fetch(fileUrl).then(r => r.blob()).then(blob => {
                 patchBaseFile = new File([blob], filename, { type: blob.type || 'video/mp4' });
             }).catch(() => {
-                patchBaseFile = { name: filename, isVault: true };
+                patchBaseFile = { name: filename, isVault: true, folder: folder };
             });
         } else if (mediaType === 'patch_center') {
             const cList = document.getElementById('patchCenterFileList');
-            if (cList) cList.innerHTML = `<span class="badge" style="background:#ff3b30; color:#fff;">📁 Vault: ${filename}</span>`;
+            if (cList) cList.innerHTML = `<span class="badge" style="background:${folderColor}; color:#fff;">📁 Vault [${folderLabel}]: ${filename}</span>`;
             fetch(fileUrl).then(r => r.blob()).then(blob => {
                 patchCenterFile = new File([blob], filename, { type: blob.type || 'video/mp4' });
             }).catch(() => {
-                patchCenterFile = { name: filename, isVault: true };
+                patchCenterFile = { name: filename, isVault: true, folder: folder };
             });
         } else if (mediaType === 'decrypt') {
             selectedVaultMedia.decrypt = [filename];
+            selectedVaultMedia.decryptFolder = folder;
             const dList = document.getElementById('decryptFileList');
-            if (dList) dList.innerHTML = `<span class="badge" style="background:#ff9500; color:#fff;">📁 Vault: ${filename}</span>`;
+            if (dList) dList.innerHTML = `<span class="badge" style="background:${folderColor}; color:#fff;">📁 Vault [${folderLabel}]: ${filename}</span>`;
         }
     } catch (e) {
         console.error("Failed to select vault file:", e);

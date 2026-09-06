@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Media-Encrypt Studio</title>
+    <title>{{ metadata.name }} v{{ metadata.version }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/preview.css') }}">
@@ -46,19 +46,26 @@
             </div>
             {% include 'components/progress.html' %}
             <div class="project-version-footer">
-                Media-Encrypt Studio v2.0
+                {{ metadata.name }} v{{ metadata.version }}
             </div>
         </div>
     </div>
     <div id="vaultPickerModal" class="modal-overlay hidden">
         <div class="modal-content vault-picker-modal-box">
+            <button type="button" class="modal-close" onclick="closeVaultPicker()">✕</button>
             <div class="modal-header-flex">
                 <span id="vaultPickerTitle" style="font-weight: 700; font-size: 16px;">📂 Select from Vault</span>
-                <button type="button" class="modal-close" onclick="closeVaultPicker()">✕</button>
             </div>
-            <div style="padding: 10px 15px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 12px; color: #666;">Choose existing file(s) saved in vault:</span>
-                <button type="button" class="ios-btn-small" onclick="refreshVaultPicker()">🔄 Refresh</button>
+            <div style="padding: 10px 15px 8px 15px; border-bottom: 1px solid #c8c7cc; background: #fafafa;">
+                <div class="segmented-control" style="margin: 0 0 8px 0; width: 100%;">
+                    <button type="button" id="pickerTabInput" class="segment-btn active" onclick="switchPickerFolder('input')">📥 Inputs</button>
+                    <button type="button" id="pickerTabEncrypted" class="segment-btn" onclick="switchPickerFolder('encrypted')">🔒 Encrypted</button>
+                    <button type="button" id="pickerTabDecrypted" class="segment-btn" onclick="switchPickerFolder('decrypted')">🔓 Decrypted</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="vaultPickerSubtext" style="font-size: 11px; color: #666;">Source folder: <b id="vaultPickerFolderBadge" style="color: #007aff;">Inputs</b></span>
+                    <button type="button" class="ios-btn-small" style="padding: 2px 8px; font-size: 11px;" onclick="refreshVaultPicker()">🔄 Refresh</button>
+                </div>
             </div>
             <div id="vaultPickerList" class="vault-picker-list">
             </div>

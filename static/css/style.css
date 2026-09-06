@@ -951,7 +951,8 @@ body.ios-dark-theme .url-download-container {
     display: flex;
     flex-direction: column;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
 }
 .modal-header-flex {
     display: flex;
@@ -960,6 +961,8 @@ body.ios-dark-theme .url-download-container {
     padding: 12px 15px;
     background: linear-gradient(to bottom, #f7f7f7 0%, #ebebeb 100%);
     border-bottom: 1px solid #c8c7cc;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
 }
 body.ios-dark-theme .modal-header-flex {
     background: linear-gradient(to bottom, #34373d 0%, #25272c 100%);

@@ -141,13 +141,21 @@
                 </div>
                 <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
                     <div class="flex-row" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 5px;">
-                        <label class="ios-label" id="v_bit_label" style="margin-bottom: 0;">Video Bitrate: 3000k<span class="help-tip">❔<span class="tooltip-text">Higher bitrate yields better visual quality but increases the final file size.</span></span></label>
+                        <label class="ios-label" id="v_bit_label" style="margin-bottom: 0;">Max Dynamic Bitrate: 3000k<span class="help-tip">❔<span class="tooltip-text">Upper ceiling for dynamic video bitrate (Constrained VBR). Bitrate scales down on simple scenes and up to this limit on complex scenes.</span></span></label>
                         <label class="ios-switch-label" style="font-size: 11px; margin-bottom: 0;"><input type="checkbox" id="autoVidBitrate" checked onchange="toggleVidBitrateAuto(this.checked)"> Auto</label>
                     </div>
                     <div id="vidBitrateSliderContainer" style="display: none; align-items: center; gap: 12px;">
                         <input type="range" id="v_bit_slider" min="500" max="25000" step="500" value="3000" style="flex: 1; accent-color: #007aff;">
                         <span id="v_bit_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">3000k</span>
                     </div>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-label">Spatial Compression Mode<span class="help-tip">❔<span class="tooltip-text">Protects encrypted blocks from codec ringing, boundary blur, and color bleeding.<br><br>• <b>Off (Standard):</b> Classic fixed/auto bitrate.<br>• <b>Mode 1 (Zone Protection):</b> Dynamic CRF with high-fidelity edge preservation.<br>• <b>Mode 2 (Isolated Tiles):</b> Hardware/codec slices with deblocking disabled across tile boundaries.</span></span></label>
+                    <select id="v_spatial_mode" class="ios-select">
+                        <option value="off" selected>Off (Standard)</option>
+                        <option value="zone">Mode 1: Zone Protection (CRF + Edge Guard)</option>
+                        <option value="tiles">Mode 2: Isolated Tiles (Codec Slices & No Deblock)</option>
+                    </select>
                 </div>
                 <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
                     <div>

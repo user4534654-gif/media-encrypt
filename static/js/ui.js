@@ -296,7 +296,7 @@ const bitLabel = document.getElementById('v_bit_label');
 if (bitSlider && bitVal && bitLabel) {
     bitSlider.addEventListener('input', function() {
         bitVal.innerText = this.value + 'k';
-        bitLabel.innerText = 'Video Bitrate: ' + this.value + 'k';
+        bitLabel.innerText = 'Max Dynamic Bitrate: ' + this.value + 'k';
     });
 }
 const freqSlider = document.getElementById('carrier_freq_slider');

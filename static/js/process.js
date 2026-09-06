@@ -86,7 +86,15 @@ async function startBatch(action) {
     fd.append('action', action);
     if (isVaultSelection) {
         fd.append('vault_filenames', JSON.stringify(rawFiles));
-        fd.append('vault_folder', action === 'scramble' ? 'input' : 'encrypted');
+        let chosenFolder = 'input';
+        if (action === 'scramble') {
+            if (activeMediaType === 'video' && selectedVaultMedia.videoFolder) chosenFolder = selectedVaultMedia.videoFolder;
+            else if (activeMediaType === 'image' && selectedVaultMedia.imageFolder) chosenFolder = selectedVaultMedia.imageFolder;
+            else if (activeMediaType === 'audio' && selectedVaultMedia.audioFolder) chosenFolder = selectedVaultMedia.audioFolder;
+        } else {
+            chosenFolder = selectedVaultMedia.decryptFolder || 'encrypted';
+        }
+        fd.append('vault_folder', chosenFolder);
     } else {
         rawFiles.forEach(f => {
             fd.append('files', f);
@@ -103,6 +111,8 @@ async function startBatch(action) {
             fd.append('vid_codec', document.getElementById('v_codec').value);
             const isAutoBitrate = document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : true;
             fd.append('vid_bitrate', isAutoBitrate ? 'auto' : document.getElementById('v_bit_slider').value + 'k');
+            const spatialMode = document.getElementById('v_spatial_mode') ? document.getElementById('v_spatial_mode').value : 'off';
+            fd.append('spatial_compression_mode', spatialMode);
             fd.append('vid_preset', document.getElementById('v_preset').value);
             const aSrAuto = document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true;
             fd.append('aud_sr', aSrAuto ? 'auto' : document.getElementById('a_sr_slider').value);
@@ -119,6 +129,9 @@ async function startBatch(action) {
                     fd.append('center_file', centerUpload.files[0]);
                 } else if (selectedVaultMedia.videoCenter) {
                     fd.append('center_vault_filename', selectedVaultMedia.videoCenter);
+                    if (selectedVaultMedia.videoCenterFolder) {
+                        fd.append('center_vault_folder', selectedVaultMedia.videoCenterFolder);
+                    }
                 }
             }
             fd.append('aud_method', document.getElementById('v_aud_method').value);
@@ -153,6 +166,9 @@ async function startBatch(action) {
                     fd.append('center_file', centerImageUpload.files[0]);
                 } else if (selectedVaultMedia.imageCenter) {
                     fd.append('center_vault_filename', selectedVaultMedia.imageCenter);
+                    if (selectedVaultMedia.imageCenterFolder) {
+                        fd.append('center_vault_folder', selectedVaultMedia.imageCenterFolder);
+                    }
                 }
             }
             fd.append('center_size', document.getElementById('img_center_size').value);

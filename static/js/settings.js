@@ -23,6 +23,7 @@ function saveAllSettings() {
         v_codec: document.getElementById('v_codec') ? document.getElementById('v_codec').value : 'auto',
         v_preset: document.getElementById('v_preset') ? document.getElementById('v_preset').value : 'auto',
         v_bit: bitSlider ? bitSlider.value : '3000',
+        v_spatial_mode: document.getElementById('v_spatial_mode') ? document.getElementById('v_spatial_mode').value : 'off',
         autoVidBitrate: document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : true,
         a_sr_auto: document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true,
         a_sr_slider: document.getElementById('a_sr_slider') ? document.getElementById('a_sr_slider').value : '48000',
@@ -90,13 +91,14 @@ function loadAllSettings() {
         setVal('v_fmt', settings.v_fmt);
         setVal('v_codec', settings.v_codec);
         setVal('v_preset', settings.v_preset);
+        setVal('v_spatial_mode', settings.v_spatial_mode || 'off');
         const bitSlider = document.getElementById('v_bit_slider');
         const bitVal = document.getElementById('v_bit_val');
         const bitLabel = document.getElementById('v_bit_label');
         if (settings.v_bit && bitSlider) {
             bitSlider.value = settings.v_bit;
             if (bitVal) bitVal.innerText = settings.v_bit + 'k';
-            if (bitLabel) bitLabel.innerText = 'Video Bitrate: ' + settings.v_bit + 'k';
+            if (bitLabel) bitLabel.innerText = 'Max Dynamic Bitrate: ' + settings.v_bit + 'k';
         }
         if (settings.autoVidBitrate !== undefined) {
             setChecked('autoVidBitrate', settings.autoVidBitrate);
