@@ -125,17 +125,55 @@ function syncEncBadgesFromMode(mode) {
         centerBadge.style.color = '#333';
     }
 }
+let customTrackLFile = null;
+let customTrackRFile = null;
+function onCustomTrackFileSelected(channel, file) {
+    if (!file) return;
+    if (channel === 'L') {
+        customTrackLFile = file;
+        const nameElem = document.getElementById('trackLCustomName');
+        if (nameElem) nameElem.innerText = `(${file.name})`;
+    } else {
+        customTrackRFile = file;
+        const nameElem = document.getElementById('trackRCustomName');
+        if (nameElem) nameElem.innerText = `(${file.name})`;
+    }
+    probeFileDuration(file, function(d) {
+        if (d > 0) {
+            updateTimelineVisualization();
+        }
+    });
+}
+function getCustomAudioFiles() {
+    const srcL = document.getElementById('trackLSourceSelect') ? document.getElementById('trackLSourceSelect').value : '';
+    const srcR = document.getElementById('trackRSourceSelect') ? document.getElementById('trackRSourceSelect').value : '';
+    const encL = document.getElementById('trackLEncCheckbox') ? document.getElementById('trackLEncCheckbox').checked : true;
+    const encR = document.getElementById('trackREncCheckbox') ? document.getElementById('trackREncCheckbox').checked : true;
+    return {
+        fileL: (srcL === 'custom') ? customTrackLFile : null,
+        fileR: (srcR === 'custom') ? customTrackRFile : null,
+        encL: encL,
+        encR: encR
+    };
+}
 function updateTrackRouting(channel, source) {
     const selectElem = document.getElementById(`track${channel}SourceSelect`);
     const badgeElem = document.getElementById(`badge${channel}`);
+    const customRow = document.getElementById(`track${channel}CustomRow`);
     if (selectElem && badgeElem) {
         if (source === 'center') {
             selectElem.className = 'track-source-select red-source';
             badgeElem.className = 'channel-badge red-badge';
+        } else if (source === 'custom') {
+            selectElem.className = 'track-source-select custom-source';
+            badgeElem.className = 'channel-badge custom-badge';
         } else {
             selectElem.className = 'track-source-select blue-source';
             badgeElem.className = 'channel-badge blue-badge';
         }
+    }
+    if (customRow) {
+        customRow.style.display = (source === 'custom') ? 'flex' : 'none';
     }
     const sourceL = document.getElementById('trackLSourceSelect') ? document.getElementById('trackLSourceSelect').value : 'background';
     const sourceR = document.getElementById('trackRSourceSelect') ? document.getElementById('trackRSourceSelect').value : 'center';

@@ -752,9 +752,37 @@ def start_job_api():
                 cp = os.path.join(INPUT_FOLDER, c_name)
             if os.path.exists(cp):
                 center_path = cp
+        custom_audio_l_path = None
+        if 'custom_audio_l' in request.files and request.files['custom_audio_l'].filename:
+            cal_file = request.files['custom_audio_l']
+            custom_audio_l_path = os.path.join(INPUT_FOLDER, f"audio_l_{os.path.basename(cal_file.filename)}")
+            cal_file.save(custom_audio_l_path)
+        elif request.form.get('custom_audio_l_vault'):
+            v_name = os.path.basename(request.form.get('custom_audio_l_vault'))
+            for fld in [INPUT_FOLDER, ENCRYPTED_FOLDER, DECRYPTED_FOLDER]:
+                cand = os.path.join(fld, v_name)
+                if os.path.exists(cand):
+                    custom_audio_l_path = cand
+                    break
+        custom_audio_r_path = None
+        if 'custom_audio_r' in request.files and request.files['custom_audio_r'].filename:
+            car_file = request.files['custom_audio_r']
+            custom_audio_r_path = os.path.join(INPUT_FOLDER, f"audio_r_{os.path.basename(car_file.filename)}")
+            car_file.save(custom_audio_r_path)
+        elif request.form.get('custom_audio_r_vault'):
+            v_name = os.path.basename(request.form.get('custom_audio_r_vault'))
+            for fld in [INPUT_FOLDER, ENCRYPTED_FOLDER, DECRYPTED_FOLDER]:
+                cand = os.path.join(fld, v_name)
+                if os.path.exists(cand):
+                    custom_audio_r_path = cand
+                    break
         form_data = dict(request.form)
         if center_path:
             form_data['center_path'] = center_path
+        if custom_audio_l_path:
+            form_data['custom_audio_l'] = custom_audio_l_path
+        if custom_audio_r_path:
+            form_data['custom_audio_r'] = custom_audio_r_path
         ok, msg, jid = job_manager.start_job(action, files_info, form_data)
         if not ok:
             return jsonify({"status": "error", "message": msg, "job_id": jid}), 409
@@ -763,6 +791,67 @@ def start_job_api():
         tb = traceback.format_exc()
         diag = LiveDebugger.analyze_exception(e, module_name="HTTP", func_name="start_job_api")
         return jsonify({"status": "error", "message": str(e), "traceback": tb, "diagnostic": diag}), 500
+@app.route('/api/detect_optical_markers', methods=['POST'])
+def detect_optical_markers_api():
+    try:
+        from core.crypto import detect_optical_markers
+        import cv2
+        import numpy as np
+        img = None
+        if 'file' in request.files and request.files['file'].filename:
+            file_bytes = np.frombuffer(request.files['file'].read(), np.uint8)
+            img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        elif request.form.get('vault_filename'):
+            v_name = os.path.basename(request.form.get('vault_filename'))
+            v_folder = request.form.get('vault_folder', 'encrypted')
+            target_dir = ENCRYPTED_FOLDER if v_folder == 'encrypted' else (DECRYPTED_FOLDER if v_folder == 'decrypted' else INPUT_FOLDER)
+            f_path = os.path.join(target_dir, v_name)
+            if os.path.exists(f_path):
+                ext = os.path.splitext(f_path)[1].lower()
+                if ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
+                    cap = cv2.VideoCapture(f_path)
+                    ret, frame = cap.read()
+                    cap.release()
+                    if ret:
+                        img = frame
+                else:
+                    img = cv2.imread(f_path)
+        if img is None:
+            return jsonify({"status": "error", "message": "Could not read media file or image frame."}), 400
+        placement = request.form.get('marker_placement', 'outside')
+        roi = detect_optical_markers(img, placement=placement)
+        if roi:
+            return jsonify({"status": "ok", "roi": roi, "placement": placement})
+        else:
+            return jsonify({"status": "not_found", "message": "No optical markers detected."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+@app.route('/api/scan_qr', methods=['POST'])
+def scan_qr_api():
+    try:
+        import cv2
+        import numpy as np
+        img = None
+        if 'file' in request.files and request.files['file'].filename:
+            file_bytes = np.frombuffer(request.files['file'].read(), np.uint8)
+            img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        elif request.form.get('vault_filename'):
+            v_name = os.path.basename(request.form.get('vault_filename'))
+            f_path = os.path.join(ENCRYPTED_FOLDER, v_name)
+            if not os.path.exists(f_path):
+                f_path = os.path.join(INPUT_FOLDER, v_name)
+            if os.path.exists(f_path):
+                img = cv2.imread(f_path)
+        if img is None:
+            return jsonify({"status": "error", "message": "No image provided."}), 400
+        detector = cv2.QRCodeDetector()
+        decoded_text, points, _ = detector.detectAndDecode(img)
+        if decoded_text:
+            return jsonify({"status": "ok", "key": decoded_text.strip()})
+        else:
+            return jsonify({"status": "not_found", "message": "No QR code detected in image."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 @app.route('/api/job/status', methods=['GET'])
 def get_job_status_api():
     status = job_manager.get_status()

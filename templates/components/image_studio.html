@@ -66,6 +66,77 @@
             </select>
         </div>
     </div>
+<div class="ios-group" id="imgSpatialZonesGroup">
+    <div class="collapse-trigger disabled" id="imgSpatialZonesCollapseHeader" onclick="toggleSection('imgSpatialZonesCollapseHeader', 'imgSpatialZonesCollapseContent')">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span>🩹 Selective Spatial Zone</span>
+            <span class="badge-optional" style="font-size: 11px; background: rgba(0,122,255,0.15); color: #007aff; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Optional</span>
+            <span class="collapse-arrow">▶️</span>
+        </div>
+        <label class="ios-switch-label" style="margin: 0; padding-left: 10px; display: inline-flex; align-items: center; gap: 4px;" onclick="event.stopPropagation()">
+            <input type="checkbox" id="imgEnableSpatialZones" onchange="onEnableImgSpatialZonesToggle(this.checked)">
+            <span style="font-size: 11px; font-weight: normal; text-shadow: none;">Enable</span>
+        </label>
+    </div>
+    <div class="collapse-content hidden" id="imgSpatialZonesCollapseContent">
+        <div class="ios-group-container" style="padding: 12px;">
+            <div style="margin-bottom: 8px;">
+                <div class="segmented-control">
+                    <button type="button" id="imgPatchToolMove" class="segment-btn active" onclick="setImgPatchInteractionMode('move')">✋ Move / Drag</button>
+                    <button type="button" id="imgPatchToolResize" class="segment-btn" onclick="setImgPatchInteractionMode('resize')">📐 Resize Handles</button>
+                    <button type="button" class="segment-btn" onclick="setImgPatchFullscreen()">🔲 Full Frame</button>
+                    <button type="button" class="segment-btn" onclick="resetImgPatchBoxToCenter()">↺ Center Box</button>
+                </div>
+            </div>
+            <div id="imgPatchPreviewContainer" class="patch-preview-container" style="width: fit-content; max-width: 100%; margin: 0 auto 12px auto; position: relative; background: #000; border-radius: 8px; overflow: hidden; min-height: 120px; display: flex; align-items: center; justify-content: center;">
+                <div id="imgPatchEmptyNotice" style="color: #8e8e93; font-size: 12px; padding: 30px 20px; text-align: center;">
+                    🖼️ Upload an image above to preview and adjust the encryption zone
+                </div>
+                <img id="imgPatchPreview" style="display: none; max-height: 380px; max-width: 100%; width: auto; height: auto; margin: 0 auto;">
+                <div id="imgPatchRegionBox" class="patch-region-box hidden" style="left: 20%; top: 20%; width: 60%; height: 60%;">
+                    <div class="patch-region-box-badge">🔒 ENCRYPT ZONE</div>
+                    <div class="patch-resize-handle nw" data-handle="nw"></div>
+                    <div class="patch-resize-handle n" data-handle="n"></div>
+                    <div class="patch-resize-handle ne" data-handle="ne"></div>
+                    <div class="patch-resize-handle w" data-handle="w"></div>
+                    <div class="patch-resize-handle e" data-handle="e"></div>
+                    <div class="patch-resize-handle sw" data-handle="sw"></div>
+                    <div class="patch-resize-handle s" data-handle="s"></div>
+                    <div class="patch-resize-handle se" data-handle="se"></div>
+                </div>
+            </div>
+            <div class="patch-coords-bar" style="display: flex; gap: 8px; align-items: center; justify-content: space-between; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+                <span style="font-weight: 600; color: #2d3748;">🎯 Zone Bounding Box [x1, y1, x2, y2]:</span>
+                <div style="display: flex; gap: 4px; align-items: center; font-family: monospace;">
+                    <span>X1</span><input type="number" id="imgCoordX1" step="0.01" min="0" max="1" value="0.20" class="ios-input" style="width: 58px; padding: 2px 4px; font-size: 11px; text-align: center;" onchange="onManualImgCoordInput()">
+                    <span>Y1</span><input type="number" id="imgCoordY1" step="0.01" min="0" max="1" value="0.20" class="ios-input" style="width: 58px; padding: 2px 4px; font-size: 11px; text-align: center;" onchange="onManualImgCoordInput()">
+                    <span>X2</span><input type="number" id="imgCoordX2" step="0.01" min="0" max="1" value="0.80" class="ios-input" style="width: 58px; padding: 2px 4px; font-size: 11px; text-align: center;" onchange="onManualImgCoordInput()">
+                    <span>Y2</span><input type="number" id="imgCoordY2" step="0.01" min="0" max="1" value="0.80" class="ios-input" style="width: 58px; padding: 2px 4px; font-size: 11px; text-align: center;" onchange="onManualImgCoordInput()">
+                </div>
+            </div>
+            <div style="background: #f8fafc; border-radius: 8px; padding: 10px 14px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <label class="ios-label" style="margin-bottom: 2px;">Invert Encryption Zone</label>
+                        <div style="font-size: 11px; color: #666;">Scramble outside the box; keep region inside untouched</div>
+                    </div>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="imgRoiInvert">
+                    </label>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #edf2f7; padding-top: 8px;">
+                    <div>
+                        <label class="ios-label" style="margin-bottom: 2px;">Embed Optical B&W Corner Markers</label>
+                        <div style="font-size: 11px; color: #666;">Enables automatic coordinate-free discovery during decryption</div>
+                    </div>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="imgOpticalMarkers">
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
     <div class="ios-group">
         <div class="ios-group-header">2. Image Scrambling Parameters</div>
         <div class="ios-group-row-grid">
@@ -92,6 +163,12 @@
             <label class="ios-label" style="margin-bottom: 0;">Save Key File (.key.txt)<span class="help-tip">❔<span class="tooltip-text">Saves the encryption key to a companion .key.txt file in the vault.</span></span></label>
             <label class="ios-switch-label">
                 <input type="checkbox" id="imgSaveKeyFile" checked>
+            </label>
+        </div>
+        <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+            <label class="ios-label" style="margin-bottom: 0;">Generate QR Code (Optional)<span class="help-tip">❔<span class="tooltip-text">Creates a companion QR code PNG for mobile key scanning. Disabled by default.</span></span></label>
+            <label class="ios-switch-label">
+                <input type="checkbox" id="imgGenerateQr">
             </label>
         </div>
     </div>

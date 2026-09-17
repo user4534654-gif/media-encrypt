@@ -10,6 +10,7 @@ pywebview
 av
 yt-dlp
 requests
+qrcode
 
 # ── Build / packaging dependencies ────────────────────────────────────────────
 # These are only needed when building the Windows .exe with PyInstaller.

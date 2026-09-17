@@ -1,0 +1,204 @@
+<svg width="400" height="300" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="400" height="300" fill="white" stroke="black" stroke-width="2" />
+  <rect x="0" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">1</text>
+  <rect x="40" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">2</text>
+  <rect x="80" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">3</text>
+  <rect x="120" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">4</text>
+  <rect x="160" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">5</text>
+  <rect x="200" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">6</text>
+  <rect x="240" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">7</text>
+  <rect x="280" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">8</text>
+  <rect x="320" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">9</text>
+  <rect x="360" y="0" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="15.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">10</text>
+  <rect x="0" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">11</text>
+  <rect x="40" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">12</text>
+  <rect x="80" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">13</text>
+  <rect x="120" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">14</text>
+  <rect x="160" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">15</text>
+  <rect x="200" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">16</text>
+  <rect x="240" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">17</text>
+  <rect x="280" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">18</text>
+  <rect x="320" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">19</text>
+  <rect x="360" y="30" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="45.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">20</text>
+  <rect x="0" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">21</text>
+  <rect x="40" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">22</text>
+  <rect x="80" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">23</text>
+  <rect x="120" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">24</text>
+  <rect x="160" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">25</text>
+  <rect x="200" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">26</text>
+  <rect x="240" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">27</text>
+  <rect x="280" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">28</text>
+  <rect x="320" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">29</text>
+  <rect x="360" y="60" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="75.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">30</text>
+  <rect x="0" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">31</text>
+  <rect x="40" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">32</text>
+  <rect x="80" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">33</text>
+  <rect x="120" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">34</text>
+  <rect x="160" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">35</text>
+  <rect x="200" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">36</text>
+  <rect x="240" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">37</text>
+  <rect x="280" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">38</text>
+  <rect x="320" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">39</text>
+  <rect x="360" y="90" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="105.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">40</text>
+  <rect x="0" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">41</text>
+  <rect x="40" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">42</text>
+  <rect x="80" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">43</text>
+  <rect x="120" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">44</text>
+  <rect x="160" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">45</text>
+  <rect x="200" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">46</text>
+  <rect x="240" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">47</text>
+  <rect x="280" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">48</text>
+  <rect x="320" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">49</text>
+  <rect x="360" y="120" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="135.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">50</text>
+  <rect x="0" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">51</text>
+  <rect x="40" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">52</text>
+  <rect x="80" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">53</text>
+  <rect x="120" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">54</text>
+  <rect x="160" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">55</text>
+  <rect x="200" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">56</text>
+  <rect x="240" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">57</text>
+  <rect x="280" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">58</text>
+  <rect x="320" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">59</text>
+  <rect x="360" y="150" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="165.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">60</text>
+  <rect x="0" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">61</text>
+  <rect x="40" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">62</text>
+  <rect x="80" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">63</text>
+  <rect x="120" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">64</text>
+  <rect x="160" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">65</text>
+  <rect x="200" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">66</text>
+  <rect x="240" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">67</text>
+  <rect x="280" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">68</text>
+  <rect x="320" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">69</text>
+  <rect x="360" y="180" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="195.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">70</text>
+  <rect x="0" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">71</text>
+  <rect x="40" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">72</text>
+  <rect x="80" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">73</text>
+  <rect x="120" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">74</text>
+  <rect x="160" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">75</text>
+  <rect x="200" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">76</text>
+  <rect x="240" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">77</text>
+  <rect x="280" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">78</text>
+  <rect x="320" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">79</text>
+  <rect x="360" y="210" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="225.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">80</text>
+  <rect x="0" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">81</text>
+  <rect x="40" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">82</text>
+  <rect x="80" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">83</text>
+  <rect x="120" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">84</text>
+  <rect x="160" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">85</text>
+  <rect x="200" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">86</text>
+  <rect x="240" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">87</text>
+  <rect x="280" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">88</text>
+  <rect x="320" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">89</text>
+  <rect x="360" y="240" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="255.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">90</text>
+  <rect x="0" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="20.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">91</text>
+  <rect x="40" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="60.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">92</text>
+  <rect x="80" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="100.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">93</text>
+  <rect x="120" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="140.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">94</text>
+  <rect x="160" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="180.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">95</text>
+  <rect x="200" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="220.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">96</text>
+  <rect x="240" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="260.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">97</text>
+  <rect x="280" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="300.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">98</text>
+  <rect x="320" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="340.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">99</text>
+  <rect x="360" y="270" width="40" height="30" fill="none" stroke="black" stroke-width="1.5" />
+  <text x="380.0" y="285.0" font-family="Arial" font-size="12.0" fill="black" text-anchor="middle" dominant-baseline="central">100</text>
+</svg>

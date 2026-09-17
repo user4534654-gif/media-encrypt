@@ -56,3 +56,31 @@ def get_outer_blocks(cols, rows, out_w, out_h, center_size='1/4'):
             else:
                 outer_indices.append(idx)
     return outer_indices, inner_indices, (cx1, cy1, cx2, cy2)
+def get_roi_blocks(w, h, roi, cols, rows, invert=False):
+    rx1, ry1, rx2, ry2 = roi
+    if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
+        rx1 = int(round(rx1 * w))
+        ry1 = int(round(ry1 * h))
+        rx2 = int(round(rx2 * w))
+        ry2 = int(round(ry2 * h))
+    rx1 = max(0, min(w, int(rx1)))
+    rx2 = max(0, min(w, int(rx2)))
+    ry1 = max(0, min(h, int(ry1)))
+    ry2 = max(0, min(h, int(ry2)))
+    if rx1 > rx2: rx1, rx2 = rx2, rx1
+    if ry1 > ry2: ry1, ry2 = ry2, ry1
+    rw = max(1, rx2 - rx1)
+    rh = max(1, ry2 - ry1)
+    if not invert:
+        sub_blocks = get_blocks(rw, rh, cols, rows)
+        roi_blocks = [(rx1 + bx1, ry1 + by1, rx1 + bx2, ry1 + by2) for (bx1, by1, bx2, by2) in sub_blocks]
+        return roi_blocks
+    else:
+        all_blocks = get_blocks(w, h, cols, rows)
+        outer_blocks = []
+        for (bx1, by1, bx2, by2) in all_blocks:
+            cx = (bx1 + bx2) // 2
+            cy = (by1 + by2) // 2
+            if not (rx1 <= cx < rx2 and ry1 <= cy < ry2):
+                outer_blocks.append((bx1, by1, bx2, by2))
+        return outer_blocks

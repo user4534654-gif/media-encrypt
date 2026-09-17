@@ -102,12 +102,28 @@ async function startBatch(action) {
     }
     if (action === 'scramble') {
         if (activeMediaType === 'video') {
-            fd.append('enc_video', encVideo.checked); 
-            fd.append('enc_audio', encAudio.checked);
+            const fmtVal = document.getElementById('v_fmt').value;
+            const isInputImage = rawFiles.length > 0 && (
+                typeof rawFiles[0] === 'string'
+                    ? /\.(jpe?g|png|webp|avif|bmp)$/i.test(rawFiles[0])
+                    : (rawFiles[0].type ? rawFiles[0].type.startsWith('image/') : /\.(jpe?g|png|webp|avif|bmp)$/i.test(rawFiles[0].name))
+            );
+            if (isInputImage) {
+                let imgFmt = fmtVal;
+                if (imgFmt === 'auto' || ['.mp4', '.mkv', '.avi', '.webm', '.mov'].includes(imgFmt)) {
+                    imgFmt = (typeof activeImageFormat !== 'undefined' && activeImageFormat) ? activeImageFormat : 'auto';
+                }
+                fd.append('img_format', imgFmt);
+                fd.append('enc_video', 'true');
+                fd.append('enc_audio', 'false');
+            } else {
+                fd.append('enc_video', encVideo.checked); 
+                fd.append('enc_audio', encAudio.checked);
+                fd.append('vid_format', fmtVal); 
+            }
             fd.append('cols', document.getElementById('cols').value); 
             fd.append('rows', document.getElementById('rows').value);
             fd.append('sid', document.getElementById('sid').value); 
-            fd.append('vid_format', document.getElementById('v_fmt').value); 
             fd.append('vid_codec', document.getElementById('v_codec').value);
             const isAutoBitrate = document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : true;
             fd.append('vid_bitrate', isAutoBitrate ? 'auto' : document.getElementById('v_bit_slider').value + 'k');
@@ -153,6 +169,34 @@ async function startBatch(action) {
             fd.append('export_svg', document.getElementById('exportSvg').checked);
             fd.append('use_gpu', document.getElementById('useGpu') ? document.getElementById('useGpu').checked : false);
             fd.append('save_key_file', document.getElementById('saveKeyFile') ? document.getElementById('saveKeyFile').checked : true);
+            fd.append('generate_qr', document.getElementById('generateQr') ? document.getElementById('generateQr').checked : false);
+            if (typeof getCustomAudioFiles === 'function') {
+                const customAud = getCustomAudioFiles();
+                if (customAud.fileL) {
+                    fd.append('custom_audio_l', customAud.fileL);
+                    fd.append('enc_custom_l', customAud.encL ? 'true' : 'false');
+                }
+                if (customAud.fileR) {
+                    fd.append('custom_audio_r', customAud.fileR);
+                    fd.append('enc_custom_r', customAud.encR ? 'true' : 'false');
+                }
+            }
+            const enableSpatial = document.getElementById('enableSpatialZones') ? document.getElementById('enableSpatialZones').checked : false;
+            if (enableSpatial && typeof getSpatialPatchConfig === 'function') {
+                const patchCfg = getSpatialPatchConfig();
+                if (patchCfg.patch_roi) {
+                    fd.append('patch_roi', JSON.stringify(patchCfg.patch_roi));
+                }
+                if (patchCfg.patch_segments && patchCfg.patch_segments.length > 0) {
+                    fd.append('patch_segments', JSON.stringify(patchCfg.patch_segments));
+                }
+                if (patchCfg.patch_intervals && patchCfg.patch_intervals.length > 0) {
+                    fd.append('patch_intervals', JSON.stringify(patchCfg.patch_intervals));
+                }
+                fd.append('roi_invert', patchCfg.roi_invert ? 'true' : 'false');
+                fd.append('optical_markers', patchCfg.optical_markers ? 'true' : 'false');
+                fd.append('marker_placement', patchCfg.marker_placement || 'outside');
+            }
         } else if (activeMediaType === 'image') {
             fd.append('enc_video', 'true'); 
             fd.append('enc_audio', 'false');
@@ -175,6 +219,17 @@ async function startBatch(action) {
             fd.append('video_encrypt_mode', document.getElementById('img_video_encrypt_mode').value);
             fd.append('export_svg', document.getElementById('imgExportSvg').checked);
             fd.append('save_key_file', document.getElementById('imgSaveKeyFile') ? document.getElementById('imgSaveKeyFile').checked : true);
+            fd.append('generate_qr', document.getElementById('imgGenerateQr') ? document.getElementById('imgGenerateQr').checked : false);
+            const enableZones = document.getElementById('imgEnableSpatialZones');
+            if (enableZones && enableZones.checked) {
+                const x1 = parseFloat(document.getElementById('imgCoordX1').value) || 0.20;
+                const y1 = parseFloat(document.getElementById('imgCoordY1').value) || 0.20;
+                const x2 = parseFloat(document.getElementById('imgCoordX2').value) || 0.80;
+                const y2 = parseFloat(document.getElementById('imgCoordY2').value) || 0.80;
+                fd.append('patch_roi', JSON.stringify([x1, y1, x2, y2]));
+                fd.append('roi_invert', document.getElementById('imgRoiInvert').checked ? 'true' : 'false');
+                fd.append('optical_markers', document.getElementById('imgOpticalMarkers').checked ? 'true' : 'false');
+            }
         } else if (activeMediaType === 'audio') {
             fd.append('enc_video', 'false'); 
             fd.append('enc_audio', 'true');
@@ -192,6 +247,7 @@ async function startBatch(action) {
             fd.append('vol_factor', parseFloat(document.getElementById('aud_vol_factor_slider').value) / 100.0);
             fd.append('aud_track', document.getElementById('audio_track_select').value);
             fd.append('save_key_file', document.getElementById('audSaveKeyFile') ? document.getElementById('audSaveKeyFile').checked : true);
+            fd.append('generate_qr', document.getElementById('audGenerateQr') ? document.getElementById('audGenerateQr').checked : false);
         }
     } else {
         fd.append('key', document.getElementById('decKey').value);
@@ -400,17 +456,107 @@ function renderKeysOutput(keys) {
         const itemName = item.file || item.name || '';
         const keyVal = item.key || '';
         const outFile = item.out_file || '';
+        const qrFile = item.qr_file || '';
+        const isK85 = keyVal.startsWith('K85:');
+        const k85Badge = isK85 
+            ? `<span style="font-size: 10px; background: #ede9fe; color: #6d28d9; padding: 1px 5px; border-radius: 3px; font-weight: 700; border: 1px solid #ddd6fe;" title="Algorithmic Base85 Compressed Key">K85</span>` 
+            : '';
+        const qrBtn = qrFile ? `
+            <a href="/api/vault/download?folder=output&filename=${encodeURIComponent(qrFile)}" download="${qrFile}" class="ios-btn-small" style="text-decoration: none; padding: 2px 6px; font-size: 11px; margin: 0; background: #e8f5e9; color: #2e7d32; border: 1px solid #81c784; cursor: pointer; border-radius: 4px; font-weight: bold; display: inline-flex; align-items: center; gap: 2px;" title="Download Key QR Code">📱 QR</a>
+        ` : '';
         keysOut.innerHTML += `
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; background: rgba(0,0,0,0.03); padding: 5px 8px; border-radius: 6px; border: 1px solid #e1e4e8; min-width: 0; overflow: hidden; box-sizing: border-box;">
                 <span style="font-weight: 500; color: #333; font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; word-break: break-all; overflow-wrap: anywhere;" title="${itemName}">${itemName}</span>
                 <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                    ${k85Badge}
                     <code style="background: #e1f5fe; color: #0288d1; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 12px; border: 1px dashed #0288d1; font-family: monospace;">${keyVal}</code>
+                    ${qrBtn}
                     <button type="button" class="ios-btn-small" onclick="saveKeyToFile('${keyVal}', '${outFile}', this)" style="padding: 2px 6px; font-size: 11px; margin: 0; background: linear-gradient(to bottom, #ffffff 0%, #eaeaea 100%); cursor: pointer; border-radius: 4px; font-weight: bold; border: 1px solid #b0b0b0;">💾 Save</button>
                     <button type="button" class="ios-btn-small" onclick="copyKeyToClipboard('${keyVal}', this)" style="padding: 2px 6px; font-size: 11px; margin: 0; background: linear-gradient(to bottom, #ffffff 0%, #eaeaea 100%); cursor: pointer; border-radius: 4px; font-weight: bold; border: 1px solid #b0b0b0;">📋 Copy</button>
                 </div>
             </div>
         `;
     });
+}
+function onDecKeyChanged(val) {
+    val = (val || '').trim();
+    const k85Badge = document.getElementById('decKeyK85Badge');
+    const modeBadge = document.getElementById('decKeyModeBadge');
+    const patchBadge = document.getElementById('decKeyPatchBadge');
+    const spatialBadge = document.getElementById('decKeySpatialBadge');
+    if (k85Badge) k85Badge.classList.toggle('hidden', !val.startsWith('K85:'));
+    if (modeBadge) modeBadge.classList.toggle('hidden', !val.includes('|c') && !val.includes('|ext'));
+    if (patchBadge) patchBadge.classList.toggle('hidden', !val.includes('|p:') && !val.includes('|psegs:'));
+    if (spatialBadge) spatialBadge.classList.toggle('hidden', !val.includes('|roi:') && !val.includes('|psegs:'));
+}
+async function handleQrFileUpload(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('qr_image', file);
+    try {
+        const res = await fetch('/api/scan_qr', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.status === 'ok' && data.key) {
+            const decKeyInput = document.getElementById('decKey');
+            if (decKeyInput) {
+                decKeyInput.value = data.key;
+                onDecKeyChanged(data.key);
+            }
+            alert("✅ Decryption Key successfully extracted from QR Code!");
+        } else {
+            alert("Could not read QR code: " + (data.message || "Unknown error"));
+        }
+    } catch (err) {
+        alert("Error scanning QR code: " + err.message);
+    } finally {
+        event.target.value = '';
+    }
+}
+async function triggerAutoDetectMarkers() {
+    const decryptUpload = document.getElementById('decryptUpload');
+    let file = null;
+    if (decryptUpload && decryptUpload.files && decryptUpload.files.length > 0) {
+        file = decryptUpload.files[0];
+    }
+    if (!file && typeof selectedVaultMedia !== 'undefined' && selectedVaultMedia.decrypt && selectedVaultMedia.decrypt.length > 0) {
+        const filename = selectedVaultMedia.decrypt[0];
+        const folder = selectedVaultMedia.decryptFolder || 'encrypted';
+        const fd = new FormData();
+        fd.append('vault_filename', filename);
+        fd.append('vault_folder', folder);
+        return doDetectOpticalMarkers(fd);
+    }
+    if (!file) {
+        alert("Please select or upload an encrypted media file in Step 1 first.");
+        return;
+    }
+    const fd = new FormData();
+    fd.append('file', file);
+    return doDetectOpticalMarkers(fd);
+}
+async function doDetectOpticalMarkers(fd) {
+    try {
+        const res = await fetch('/api/detect_optical_markers', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.status === 'ok' && data.roi) {
+            const roi = data.roi;
+            const roiStr = `|roi:${roi.join(',')}`;
+            const decKeyInput = document.getElementById('decKey');
+            if (decKeyInput) {
+                let curVal = decKeyInput.value.trim();
+                if (!curVal.includes('|roi:')) {
+                    decKeyInput.value = (curVal ? curVal : '10x10|seed') + roiStr;
+                }
+                onDecKeyChanged(decKeyInput.value);
+            }
+            alert(`🎯 Optical B&W Corner Markers Detected!\nROI Coordinates: [${roi.join(', ')}]`);
+        } else {
+            alert(data.message || "No optical markers detected in this file.");
+        }
+    } catch (err) {
+        alert("Error detecting optical markers: " + err.message);
+    }
 }
 document.addEventListener('DOMContentLoaded', () => {
     fetch('/api/job/status').then(r => r.json()).then(data => {

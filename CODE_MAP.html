@@ -220,12 +220,11 @@
     |                   |                       |                       |                   |
     v                   v                       v                       v                   v
 Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video      Center Video
-  (Full)            (Overlay)                   |                     (Full)         (Dual Layer)
-                            +-------------------+-------------------+
-                            |                   |                   |
-                            v                   v                   v
-                    Band Scrambling    Combined Modulation    Standard Inversion
-                        (a.txt)             (b.txt)            (Frequency Swap)
+  (Full)            (Overlay)                     |                    (Full)         (Dual Layer)
+                                                  |
+                                                  v
+                                          Standard Inversion
+                                           (Frequency Swap)
         </pre>
     </div>
     <h2>2. Module Architecture & Call Graph</h2>

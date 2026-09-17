@@ -1,11 +1,15 @@
 import cv2
 import numpy as np
 import os
-from core.crypto import seeded_shuffle
-from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks
+from core.crypto import seeded_shuffle, stamp_optical_markers, restore_optical_markers, detect_optical_markers, inpaint_optical_markers
+from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks, get_roi_blocks
 from core.logger import LiveDebugger
 def save_image(path, img):
-    ext = os.path.splitext(path)[1].lower()
+    base_p, ext = os.path.splitext(path)
+    ext = ext.lower()
+    if ext in ('.mp4', '.mkv', '.avi', '.mov', '.webm', ''):
+        path = base_p + '.png'
+        ext = '.png'
     if ext in ('.jpg', '.jpeg'):
         try:
             from PIL import Image
@@ -30,8 +34,8 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
     if is_cancelled_cb and is_cancelled_cb():
         LiveDebugger.log("CANCEL", f"Image processing cancelled for task {task_id}", level="WARNING", module="IMAGE")
         raise RuntimeError("Processing cancelled by user")
-    proc_vid = options.get('process_video')
-    reverse = options.get('reverse')
+    proc_vid = options.get('process_video', True)
+    reverse = options.get('reverse') or (options.get('action') == 'unscramble')
     cols, rows, seed = options.get('cols', 1), options.get('rows', 1), options.get('seed', 0)
     target_w, target_h = options.get('target_w'), options.get('target_h')
     no_scale = options.get('no_scale', False)
@@ -66,7 +70,73 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
         except Exception as e:
             print("Failed to export SVG grids:", e)
     if proc_vid:
-        if options.get('center'):
+        _center_path = options.get('center_path')
+        _zone_roi = options.get('patch_roi')
+        _img_combine_enc = (not reverse and options.get('center') and _center_path
+                            and os.path.exists(_center_path) and bool(_zone_roi))
+        _img_combine_dec = (reverse and options.get('center')
+                            and (bool(_zone_roi) or bool(options.get('optical_markers'))))
+        if _img_combine_enc or _img_combine_dec:
+            from core.video_processor import _encrypt_zone_nested, _decrypt_zone_nested
+            placement = options.get('marker_placement', 'outside')
+            if options.get('optical_markers') and placement == 'inside':
+                LiveDebugger.log("MARKER_PLACEMENT", "Image Zone+Center mode: 'inside' corner markers would be overwritten by the pasted center content. Coercing marker_placement to 'outside'.", level="WARNING", module="IMAGE")
+                placement = 'outside'
+                options['marker_placement'] = 'outside'
+            roi = list(_zone_roi) if _zone_roi else None
+            if _img_combine_dec and options.get('optical_markers') and not roi:
+                d_roi = detect_optical_markers(img, placement=placement)
+                if d_roi:
+                    roi = list(d_roi)
+                    options['patch_roi'] = roi
+                    LiveDebugger.log("MARKER_DETECT", f"Auto-detected optical markers in image! Reconstructed ROI: {roi}", level="SUCCESS", module="IMAGE")
+                else:
+                    LiveDebugger.log("MARKER_DETECT", "Warning: Optical markers specified in key, but could not be detected in image.", level="WARNING", module="IMAGE")
+            if not roi:
+                roi = [0.0, 0.0, 1.0, 1.0]
+            rx1, ry1, rx2, ry2 = roi
+            if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
+                px1, py1 = int(round(rx1 * w)), int(round(ry1 * h))
+                px2, py2 = int(round(rx2 * w)), int(round(ry2 * h))
+            else:
+                px1, py1, px2, py2 = int(rx1), int(ry1), int(rx2), int(ry2)
+            px1, py1 = max(0, min(w, px1)), max(0, min(h, py1))
+            px2, py2 = max(0, min(w, px2)), max(0, min(h, py2))
+            zw, zh = max(2, px2 - px1), max(2, py2 - py1)
+            if _img_combine_enc:
+                center_img = cv2.imread(_center_path)
+                if center_img is None:
+                    from PIL import Image as _PILImage
+                    center_img = cv2.cvtColor(np.array(_PILImage.open(_center_path).convert('RGB')), cv2.COLOR_RGB2BGR)
+                zone_bg = img[py1:py2, px1:px2]
+                if zone_bg.shape[1] != zw or zone_bg.shape[0] != zh:
+                    zone_bg = cv2.resize(zone_bg, (zw, zh))
+                new_zone = _encrypt_zone_nested(
+                    zone_bg, center_img, cols, rows,
+                    options.get('center_size', '1/4'), seed, video_encrypt_mode)
+                new_img = img.copy()
+                new_img[py1:py2, px1:px2] = new_zone
+                if options.get('optical_markers'):
+                    new_img, optical_payload = stamp_optical_markers(new_img, px1, py1, px2, py2, placement=placement)
+                    options['optical_payload'] = optical_payload
+                save_image(output_path, new_img)
+            else:
+                patch = img[py1:py2, px1:px2]
+                if patch.shape[1] != zw or patch.shape[0] != zh:
+                    patch = cv2.resize(patch, (zw, zh))
+                restored_zone, clean_center = _decrypt_zone_nested(
+                    patch, cols, rows, options.get('center_size', '1/4'), seed, video_encrypt_mode)
+                new_img = img.copy()
+                new_img[py1:py2, px1:px2] = restored_zone
+                if options.get('optical_markers'):
+                    if options.get('optical_payload'):
+                        new_img = restore_optical_markers(new_img, options['optical_payload'])
+                    else:
+                        new_img = inpaint_optical_markers(new_img, px1, py1, px2, py2, placement=placement)
+                save_image(output_path, new_img)
+                base, ext = os.path.splitext(output_path)
+                save_image(f"{base}_center{ext}", clean_center)
+        elif options.get('center'):
             center_size = options.get('center_size', '1/4')
             outer_indices, inner_indices, (cx1, cy1, cx2, cy2) = get_outer_blocks(cols, rows, w, h, center_size=center_size)
             N_outer = len(outer_indices)
@@ -154,6 +224,58 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                             center_resized = scrambled_c
                         new_img[cy1:cy2, cx1:cx2] = center_resized
                 save_image(output_path, new_img)
+        elif options.get('patch_roi') or (reverse and options.get('optical_markers')):
+            roi = options.get('patch_roi')
+            if reverse and options.get('optical_markers') and not roi:
+                placement = options.get('marker_placement', 'outside')
+                d_roi = detect_optical_markers(img, placement=placement)
+                if d_roi:
+                    roi = list(d_roi)
+                    options['patch_roi'] = roi
+                    LiveDebugger.log("MARKER_DETECT", f"Auto-detected optical markers in image! Reconstructed ROI: {roi}", level="SUCCESS", module="IMAGE")
+                else:
+                    LiveDebugger.log("MARKER_DETECT", "Warning: Optical markers specified in key, but could not be detected in image.", level="WARNING", module="IMAGE")
+            if not roi:
+                roi = [0.0, 0.0, 1.0, 1.0]
+            roi_invert = options.get('roi_invert', False)
+            roi_blocks = get_roi_blocks(w, h, roi, cols, rows, invert=roi_invert)
+            n_roi_blocks = len(roi_blocks)
+            dest_to_src = {}
+            if reverse:
+                fwd = seeded_shuffle(list(range(n_roi_blocks)), seed)
+                for i, v in enumerate(fwd):
+                    dest_to_src[v] = i
+            else:
+                shuffled = seeded_shuffle(list(range(n_roi_blocks)), seed)
+                for i, v in enumerate(shuffled):
+                    dest_to_src[i] = v
+            new_img = img.copy()
+            for i in range(n_roi_blocks):
+                t_idx = dest_to_src[i]
+                sx1, sy1, sx2, sy2 = roi_blocks[t_idx]
+                dx1, dy1, dx2, dy2 = roi_blocks[i]
+                tile = img[sy1:sy2, sx1:sx2]
+                dw_blk, dh_blk = dx2 - dx1, dy2 - dy1
+                if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
+                    tile = cv2.resize(tile, (dw_blk, dh_blk))
+                new_img[dy1:dy2, dx1:dx2] = tile
+            if not reverse and options.get('optical_markers'):
+                rx1, ry1, rx2, ry2 = roi
+                if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
+                    rx1, ry1, rx2, ry2 = int(rx1 * w), int(ry1 * h), int(rx2 * w), int(ry2 * h)
+                placement = options.get('marker_placement', 'outside')
+                new_img, optical_payload = stamp_optical_markers(new_img, rx1, ry1, rx2, ry2, placement=placement)
+                options['optical_payload'] = optical_payload
+            elif reverse and options.get('optical_markers'):
+                if options.get('optical_payload'):
+                    new_img = restore_optical_markers(new_img, options['optical_payload'])
+                elif roi:
+                    rx1, ry1, rx2, ry2 = roi
+                    if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
+                        rx1, ry1, rx2, ry2 = int(rx1 * w), int(ry1 * h), int(rx2 * w), int(ry2 * h)
+                    placement = options.get('marker_placement', 'outside')
+                    new_img = inpaint_optical_markers(new_img, rx1, ry1, rx2, ry2, placement=placement)
+            save_image(output_path, new_img)
         else:
             dest_to_src = {}
             if reverse:

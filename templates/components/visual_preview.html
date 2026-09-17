@@ -31,11 +31,18 @@
                 <select class="track-source-select blue-source" id="trackLSourceSelect" onchange="updateTrackRouting('L', this.value)">
                     <option value="background" selected>Background Audio (Blue)</option>
                     <option value="center">Center Audio (Red)</option>
+                    <option value="custom">Custom Audio/Video...</option>
                 </select>
                 <span class="track-method-badge" id="trackLMethodBadge">[inversion]</span>
                 <label class="track-enc-checkbox">
                     <input type="checkbox" id="trackLEncCheckbox" checked onchange="updateTrackEncState('L', this.checked)"> 🔒 Encrypt<span class="help-tip">❔<span class="tooltip-text">Toggle frequency scrambling/modulation on the Left audio channel.</span></span>
                 </label>
+            </div>
+            <div id="trackLCustomRow" style="display: none; gap: 8px; align-items: center; padding: 4px 12px 8px 12px; font-size: 12px;">
+                <span style="color: #007aff; font-weight: 600;">Custom L:</span>
+                <input type="file" id="trackLCustomFile" accept="audio/*,video/*" class="ios-file-input" style="flex: 1;" onchange="onCustomTrackFileSelected('L', this.files[0])">
+                <button type="button" class="ios-btn-small" onclick="openInputVaultPicker('track_l_custom', false)">📂 Vault</button>
+                <span id="trackLCustomName" style="color: #555; font-style: italic;"></span>
             </div>
             <div class="track-timeline-bar-container" id="trackLContainer">
                 <div class="track-active-segment blue-segment" id="trackLActiveSeg">
@@ -53,11 +60,18 @@
                 <select class="track-source-select red-source" id="trackRSourceSelect" onchange="updateTrackRouting('R', this.value)">
                     <option value="center" selected>Center Audio (Red)</option>
                     <option value="background">Background Audio (Blue)</option>
+                    <option value="custom">Custom Audio/Video...</option>
                 </select>
                 <span class="track-method-badge" id="trackRMethodBadge">[inversion]</span>
                 <label class="track-enc-checkbox">
                     <input type="checkbox" id="trackREncCheckbox" checked onchange="updateTrackEncState('R', this.checked)"> 🔒 Encrypt<span class="help-tip">❔<span class="tooltip-text">Toggle frequency scrambling/modulation on the Right audio channel.</span></span>
                 </label>
+            </div>
+            <div id="trackRCustomRow" style="display: none; gap: 8px; align-items: center; padding: 4px 12px 8px 12px; font-size: 12px;">
+                <span style="color: #ff3b30; font-weight: 600;">Custom R:</span>
+                <input type="file" id="trackRCustomFile" accept="audio/*,video/*" class="ios-file-input" style="flex: 1;" onchange="onCustomTrackFileSelected('R', this.files[0])">
+                <button type="button" class="ios-btn-small" onclick="openInputVaultPicker('track_r_custom', false)">📂 Vault</button>
+                <span id="trackRCustomName" style="color: #555; font-style: italic;"></span>
             </div>
             <div class="track-timeline-bar-container" id="trackRContainer">
                 <div class="track-active-segment red-segment" id="trackRActiveSeg">

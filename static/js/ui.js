@@ -100,13 +100,14 @@ function setImageFormat(format) {
     saveAllSettings();
 }
 function setMediaTypeTab(type) {
+    if (type === 'patch') type = 'video';
     activeMediaType = type;
     const vTab = document.getElementById('mediaTabVideo');
     const pTab = document.getElementById('mediaTabPatch');
     const iTab = document.getElementById('mediaTabImage');
     const aTab = document.getElementById('mediaTabAudio');
     if (vTab) vTab.classList.toggle('active', type === 'video');
-    if (pTab) pTab.classList.toggle('active', type === 'patch');
+    if (pTab) pTab.classList.toggle('active', false);
     if (iTab) iTab.classList.toggle('active', type === 'image');
     if (aTab) aTab.classList.toggle('active', type === 'audio');
     const vStudio = document.getElementById('videoStudio');
@@ -557,6 +558,7 @@ function toggleSection(triggerId, contentId) {
     const trigger = document.getElementById(triggerId);
     const content = document.getElementById(contentId);
     if (!trigger || !content) return;
+    if (trigger.classList.contains('disabled')) return;
     const isActive = trigger.classList.contains('active');
     if (isActive) {
         trigger.classList.remove('active');
@@ -567,6 +569,47 @@ function toggleSection(triggerId, contentId) {
     }
     saveAllSettings();
 }
+function onEncAudioToggle(checked) {
+    const header = document.getElementById('audCollapseHeader');
+    const content = document.getElementById('audCollapseContent');
+    if (header) {
+        header.classList.toggle('disabled', !checked);
+    }
+    if (!checked && content) {
+        if (header) header.classList.remove('active');
+        content.classList.add('hidden');
+    }
+    if (typeof saveAllSettings === 'function') saveAllSettings();
+}
+function onEnableSpatialZonesToggle(checked) {
+    const header = document.getElementById('spatialZonesCollapseHeader');
+    const content = document.getElementById('spatialZonesCollapseContent');
+    if (header) {
+        header.classList.toggle('disabled', !checked);
+    }
+    if (checked) {
+        if (header) header.classList.add('active');
+        if (content) content.classList.remove('hidden');
+        if (typeof toggleSpatialZonesEditor === 'function') toggleSpatialZonesEditor(true);
+    } else {
+        if (header) header.classList.remove('active');
+        if (content) content.classList.add('hidden');
+        if (typeof toggleSpatialZonesEditor === 'function') toggleSpatialZonesEditor(false);
+    }
+    if (typeof saveAllSettings === 'function') saveAllSettings();
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const encAudioCb = document.getElementById('encAudio');
+    if (encAudioCb) {
+        const header = document.getElementById('audCollapseHeader');
+        if (header) header.classList.toggle('disabled', !encAudioCb.checked);
+    }
+    const spatialCb = document.getElementById('enableSpatialZones');
+    if (spatialCb) {
+        const header = document.getElementById('spatialZonesCollapseHeader');
+        if (header) header.classList.toggle('disabled', !spatialCb.checked);
+    }
+});
 let activeDownloadEventSources = {};
 function closeTerminal(terminalId) {
     const term = document.getElementById(terminalId);
@@ -651,4 +694,17 @@ function triggerUrlDownload(mediaType, isCenter = false) {
         es.close();
         delete activeDownloadEventSources[termId];
     };
+}
+function onEnableImgSpatialZonesToggle(enabled) {
+    const header = document.getElementById('imgSpatialZonesCollapseHeader');
+    const content = document.getElementById('imgSpatialZonesCollapseContent');
+    if (!enabled) {
+        header.classList.add('disabled');
+        header.classList.remove('active');
+        content.classList.add('hidden');
+    } else {
+        header.classList.remove('disabled');
+        header.classList.add('active');
+        content.classList.remove('hidden');
+    }
 }

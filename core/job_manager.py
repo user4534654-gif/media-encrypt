@@ -3,7 +3,7 @@ import time
 import secrets
 import threading
 import traceback
-from core.crypto import clean_key, hash_str
+from core.crypto import clean_key, hash_str, compress_key, decompress_key, generate_qr_code
 from core.pipeline import process_media
 from core.metadata_prober import probe_media_file
 from core.logger import LiveDebugger
@@ -136,6 +136,7 @@ class JobManager:
                     'vol_factor_bg': float(form_data.get('vol_factor_bg', form_data.get('vol_factor', 1.0))),
                     'vol_factor_center': float(form_data.get('vol_factor_center', 1.0)),
                     'dual_track': form_data.get('dual_track') in [True, 'true', 'True', '1'],
+                    'center': False,
                     'center_size': form_data.get('center_size', '1/4'),
                     'video_encrypt_mode': form_data.get('video_encrypt_mode', 'external'),
                     'aud_track': form_data.get('aud_track', 'both'),
@@ -147,13 +148,15 @@ class JobManager:
                 }
                 options = self.resolve_quality_fn(file_path, options)
                 fn_lower = filename.lower()
-                if fn_lower.endswith(('.jpg', '.png', '.jpeg', '.bmp', '.webp', '.avif')):
+                is_image = fn_lower.endswith(('.jpg', '.png', '.jpeg', '.bmp', '.webp', '.avif')) or (info.get('format') == 'image') or (file_item.get('type') == 'image')
+                if is_image:
                     out_ext = form_data.get('img_format', '.png')
-                    if out_ext == 'auto':
-                        out_ext = os.path.splitext(filename)[1].lower()
-                elif fn_lower.endswith(('.mp3', '.wav', '.ogg', '.flac', '.m4a')):
+                    if out_ext == 'auto' or not out_ext or out_ext in ('.mp4', '.mkv', '.avi', '.mov', '.webm'):
+                        _, f_ext = os.path.splitext(filename)
+                        out_ext = f_ext.lower() if f_ext.lower() in ('.jpg', '.png', '.jpeg', '.bmp', '.webp', '.avif') else '.png'
+                elif fn_lower.endswith(('.mp3', '.wav', '.ogg', '.flac', '.m4a')) or (info.get('format') == 'audio'):
                     out_ext = form_data.get('aud_format', '.wav')
-                    if out_ext == 'auto':
+                    if out_ext == 'auto' or not out_ext:
                         out_ext = os.path.splitext(filename)[1].lower()
                 else:
                     out_ext = options['vid_format']
@@ -198,6 +201,38 @@ class JobManager:
                                 pass
                         if valid_intervals:
                             options['patch_intervals'] = valid_intervals
+                    raw_roi = form_data.get('patch_roi')
+                    if raw_roi:
+                        if isinstance(raw_roi, str):
+                            try:
+                                import json
+                                options['patch_roi'] = json.loads(raw_roi)
+                            except Exception:
+                                parts = [float(p.strip()) for p in raw_roi.split(',') if p.strip()]
+                                if len(parts) >= 4:
+                                    options['patch_roi'] = parts[:4]
+                        elif isinstance(raw_roi, (list, tuple)) and len(raw_roi) >= 4:
+                            options['patch_roi'] = list(raw_roi)[:4]
+                    options['roi_invert'] = form_data.get('roi_invert') in [True, 'true', 'True', '1']
+                    options['optical_markers'] = (form_data.get('optical_markers') in [True, 'true', 'True', '1'] or
+                                                  form_data.get('patch_optical_markers') in [True, 'true', 'True', '1'])
+                    options['marker_placement'] = form_data.get('marker_placement') or form_data.get('patch_marker_placement') or 'outside'
+                    raw_segments = form_data.get('patch_segments')
+                    if raw_segments:
+                        if isinstance(raw_segments, str):
+                            try:
+                                import json
+                                options['patch_segments'] = json.loads(raw_segments)
+                            except Exception:
+                                pass
+                        elif isinstance(raw_segments, list):
+                            options['patch_segments'] = raw_segments
+                    if form_data.get('custom_audio_l'):
+                        options['custom_audio_l'] = form_data.get('custom_audio_l')
+                    if form_data.get('custom_audio_r'):
+                        options['custom_audio_r'] = form_data.get('custom_audio_r')
+                    options['custom_audio_l_enc'] = form_data.get('custom_audio_l_enc') not in [False, 'false', 'False', '0']
+                    options['custom_audio_r_enc'] = form_data.get('custom_audio_r_enc') not in [False, 'false', 'False', '0']
                     sid = str(form_data.get('sid', '')).strip() or secrets.token_hex(4)
                     options['seed'] = hash_str(sid)
                     options['aud_key'] = hash_str(sid)
@@ -211,11 +246,37 @@ class JobManager:
                     elif options['aud_method'] == 'combined':
                         method_tag = 'acb'
                     patch_tag = ""
-                    if options.get('patch_intervals'):
-                        patch_str = ",".join(f"{s:.3f}-{e:.3f}" for s, e in options['patch_intervals'])
-                        patch_tag = f"|patch:{patch_str}"
+                    if options.get('patch_intervals') and not options.get('patch_segments'):
+                        if not options.get('optical_markers') or options.get('process_audio'):
+                            patch_str = ",".join(f"{s:.3f}-{e:.3f}" for s, e in options['patch_intervals'])
+                            patch_tag = f"|patch:{patch_str}"
+                    spatial_tag = ""
+                    if options.get('patch_segments'):
+                        if not options.get('optical_markers'):
+                            psegs_encoded = []
+                            for s in options['patch_segments']:
+                                s_start = float(s.get('start', 0.0))
+                                s_end = float(s.get('end', 0.0))
+                                s_roi = s.get('roi')
+                                s_inv = 1 if s.get('invert') else 0
+                                if s_roi and len(s_roi) >= 4:
+                                    psegs_encoded.append(f"{s_start:.2f}-{s_end:.2f}:{s_roi[0]:.3f}_{s_roi[1]:.3f}_{s_roi[2]:.3f}_{s_roi[3]:.3f}_{s_inv}")
+                                else:
+                                    psegs_encoded.append(f"{s_start:.2f}-{s_end:.2f}")
+                            spatial_tag += f"|psegs:{','.join(psegs_encoded)}"
+                    elif options.get('patch_roi'):
+                        rx1, ry1, rx2, ry2 = options['patch_roi']
+                        inv_bit = 1 if options.get('roi_invert') else 0
+                        if not options.get('optical_markers'):
+                            spatial_tag += f"|roi:{rx1:.3f}_{ry1:.3f}_{rx2:.3f}_{ry2:.3f}_{inv_bit}"
+                    if options.get('optical_markers'):
+                        plc = options.get('marker_placement', 'outside')[:3]
+                        inv_sfx = "_inv" if options.get('roi_invert') else ""
+                        spatial_tag += f"|opt_{plc}{inv_sfx}"
+                    if options.get('custom_audio_l') or options.get('custom_audio_r'):
+                        spatial_tag += "|ca"
                     if options['process_video'] and options['process_audio']:
-                        key = f"{options['cols']}x{options['rows']}|{sid}{patch_tag}"
+                        key = f"{options['cols']}x{options['rows']}|{sid}{patch_tag}{spatial_tag}"
                         if options.get('center'):
                             if options.get('center_size', '1/4') != '1/4':
                                 key += f"|c_{options['center_size']}"
@@ -238,7 +299,7 @@ class JobManager:
                         elif options['aud_track'] == 'right':
                             key += "|at_r"
                     elif options['process_audio']:
-                        key = f"|a|{sid}{patch_tag}"
+                        key = f"|a|{sid}{patch_tag}{spatial_tag}"
                         key += f"|{method_tag}"
                         key += f"|as_{options['aud_splits']}"
                         key += f"|cf_{options['carrier_freq']}"
@@ -249,7 +310,7 @@ class JobManager:
                         elif options['aud_track'] == 'right':
                             key += "|at_r"
                     else:
-                        key = f"{options['cols']}x{options['rows']}|{sid}{patch_tag}"
+                        key = f"{options['cols']}x{options['rows']}|{sid}{patch_tag}{spatial_tag}"
                         if options.get('center'):
                             if options.get('center_size', '1/4') != '1/4':
                                 key += f"|c_{options['center_size']}"
@@ -270,20 +331,34 @@ class JobManager:
                             self.status = "cancelled"
                             self.end_time = time.time()
                         return
+                    active_key = key
+                    generate_qr_enabled = form_data.get('generate_qr') in [True, 'true', 'True', '1']
+                    qr_filename = None
+                    qr_path = None
+                    if generate_qr_enabled:
+                        qr_filename = f"{os.path.splitext(os.path.basename(out_path))[0]}_qr.png"
+                        qr_path = os.path.join(self.encrypted_folder, qr_filename)
+                        try:
+                            generate_qr_code(active_key, qr_path)
+                        except Exception as e:
+                            print(f"Warning: QR generation skipped or failed: {e}")
                     save_key_enabled = form_data.get('save_key_file') in [True, 'true', 'True', '1', None]
                     key_path = None
                     if save_key_enabled:
-                        key_path = self.save_key_fn(os.path.basename(out_path), key)
+                        key_path = self.save_key_fn(os.path.basename(out_path), active_key)
                     with self.lock:
                         self.keys.append({
                             "name": display_name,
                             "file": display_name,
                             "out_file": os.path.basename(out_path),
-                            "key": key,
+                            "key": active_key,
+                            "canonical_key": key,
+                            "qr_file": qr_filename if (qr_path and os.path.exists(qr_path)) else None,
                             "path": out_path
                         })
                 elif action == "unscramble":
-                    raw_key = clean_key(form_data.get('key', ''))
+                    raw_input_key = form_data.get('key', '')
+                    raw_key, opt_payload = decompress_key(raw_input_key)
                     options.update({
                         'process_audio': False,
                         'process_video': False,
@@ -295,7 +370,8 @@ class JobManager:
                         'vol_factor': 1.0,
                         'dual_track': False,
                         'video_encrypt_mode': 'external',
-                        'aud_track': 'both'
+                        'aud_track': 'both',
+                        'optical_payload': opt_payload
                     })
                     def _parse_patch_tag(part_str):
                         content = part_str.split(':', 1)[1] if ':' in part_str else ""
@@ -393,6 +469,44 @@ class JobManager:
                                 options['carrier_freq'] = int(part[3:])
                             elif part.startswith('v_'):
                                 options['vol_factor'] = float(part[2:])
+                            elif part.startswith('psegs:'):
+                                p_content = part.split(':', 1)[1]
+                                psegs = []
+                                p_intervals = []
+                                for item in p_content.split(','):
+                                    item = item.strip()
+                                    if ':' in item:
+                                        t_part, r_part = item.split(':', 1)
+                                        s_s, s_e = map(float, t_part.split('-'))
+                                        r_coords = r_part.split('_')
+                                        r_box = [float(r_coords[0]), float(r_coords[1]), float(r_coords[2]), float(r_coords[3])]
+                                        r_inv = (r_coords[4] == '1') if len(r_coords) > 4 else False
+                                        psegs.append({"start": s_s, "end": s_e, "roi": r_box, "invert": r_inv})
+                                        p_intervals.append((s_s, s_e))
+                                    elif '-' in item:
+                                        s_s, s_e = map(float, item.split('-'))
+                                        p_intervals.append((s_s, s_e))
+                                        psegs.append({"start": s_s, "end": s_e})
+                                if psegs:
+                                    options['patch_segments'] = psegs
+                                if p_intervals:
+                                    options['patch_intervals'] = p_intervals
+                            elif part.startswith('roi:'):
+                                r_part = part.split(':', 1)[1]
+                                sep = '_' if '_' in r_part else ','
+                                r_coords = [c.strip() for c in r_part.split(sep) if c.strip()]
+                                if len(r_coords) >= 4:
+                                    options['patch_roi'] = [float(r_coords[0]), float(r_coords[1]), float(r_coords[2]), float(r_coords[3])]
+                                    if len(r_coords) > 4:
+                                        options['roi_invert'] = (r_coords[4] == '1')
+                            elif part.startswith('opt_'):
+                                options['optical_markers'] = True
+                                options['marker_placement'] = 'inside' if 'ins' in part else 'outside'
+                                if 'inv' in part:
+                                    options['roi_invert'] = True
+                            elif part == 'ca':
+                                options['custom_audio_l_enc'] = True
+                                options['custom_audio_r_enc'] = True
                     out_path = os.path.join(self.decrypted_folder, f"restored_{base_name}{out_ext}")
                     LiveDebugger.log("Start Process", f"Decrypting '{display_name}' -> '{out_path}' | Key: '{raw_key}'", level="INFO", module="JOB")
                     process_media(file_path, out_path, options, p_dict, task_id)
@@ -412,6 +526,17 @@ class JobManager:
                             "key": raw_key,
                             "path": out_path
                         })
+                        base_d, ext_d = os.path.splitext(out_path)
+                        c_path = f"{base_d}_center{ext_d}"
+                        if os.path.exists(c_path):
+                            c_out_file = os.path.basename(c_path)
+                            self.keys.append({
+                                "name": f"{display_name} (Center)",
+                                "file": f"{display_name} (Center)",
+                                "out_file": c_out_file,
+                                "key": raw_key,
+                                "path": c_path
+                            })
                 with self.lock:
                     self.progress = 100
             except Exception as e:
