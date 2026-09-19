@@ -302,6 +302,11 @@ async function selectVaultFileDirectly(filename, mediaType, isCenter, folder = '
             selectedVaultMedia.decryptFolder = folder;
             const dList = document.getElementById('decryptFileList');
             if (dList) dList.innerHTML = `<span class="badge" style="background:${folderColor}; color:#fff;">📁 Vault [${folderLabel}]: ${filename}</span>`;
+        } else if (mediaType === 'track_l_custom' || mediaType === 'track_r_custom') {
+            const channel = mediaType === 'track_l_custom' ? 'L' : 'R';
+            if (typeof setCustomTrackVault === 'function') {
+                setCustomTrackVault(channel, filename, folder);
+            }
         }
     } catch (e) {
         console.error("Failed to select vault file:", e);

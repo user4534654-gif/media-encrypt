@@ -3,12 +3,18 @@ let activePreviewTarget = 'external';
 let durBg = 10;      
 let durCenter = 3;   
 function initVisualPreview() {
-    const centerSizeSelect = document.getElementById('center_size') || document.getElementById('img_center_size');
-    if (centerSizeSelect) {
-        centerSizeSelect.addEventListener('change', function() {
-            updateCenterOverlaySize(this.value);
-        });
-    }
+    ['center_size', 'img_center_size'].forEach(id => {
+        const slider = document.getElementById(id);
+        if (slider) {
+            slider.addEventListener('input', function() {
+                updateCenterOverlaySize(this.value);
+            });
+            slider.addEventListener('change', function() {
+                updateCenterOverlaySize(this.value);
+            });
+        }
+    });
+    syncCenterSizeControls();
     const videoEncModeSelect = document.getElementById('video_encrypt_mode') || document.getElementById('img_video_encrypt_mode');
     if (videoEncModeSelect) {
         videoEncModeSelect.addEventListener('change', function() {
@@ -92,17 +98,55 @@ function selectPreviewTarget(target, event) {
         }
     }
 }
+function normalizeCenterValueJS(val) {
+    let n = 1.0;
+    if (typeof val === 'number' && isFinite(val)) {
+        n = val;
+    } else if (typeof val === 'string') {
+        const s = val.trim();
+        if (s.indexOf('/') !== -1) {
+            const parts = s.split('/');
+            const a = parseFloat(parts[0]);
+            const b = parseFloat(parts[1]);
+            if (isFinite(a) && isFinite(b) && b !== 0) n = (a / b) * 4.0;
+        } else {
+            const f = parseFloat(s);
+            if (isFinite(f)) n = f;
+        }
+    }
+    if (!isFinite(n)) n = 1.0;
+    return Math.max(1, Math.min(3, n));
+}
+function centerValueToLinearPct(val) {
+    const n = normalizeCenterValueJS(val);
+    return Math.sqrt(n / 4.0) * 100.0;
+}
 function updateCenterOverlaySize(val) {
     const centerBox = document.getElementById('previewCenterBox');
-    if (!centerBox) return;
-    centerBox.classList.remove('size-1-4', 'size-2-4', 'size-3-4');
-    if (val === '2/4') {
-        centerBox.classList.add('size-2-4');
-    } else if (val === '3/4') {
-        centerBox.classList.add('size-3-4');
-    } else {
-        centerBox.classList.add('size-1-4');
+    if (centerBox) {
+        const pct = centerValueToLinearPct(val).toFixed(2);
+        centerBox.classList.remove('size-1-4', 'size-2-4', 'size-3-4');
+        centerBox.style.width = pct + '%';
+        centerBox.style.height = pct + '%';
     }
+    const n = normalizeCenterValueJS(val);
+    const badge = document.getElementById('centerSizeVal');
+    if (badge) badge.innerText = n.toFixed(2);
+    const imgBadge = document.getElementById('imgCenterSizeVal');
+    if (imgBadge) imgBadge.innerText = n.toFixed(2);
+}
+function onCenterSizeSlider(val, isImage) {
+    const slider = document.getElementById(isImage ? 'img_center_size' : 'center_size');
+    if (slider && slider.value !== String(val)) slider.value = val;
+    updateCenterOverlaySize(val);
+}
+function syncCenterSizeControls() {
+    ['center_size', 'img_center_size'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = normalizeCenterValueJS(el.value);
+    });
+    const active = document.getElementById('center_size') || document.getElementById('img_center_size');
+    if (active) updateCenterOverlaySize(active.value);
 }
 function syncEncBadgesFromMode(mode) {
     const bgBadge = document.getElementById('bgEncStatusBadge');
@@ -127,14 +171,18 @@ function syncEncBadgesFromMode(mode) {
 }
 let customTrackLFile = null;
 let customTrackRFile = null;
+let customTrackLVault = null; 
+let customTrackRVault = null;
 function onCustomTrackFileSelected(channel, file) {
     if (!file) return;
     if (channel === 'L') {
         customTrackLFile = file;
+        customTrackLVault = null;
         const nameElem = document.getElementById('trackLCustomName');
         if (nameElem) nameElem.innerText = `(${file.name})`;
     } else {
         customTrackRFile = file;
+        customTrackRVault = null;
         const nameElem = document.getElementById('trackRCustomName');
         if (nameElem) nameElem.innerText = `(${file.name})`;
     }
@@ -144,6 +192,22 @@ function onCustomTrackFileSelected(channel, file) {
         }
     });
 }
+function setCustomTrackVault(channel, filename, folder) {
+    const nameElem = document.getElementById(channel === 'L' ? 'trackLCustomName' : 'trackRCustomName');
+    if (channel === 'L') {
+        customTrackLVault = { name: filename, folder: folder || 'input' };
+        customTrackLFile = null;
+        const fileInput = document.getElementById('trackLCustomFile');
+        if (fileInput) fileInput.value = '';
+    } else {
+        customTrackRVault = { name: filename, folder: folder || 'input' };
+        customTrackRFile = null;
+        const fileInput = document.getElementById('trackRCustomFile');
+        if (fileInput) fileInput.value = '';
+    }
+    if (nameElem) nameElem.innerText = `📁 Vault [${folder || 'input'}]: ${filename}`;
+    updateTimelineVisualization();
+}
 function getCustomAudioFiles() {
     const srcL = document.getElementById('trackLSourceSelect') ? document.getElementById('trackLSourceSelect').value : '';
     const srcR = document.getElementById('trackRSourceSelect') ? document.getElementById('trackRSourceSelect').value : '';
@@ -152,6 +216,10 @@ function getCustomAudioFiles() {
     return {
         fileL: (srcL === 'custom') ? customTrackLFile : null,
         fileR: (srcR === 'custom') ? customTrackRFile : null,
+        vaultL: (srcL === 'custom') ? customTrackLVault : null,
+        vaultR: (srcR === 'custom') ? customTrackRVault : null,
+        srcL: srcL,
+        srcR: srcR,
         encL: encL,
         encR: encR
     };

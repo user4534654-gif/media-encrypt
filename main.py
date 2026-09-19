@@ -19,6 +19,7 @@ import requests
 from PIL import Image
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response, send_file
 from core.crypto import clean_key, hash_str
+from core.grid_utils import format_center_key
 from core.pipeline import process_media
 from core.metadata_prober import probe_media_file
 from core.metadata import load_project_metadata
@@ -483,6 +484,15 @@ def process_api():
             'outer_end_action': request.form.get('outer_end_action', 'stop'),
             'spatial_compression_mode': request.form.get('spatial_compression_mode', 'off'),
         }
+        for _ch in ('l', 'r'):
+            _src = request.form.get(f'track_{_ch}_source')
+            if _src in ('background', 'center', 'custom'):
+                options[f'track_{_ch}_source'] = _src
+            _enc = request.form.get(f'track_{_ch}_enc',
+                     request.form.get(f'custom_audio_{_ch}_enc',
+                     request.form.get(f'enc_custom_{_ch}', 'true')))
+            options[f'track_{_ch}_enc'] = str(_enc).lower() not in ('false', '0', 'no', 'off')
+            options[f'custom_audio_{_ch}_enc'] = options[f'track_{_ch}_enc']
         options = resolve_auto_quality(path, options)
         fn_lower = filename.lower()
         if fn_lower.endswith(('.jpg', '.png', '.jpeg', '.bmp', '.webp', '.avif')):
@@ -529,6 +539,20 @@ def process_api():
                     if os.path.exists(center_path):
                         options['center'] = True
                         options['center_path'] = center_path
+            for _ch in ('l', 'r'):
+                _up_key = f'custom_audio_{_ch}'
+                if _up_key in request.files and request.files[_up_key].filename:
+                    _up = request.files[_up_key]
+                    _cp = os.path.join(INPUT_FOLDER, f"audio_{_ch}_{os.path.basename(_up.filename)}")
+                    _up.save(_cp)
+                    options[_up_key] = _cp
+                elif request.form.get(f'{_up_key}_vault'):
+                    _vn = os.path.basename(request.form.get(f'{_up_key}_vault'))
+                    for _fld in (INPUT_FOLDER, ENCRYPTED_FOLDER, DECRYPTED_FOLDER):
+                        _cand = os.path.join(_fld, _vn)
+                        if os.path.exists(_cand):
+                            options[_up_key] = _cand
+                            break
             method_tag = 'ainv'
             if options['aud_method'] == 'band_scramble':
                 method_tag = 'abs'
@@ -537,10 +561,7 @@ def process_api():
             if options['process_video'] and options['process_audio']:
                 key = f"{options['cols']}x{options['rows']}|{sid}"
                 if options.get('center'):
-                    if options.get('center_size', '1/4') != '1/4':
-                        key += f"|c_{options['center_size']}"
-                    else:
-                        key += "|c"
+                    key += format_center_key(options.get('center_size', '1/4'))
                 if options['video_encrypt_mode'] == 'center':
                     key += "|em_cnt"
                 elif options['video_encrypt_mode'] == 'both':
@@ -551,6 +572,17 @@ def process_api():
                 key += f"|cf_{options['carrier_freq']}"
                 if options.get('dual_track'):
                     key += "|dm"
+                _routed_key = bool(options.get('custom_audio_l') or options.get('custom_audio_r'))
+                if not _routed_key:
+                    _el = options.get('track_l_source', 'background')
+                    _er = options.get('track_r_source', 'background')
+                    _routed_key = (_el != 'background' or _er != 'center')
+                if _routed_key:
+                    key += "|ca"
+                    if not options.get('track_l_enc', True):
+                        key += "|cal0"
+                    if not options.get('track_r_enc', True):
+                        key += "|car0"
                 if options.get('vol_factor', 1.0) != 1.0:
                     key += f"|v_{options['vol_factor']}"
                 if options['aud_track'] == 'left':
@@ -571,10 +603,7 @@ def process_api():
             else:
                 key = f"{options['cols']}x{options['rows']}|{sid}"
                 if options.get('center'):
-                    if options.get('center_size', '1/4') != '1/4':
-                        key += f"|c_{options['center_size']}"
-                    else:
-                        key += "|c"
+                    key += format_center_key(options.get('center_size', '1/4'))
                 if options['video_encrypt_mode'] == 'center':
                     key += "|em_cnt"
                 elif options['video_encrypt_mode'] == 'both':
@@ -600,7 +629,10 @@ def process_api():
                 'vol_factor': 1.0,
                 'dual_track': False,
                 'video_encrypt_mode': 'external',
-                'aud_track': 'both'
+                'aud_track': 'both',
+                'has_custom_audio': False,
+                'track_l_enc': True,
+                'track_r_enc': True
             })
             if raw_key.startswith("|a"):
                 options['process_audio'] = True
@@ -648,6 +680,14 @@ def process_api():
                         options['center_size'] = part[2:]
                     elif part == 'dm':
                         options['dual_track'] = True
+                    elif part == 'ca':
+                        options['has_custom_audio'] = True
+                    elif part == 'cal0':
+                        options['has_custom_audio'] = True
+                        options['track_l_enc'] = False
+                    elif part == 'car0':
+                        options['has_custom_audio'] = True
+                        options['track_r_enc'] = False
                     elif part == 'em_ext':
                         options['video_encrypt_mode'] = 'external'
                     elif part == 'em_cnt':

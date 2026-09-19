@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import os
 from core.crypto import seeded_shuffle, stamp_optical_markers, restore_optical_markers, detect_optical_markers, inpaint_optical_markers
-from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks, get_roi_blocks
+from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks, get_roi_blocks, center_inner_grid
 from core.logger import LiveDebugger
 def save_image(path, img):
     base_p, ext = os.path.splitext(path)
@@ -145,14 +145,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             shuffled_outer = seeded_shuffle(list(outer_indices), seed)
             cw = cx2 - cx1
             ch = cy2 - cy1
-            if center_size == '2/4':
-                s = 0.7071
-            elif center_size == '3/4':
-                s = 0.866
-            else:
-                s = 0.5
-            cols_inner = max(1, min(cols - 1, int(cols * s)))
-            rows_inner = max(1, min(rows - 1, int(rows * s)))
+            cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
             center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
             dest_to_src_center = {idx: idx for idx in range(cols_inner * rows_inner)}
             shuffled_center = seeded_shuffle(list(range(cols_inner * rows_inner)), seed)

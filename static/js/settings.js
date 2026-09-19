@@ -56,6 +56,10 @@ function saveAllSettings() {
         v_aud_splits: document.getElementById('v_aud_splits') ? document.getElementById('v_aud_splits').value : '10',
         vol_factor: document.getElementById('vol_factor_slider') ? document.getElementById('vol_factor_slider').value : '100',
         dual_track: document.getElementById('dual_track') ? document.getElementById('dual_track').checked : false,
+        track_l_source: document.getElementById('trackLSourceSelect') ? document.getElementById('trackLSourceSelect').value : 'background',
+        track_r_source: document.getElementById('trackRSourceSelect') ? document.getElementById('trackRSourceSelect').value : 'center',
+        track_l_enc: document.getElementById('trackLEncCheckbox') ? document.getElementById('trackLEncCheckbox').checked : true,
+        track_r_enc: document.getElementById('trackREncCheckbox') ? document.getElementById('trackREncCheckbox').checked : true,
         center_size: document.getElementById('center_size') ? document.getElementById('center_size').value : '1/4',
         img_center_size: document.getElementById('img_center_size') ? document.getElementById('img_center_size').value : '1/4',
         outer_end_action: document.getElementById('outer_end_action') ? document.getElementById('outer_end_action').value : 'stop',
@@ -185,8 +189,19 @@ function loadAllSettings() {
             if (volLabel) volLabel.innerText = 'Volume Factor: ' + settings.vol_factor + '%';
         }
         setChecked('dual_track', settings.dual_track || false);
+        if (settings.track_l_source) setVal('trackLSourceSelect', settings.track_l_source);
+        if (settings.track_r_source) setVal('trackRSourceSelect', settings.track_r_source);
+        if (settings.track_l_enc !== undefined) setChecked('trackLEncCheckbox', settings.track_l_enc);
+        if (settings.track_r_enc !== undefined) setChecked('trackREncCheckbox', settings.track_r_enc);
+        if (typeof updateTrackRouting === 'function') {
+            const _sl = document.getElementById('trackLSourceSelect');
+            const _sr = document.getElementById('trackRSourceSelect');
+            if (_sl) updateTrackRouting('L', _sl.value);
+            if (_sr) updateTrackRouting('R', _sr.value);
+        }
         setVal('center_size', settings.center_size || '1/4');
         setVal('img_center_size', settings.img_center_size || '1/4');
+        if (typeof syncCenterSizeControls === 'function') syncCenterSizeControls();
         setVal('outer_end_action', settings.outer_end_action || 'stop');
         setVal('center_end_action', settings.center_end_action || 'loop');
         setVal('center_aud_action', settings.center_aud_action || 'silence');
@@ -209,7 +224,7 @@ function initAutoSave() {
         'a_sr_slider', 'a_sr_auto', 'a_codec', 'a_bit_slider', 'a_bit_auto', 'cols', 'rows', 'sid', 'aspectLock', 'noScale', 'resW', 'resH',
         'img_cols', 'img_rows', 'img_sid', 'carrier_freq_slider', 'audio_sr_slider', 'audio_sr_auto', 'audio_codec',
         'audio_bit_slider', 'audio_bit_auto', 'audio_fmt', 'decKey', 'aud_method', 'aud_splits', 'aud_seed', 'aud_vol_factor_slider',
-        'v_aud_method', 'v_aud_splits', 'vol_factor_slider', 'dual_track', 'center_size', 'img_center_size',
+        'v_aud_method', 'v_aud_splits', 'vol_factor_slider', 'dual_track', 'trackLSourceSelect', 'trackRSourceSelect', 'trackLEncCheckbox', 'trackREncCheckbox', 'center_size', 'img_center_size',
         'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg', 'useGpu', 'saveKeyFile', 'imgSaveKeyFile', 'audSaveKeyFile'
     ];
     inputs.forEach(id => {

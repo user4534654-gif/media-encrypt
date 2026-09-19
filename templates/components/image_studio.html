@@ -52,12 +52,12 @@
                 </div>
             </div>
             {% include 'components/visual_canvas.html' %}
-            <label class="ios-label" style="margin-top: 10px;">Central Overlay Size</label>
-            <select id="img_center_size" class="ios-select">
-                <option value="1/4" selected>1/4 (Default)</option>
-                <option value="2/4">2/4 (Half Space)</option>
-                <option value="3/4">3/4 (Most Space)</option>
-            </select>
+            <label class="ios-label" style="margin-top: 10px;">Central Overlay Size <span id="imgCenterSizeVal" style="font-weight: 700; color: #007aff;">1.00</span></label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 11px; color: #888;">1</span>
+                <input type="range" id="img_center_size" min="1" max="3" step="0.01" value="1" style="flex: 1; accent-color: #007aff;" oninput="onCenterSizeSlider(this.value, true)">
+                <span style="font-size: 11px; color: #888;">3</span>
+            </div>
             <label class="ios-label" style="margin-top: 10px;">Image Encryption Target</label>
             <select id="img_video_encrypt_mode" class="ios-select">
                 <option value="external" selected>External Image (Background) Only</option>

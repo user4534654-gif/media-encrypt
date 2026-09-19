@@ -1,4 +1,4 @@
-from core.grid_utils import get_blocks, get_outer_blocks, find_best_grid
+from core.grid_utils import get_blocks, get_outer_blocks, find_best_grid, center_inner_grid
 from core.crypto import seeded_shuffle
 import os
 def export_grid_to_svg(output_svg_path, w, h, cols, rows, has_center=False, center_size='1/4'):
@@ -18,14 +18,7 @@ def export_grid_to_svg(output_svg_path, w, h, cols, rows, has_center=False, cent
             svg_lines.append(f'  <rect x="{x1}" y="{y1}" width="{bw}" height="{bh}" fill="none" stroke="blue" stroke-width="1.5" />')
         cw = cx2 - cx1
         ch = cy2 - cy1
-        if center_size == '2/4':
-            s = 0.7071
-        elif center_size == '3/4':
-            s = 0.866
-        else:
-            s = 0.5
-        cols_inner = max(1, min(cols - 1, int(cols * s)))
-        rows_inner = max(1, min(rows - 1, int(rows * s)))
+        cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
         center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
         svg_lines.append('  <!-- Video 2 (Center Overlay) - Red -->')
         svg_lines.append(f'  <rect x="{cx1}" y="{cy1}" width="{cw}" height="{ch}" fill="none" stroke="red" stroke-width="3" />')
@@ -62,14 +55,7 @@ def export_scrambled_grid_to_svg(output_svg_path, w, h, cols, rows, seed, has_ce
         shuffled_outer = seeded_shuffle(list(outer_indices), seed)
         cw = cx2 - cx1
         ch = cy2 - cy1
-        if center_size == '2/4':
-            s = 0.7071
-        elif center_size == '3/4':
-            s = 0.866
-        else:
-            s = 0.5
-        cols_inner = max(1, min(cols - 1, int(cols * s)))
-        rows_inner = max(1, min(rows - 1, int(rows * s)))
+        cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
         center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
         shuffled_center = seeded_shuffle(list(range(cols_inner * rows_inner)), seed)
         for j in range(N_outer):

@@ -234,6 +234,16 @@
     color: #ff3b30;
     background: rgba(255, 59, 48, 0.06);
 }
+.track-source-select.custom-source {
+    border-color: #9b59b6;
+    color: #8e44ad;
+    background: rgba(155, 89, 182, 0.08);
+}
+.channel-badge.custom-badge {
+    background: rgba(155, 89, 182, 0.15);
+    color: #8e44ad;
+    border: 1px solid rgba(155, 89, 182, 0.3);
+}
 .track-method-badge {
     font-size: 9px;
     font-weight: 700;

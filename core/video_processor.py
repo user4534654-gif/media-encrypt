@@ -10,7 +10,7 @@ if sys.platform == "win32":
     creation_flags = subprocess.CREATE_NO_WINDOW
 from core.crypto import seeded_shuffle, stamp_optical_markers, restore_optical_markers, detect_optical_markers, detect_all_optical_markers, inpaint_optical_markers, check_marker_presence, _calculate_marker_boxes
 from core.audio import process_audio_file
-from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks, get_roi_blocks
+from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks, get_roi_blocks, center_inner_grid
 from core.svg_generator import export_grid_to_svg, export_scrambled_grid_to_svg
 from core.tempdir import get_temp_file_path
 from core.logger import LiveDebugger
@@ -105,6 +105,24 @@ def _load_or_extract_audio_channel(file_path, target_sr, ffmpeg_exe, creation_fl
             except Exception:
                 pass
     return None
+def _probe_audio_duration_sec(file_path):
+    if not file_path or not os.path.exists(file_path):
+        return 0.0
+    try:
+        from core.metadata_prober import probe_media_file
+        dur = probe_media_file(file_path).get('duration_sec')
+        return float(dur) if dur else 0.0
+    except Exception:
+        return 0.0
+def _extract_center_mono(center_path, target_sr, ffmpeg_exe, creation_flags, target_len, vol=1.0, loop_action='silence'):
+    import soundfile as sf
+    data = _load_or_extract_audio_channel(center_path, target_sr, ffmpeg_exe, creation_flags)
+    if data is None:
+        return None
+    data = _adjust_audio_length(data, target_len, loop_action)
+    if vol != 1.0:
+        data = data * vol
+    return data
 def _close_ffmpeg_proc(p, name="FFmpeg"):
     if p is None:
         return
@@ -251,14 +269,7 @@ def _zone_nested_geometry(zw, zh, cols, rows, center_size, seed):
     all_blocks_zone = get_blocks(zw, zh, cols, rows)
     src_blocks_outer_zone = get_blocks(zw, zh, c1, r1)
     shuffled_outer = seeded_shuffle(list(outer_indices), seed)
-    if center_size == '2/4':
-        s = 0.7071
-    elif center_size == '3/4':
-        s = 0.866
-    else:
-        s = 0.5
-    cols_inner = max(1, min(cols - 1, int(cols * s)))
-    rows_inner = max(1, min(rows - 1, int(rows * s)))
+    cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
     cw, ch = max(2, cx2 - cx1), max(2, cy2 - cy1)
     center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
     shuffled_center = seeded_shuffle(list(range(cols_inner * rows_inner)), seed)
@@ -370,6 +381,29 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     has_audio = subprocess.run([ffmpeg_exe, '-y', '-i', input_path, '-vn', temp_aud], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags).returncode == 0
     if has_audio and not os.path.exists(temp_aud):
         has_audio = False
+    _custom_l_path = options.get('custom_audio_l')
+    _custom_r_path = options.get('custom_audio_r')
+    _has_custom_audio = bool(_custom_l_path or _custom_r_path)
+    _wants_routed_audio = bool(
+        options.get('track_l_source') in ('background', 'center', 'custom')
+        or options.get('track_r_source') in ('background', 'center', 'custom'))
+    if proc_aud and not reverse and not has_audio and (_has_custom_audio or (
+            options.get('center') and options.get('center_path') and (
+                options.get('dual_track') or (
+                    _wants_routed_audio and (
+                        (options.get('track_l_source') or 'background') != 'background'
+                        or (options.get('track_r_source') or 'background') != 'center'))))):
+        _synth_dur = max(1.0, _probe_audio_duration_sec(input_path),
+                         _probe_audio_duration_sec(options.get('center_path')),
+                         _probe_audio_duration_sec(_custom_l_path),
+                         _probe_audio_duration_sec(_custom_r_path))
+        try:
+            import soundfile as _sf
+            _sf.write(temp_aud, np.zeros(int(round(_synth_dur * 48000)), dtype=np.float32), 48000)
+            has_audio = True
+            LiveDebugger.log("AUD_SYNTH_SILENCE", f"Background '{os.path.basename(input_path)}' has no audio; synthesized {_synth_dur:.2f}s silent base so center/custom tracks are preserved.", level="INFO", module="AUDIO")
+        except Exception as e:
+            LiveDebugger.log("AUD_SYNTH_ERR", f"Failed to synthesize silent audio base: {e}", level="WARNING", module="AUDIO")
     if has_audio and proc_aud:
         import soundfile as sf
         main_sr = 48000
@@ -379,59 +413,95 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         except Exception as e:
             LiveDebugger.log("AUDIO_SR_WARN", f"Failed to read main audio sample rate: {e}", level="WARNING", module="VIDEO")
         has_custom_audio = bool(options.get('custom_audio_l') or options.get('custom_audio_r'))
-        if not reverse and has_custom_audio:
+        _tl0 = options.get('track_l_source')
+        _tr0 = options.get('track_r_source')
+        _explicit_routing = bool(
+            _tl0 in ('background', 'center', 'custom')
+            or _tr0 in ('background', 'center', 'custom'))
+        _nondefault_routing = bool(
+            (_tl0 or 'background') != 'background' or (_tr0 or 'background') != 'center')
+        if not reverse and (has_custom_audio or (_explicit_routing and _nondefault_routing)):
             main_data = None
             if os.path.exists(temp_aud):
                 try:
                     main_data, _ = sf.read(temp_aud)
                 except Exception:
                     main_data = None
-            dur_sec = max(1.0, float(output_total_frames if 'output_total_frames' in locals() else total_frames) / max(1.0, float(fps)))
-            target_samples = int(round(dur_sec * main_sr))
-            data_l = None
-            if options.get('custom_audio_l'):
-                data_l = _load_or_extract_audio_channel(options['custom_audio_l'], main_sr, ffmpeg_exe, creation_flags)
-            if data_l is None:
-                if main_data is not None:
-                    data_l = main_data[:, 0] if len(main_data.shape) > 1 else main_data
-                else:
-                    data_l = np.zeros(target_samples, dtype=np.float32)
-            data_l = _adjust_audio_length(data_l, target_samples, action=options.get('track_l_action', 'loop'))
-            data_r = None
-            if options.get('custom_audio_r'):
-                data_r = _load_or_extract_audio_channel(options['custom_audio_r'], main_sr, ffmpeg_exe, creation_flags)
-            if data_r is None:
-                if main_data is not None:
-                    data_r = main_data[:, 1] if (len(main_data.shape) > 1 and main_data.shape[1] > 1) else (main_data[:, 0] if len(main_data.shape) > 1 else main_data)
-                else:
-                    data_r = data_l.copy()
-            data_r = _adjust_audio_length(data_r, target_samples, action=options.get('track_r_action', 'loop'))
-            enc_l = options.get('custom_audio_l_enc', True)
-            enc_r = options.get('custom_audio_r_enc', True)
+            _dur = max(1.0, _probe_audio_duration_sec(input_path),
+                       _probe_audio_duration_sec(options.get('center_path')),
+                       _probe_audio_duration_sec(options.get('custom_audio_l')),
+                       _probe_audio_duration_sec(options.get('custom_audio_r')))
+            target_samples = int(round(_dur * main_sr))
+            _center_path = options.get('center_path')
+            def _eff_source(which, custom_path):
+                v = options.get(f'track_{which}_source')
+                if v in ('background', 'center', 'custom'):
+                    return v
+                if custom_path and os.path.exists(custom_path):
+                    return 'custom'
+                return 'background'
+            src_l = _eff_source('l', options.get('custom_audio_l'))
+            src_r = _eff_source('r', options.get('custom_audio_r'))
+            center_mono = None
+            if (src_l == 'center' or src_r == 'center') and _center_path and os.path.exists(_center_path):
+                center_mono = _extract_center_mono(
+                    _center_path, main_sr, ffmpeg_exe, creation_flags,
+                    target_samples, vol=1.0, loop_action=center_aud_action)
+                if center_mono is None:
+                    LiveDebugger.log("AUD_CENTER_MISSING", f"Channel source 'center' selected but '{os.path.basename(_center_path)}' has no audio; using silence.", level="WARNING", module="AUDIO")
+            def _resolve_channel(which, src, custom_path, main_idx, vol, length_action):
+                data = None
+                if src == 'custom' and custom_path and os.path.exists(custom_path):
+                    data = _load_or_extract_audio_channel(custom_path, main_sr, ffmpeg_exe, creation_flags)
+                    if data is None:
+                        LiveDebugger.log("AUD_CUSTOM_MISSING", f"Custom {which.upper()} audio unreadable; falling back.", level="WARNING", module="AUDIO")
+                if data is None and src == 'center' and center_mono is not None:
+                    data = center_mono
+                if data is None and main_data is not None:
+                    if len(main_data.shape) > 1:
+                        data = main_data[:, main_idx] if main_data.shape[1] > main_idx else main_data[:, 0]
+                    else:
+                        data = main_data
+                if data is None:
+                    data = np.zeros(target_samples, dtype=np.float32)
+                data = _adjust_audio_length(data, target_samples, action=length_action)
+                if vol != 1.0:
+                    data = data * vol
+                return data
+            vol_bg = options.get('vol_factor_bg', options.get('vol_factor', 1.0))
+            vol_center = options.get('vol_factor_center', 1.0)
+            vol_cus = options.get('vol_factor', 1.0)
+            _vol_for = {'background': vol_bg, 'center': vol_center, 'custom': vol_cus}
+            data_l = _resolve_channel('l', src_l, options.get('custom_audio_l'), 0,
+                                      _vol_for.get(src_l, 1.0), options.get('track_l_action', 'loop'))
+            data_r = _resolve_channel('r', src_r, options.get('custom_audio_r'), 1,
+                                      _vol_for.get(src_r, 1.0), options.get('track_r_action', 'loop'))
+            enc_l = options.get('track_l_enc', options.get('custom_audio_l_enc', True))
+            enc_r = options.get('track_r_enc', options.get('custom_audio_r_enc', True))
+            if enc_l not in (True, False):
+                enc_l = str(enc_l).lower() not in ('false', '0', 'no', 'off')
+            if enc_r not in (True, False):
+                enc_r = str(enc_r).lower() not in ('false', '0', 'no', 'off')
+            def _enc_channel(data, tmp_name):
+                tmp_p = get_temp_file_path(tmp_name)
+                sf.write(tmp_p, data, main_sr)
+                process_audio_file(tmp_p, tmp_p, is_decrypt=False, method=options.get('aud_method', 'inversion'),
+                                   key=options.get('aud_key', 42), num_splits=options.get('aud_splits', 10),
+                                   carrier_freq=carrier_freq, vol_factor=1.0,
+                                   aud_track='both', patch_intervals=patch_intervals)
+                out, _ = sf.read(tmp_p)
+                if len(out.shape) > 1:
+                    out = out[:, 0]
+                if os.path.exists(tmp_p):
+                    try:
+                        os.remove(tmp_p)
+                    except Exception:
+                        pass
+                return out
             if enc_l:
-                tmp_l = get_temp_file_path("track_l_proc.wav")
-                sf.write(tmp_l, data_l, main_sr)
-                process_audio_file(tmp_l, tmp_l, is_decrypt=False, method=options.get('aud_method', 'inversion'),
-                                   key=options.get('aud_key', 42), num_splits=options.get('aud_splits', 10),
-                                   carrier_freq=carrier_freq, vol_factor=options.get('vol_factor', 1.0),
-                                   aud_track='both', patch_intervals=patch_intervals)
-                data_l, _ = sf.read(tmp_l)
-                if len(data_l.shape) > 1: data_l = data_l[:, 0]
-                if os.path.exists(tmp_l):
-                    try: os.remove(tmp_l)
-                    except Exception: pass
+                data_l = _enc_channel(data_l, "track_l_proc.wav")
             if enc_r:
-                tmp_r = get_temp_file_path("track_r_proc.wav")
-                sf.write(tmp_r, data_r, main_sr)
-                process_audio_file(tmp_r, tmp_r, is_decrypt=False, method=options.get('aud_method', 'inversion'),
-                                   key=options.get('aud_key', 42), num_splits=options.get('aud_splits', 10),
-                                   carrier_freq=carrier_freq, vol_factor=options.get('vol_factor', 1.0),
-                                   aud_track='both', patch_intervals=patch_intervals)
-                data_r, _ = sf.read(tmp_r)
-                if len(data_r.shape) > 1: data_r = data_r[:, 0]
-                if os.path.exists(tmp_r):
-                    try: os.remove(tmp_r)
-                    except Exception: pass
+                data_r = _enc_channel(data_r, "track_r_proc.wav")
             stereo_data = np.vstack((data_l, data_r)).T
             sf.write(temp_aud, stereo_data, main_sr)
         elif not reverse and options.get('center') and options.get('dual_track'):
@@ -463,40 +533,78 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 center_data = np.zeros_like(main_data)
             stereo_data = np.vstack((main_data, center_data)).T
             sf.write(temp_aud, stereo_data, main_sr)
-        elif reverse and options.get('dual_track'):
-            stereo_data, sr = sf.read(temp_aud)
-            if len(stereo_data.shape) > 1 and stereo_data.shape[1] > 1:
-                left_data  = stereo_data[:, 0]
-                right_data = stereo_data[:, 1]
-                sf.write(temp_center_aud_out, right_data, sr)
+        elif reverse and (options.get('dual_track') or options.get('has_custom_audio')):
+            if not os.path.exists(temp_aud):
+                LiveDebugger.log("AUD_DEC_MISSING", "Encrypted audio track missing; skipping audio decrypt.", level="WARNING", module="AUDIO")
             else:
-                left_data = stereo_data
-            sf.write(temp_aud, left_data, sr)
-            process_audio_file(
-                temp_aud, temp_aud, is_decrypt=True,
-                method=options.get('aud_method', 'inversion'),
-                key=options.get('aud_key', 42),
-                num_splits=options.get('aud_splits', 10),
-                carrier_freq=carrier_freq,
-                vol_factor=options.get('vol_factor', 1.0),
-                aud_track='both',                                         
-                patch_intervals=patch_intervals
-            )
-            dec_data, dec_sr = sf.read(temp_aud)
-            if len(dec_data.shape) == 1:
-                dec_stereo = np.vstack((dec_data, dec_data)).T
-                sf.write(temp_aud, dec_stereo, dec_sr)
+                stereo_data, sr = sf.read(temp_aud)
+                if len(stereo_data.shape) > 1 and stereo_data.shape[1] > 1:
+                    left_data = stereo_data[:, 0]
+                    right_data = stereo_data[:, 1]
+                else:
+                    left_data = stereo_data[:, 0] if len(stereo_data.shape) > 1 else stereo_data
+                    right_data = None
+                use_custom = bool(options.get('has_custom_audio'))
+                dec_l = options.get('track_l_enc', True) if use_custom else True
+                dec_r = options.get('track_r_enc', True) if use_custom else False
+                if dec_l not in (True, False):
+                    dec_l = str(dec_l).lower() not in ('false', '0', 'no', 'off')
+                if dec_r not in (True, False):
+                    dec_r = str(dec_r).lower() not in ('false', '0', 'no', 'off')
+                def _dec_channel(data, tmp_name):
+                    tmp_p = get_temp_file_path(tmp_name)
+                    sf.write(tmp_p, data, sr)
+                    process_audio_file(
+                        tmp_p, tmp_p, is_decrypt=True,
+                        method=options.get('aud_method', 'inversion'),
+                        key=options.get('aud_key', 42),
+                        num_splits=options.get('aud_splits', 10),
+                        carrier_freq=carrier_freq,
+                        vol_factor=options.get('vol_factor', 1.0),
+                        aud_track='both',
+                        patch_intervals=patch_intervals
+                    )
+                    out, _ = sf.read(tmp_p)
+                    if len(out.shape) > 1:
+                        out = out[:, 0]
+                    if os.path.exists(tmp_p):
+                        try:
+                            os.remove(tmp_p)
+                        except Exception:
+                            pass
+                    return out
+                if dec_l:
+                    left_data = _dec_channel(left_data, "track_l_dec.wav")
+                sf.write(temp_aud, left_data, sr)
+                if right_data is not None:
+                    if dec_r:
+                        right_data = _dec_channel(right_data, "track_r_dec.wav")
+                    _rc = right_data if len(right_data.shape) == 1 else right_data[:, 0]
+                    sf.write(temp_center_aud_out, _rc, sr)
+                if not options.get('center'):
+                    if right_data is not None:
+                        _rd = right_data if len(right_data.shape) == 1 else right_data[:, 0]
+                        _n = min(len(left_data), len(_rd))
+                        sf.write(temp_aud, np.vstack((left_data[:_n], _rd[:_n])).T, sr)
+                else:
+                    dec_data, dec_sr = sf.read(temp_aud)
+                    if len(dec_data.shape) == 1:
+                        dec_stereo = np.vstack((dec_data, dec_data)).T
+                        sf.write(temp_aud, dec_stereo, dec_sr)
         else:
-            process_audio_file(
-                temp_aud, temp_aud, is_decrypt=reverse,
-                method=options.get('aud_method', 'inversion'),
-                key=options.get('aud_key', 42),
-                num_splits=options.get('aud_splits', 10),
-                carrier_freq=carrier_freq,
-                vol_factor=options.get('vol_factor', 1.0),
-                aud_track=options.get('aud_track', 'both'),
-                patch_intervals=patch_intervals
-            )
+            if reverse and not os.path.exists(temp_aud):
+                LiveDebugger.log("AUD_DEC_MISSING", "Encrypted audio track missing; skipping audio decrypt.", level="WARNING", module="AUDIO")
+            else:
+                process_audio_file(
+                    temp_aud, temp_aud, is_decrypt=reverse,
+                    method=options.get('aud_method', 'inversion'),
+                    key=options.get('aud_key', 42),
+                    num_splits=options.get('aud_splits', 10),
+                    carrier_freq=carrier_freq,
+                    vol_factor=options.get('vol_factor', 1.0),
+                    aud_track=options.get('aud_track', 'both'),
+                    patch_intervals=patch_intervals
+                )
     cap = cv2.VideoCapture(input_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -521,14 +629,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     shuffled_outer = seeded_shuffle(list(outer_indices), seed)
     cw = cx2 - cx1
     ch = cy2 - cy1
-    if center_size == '2/4':
-        s = 0.7071
-    elif center_size == '3/4':
-        s = 0.866
-    else:
-        s = 0.5
-    cols_inner = max(1, min(cols - 1, int(cols * s)))
-    rows_inner = max(1, min(rows - 1, int(rows * s)))
+    cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
     center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
     dest_to_src_center = {idx: idx for idx in range(cols_inner * rows_inner)}
     shuffled_center = seeded_shuffle(list(range(cols_inner * rows_inner)), seed)

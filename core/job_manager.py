@@ -4,6 +4,7 @@ import secrets
 import threading
 import traceback
 from core.crypto import clean_key, hash_str, compress_key, decompress_key, generate_qr_code
+from core.grid_utils import format_center_key
 from core.pipeline import process_media
 from core.metadata_prober import probe_media_file
 from core.logger import LiveDebugger
@@ -231,8 +232,15 @@ class JobManager:
                         options['custom_audio_l'] = form_data.get('custom_audio_l')
                     if form_data.get('custom_audio_r'):
                         options['custom_audio_r'] = form_data.get('custom_audio_r')
-                    options['custom_audio_l_enc'] = form_data.get('custom_audio_l_enc') not in [False, 'false', 'False', '0']
-                    options['custom_audio_r_enc'] = form_data.get('custom_audio_r_enc') not in [False, 'false', 'False', '0']
+                    for _ch in ('l', 'r'):
+                        _enc_val = form_data.get(f'track_{_ch}_enc',
+                                     form_data.get(f'custom_audio_{_ch}_enc',
+                                     form_data.get(f'enc_custom_{_ch}', True)))
+                        options[f'track_{_ch}_enc'] = _enc_val not in [False, 'false', 'False', '0', 'off', 'no']
+                        options[f'custom_audio_{_ch}_enc'] = options[f'track_{_ch}_enc']
+                        _src_val = form_data.get(f'track_{_ch}_source')
+                        if _src_val in ('background', 'center', 'custom'):
+                            options[f'track_{_ch}_source'] = _src_val
                     sid = str(form_data.get('sid', '')).strip() or secrets.token_hex(4)
                     options['seed'] = hash_str(sid)
                     options['aud_key'] = hash_str(sid)
@@ -275,13 +283,24 @@ class JobManager:
                         spatial_tag += f"|opt_{plc}{inv_sfx}"
                     if options.get('custom_audio_l') or options.get('custom_audio_r'):
                         spatial_tag += "|ca"
+                        if not options.get('track_l_enc', True):
+                            spatial_tag += "|cal0"
+                        if not options.get('track_r_enc', True):
+                            spatial_tag += "|car0"
+                    elif (options.get('track_l_source') in ('background', 'center', 'custom')
+                            or options.get('track_r_source') in ('background', 'center', 'custom')):
+                        _eff_l = options.get('track_l_source', 'background')
+                        _eff_r = options.get('track_r_source', 'background')
+                        if _eff_l != 'background' or _eff_r != 'center':
+                            spatial_tag += "|ca"
+                            if not options.get('track_l_enc', True):
+                                spatial_tag += "|cal0"
+                            if not options.get('track_r_enc', True):
+                                spatial_tag += "|car0"
                     if options['process_video'] and options['process_audio']:
                         key = f"{options['cols']}x{options['rows']}|{sid}{patch_tag}{spatial_tag}"
                         if options.get('center'):
-                            if options.get('center_size', '1/4') != '1/4':
-                                key += f"|c_{options['center_size']}"
-                            else:
-                                key += "|c"
+                            key += format_center_key(options.get('center_size', '1/4'))
                         if options['video_encrypt_mode'] == 'center':
                             key += "|em_cnt"
                         elif options['video_encrypt_mode'] == 'both':
@@ -312,10 +331,7 @@ class JobManager:
                     else:
                         key = f"{options['cols']}x{options['rows']}|{sid}{patch_tag}{spatial_tag}"
                         if options.get('center'):
-                            if options.get('center_size', '1/4') != '1/4':
-                                key += f"|c_{options['center_size']}"
-                            else:
-                                key += "|c"
+                            key += format_center_key(options.get('center_size', '1/4'))
                         if options['video_encrypt_mode'] == 'center':
                             key += "|em_cnt"
                         elif options['video_encrypt_mode'] == 'both':
@@ -371,7 +387,10 @@ class JobManager:
                         'dual_track': False,
                         'video_encrypt_mode': 'external',
                         'aud_track': 'both',
-                        'optical_payload': opt_payload
+                        'optical_payload': opt_payload,
+                        'has_custom_audio': False,
+                        'track_l_enc': True,
+                        'track_r_enc': True
                     })
                     def _parse_patch_tag(part_str):
                         content = part_str.split(':', 1)[1] if ':' in part_str else ""
@@ -505,8 +524,19 @@ class JobManager:
                                 if 'inv' in part:
                                     options['roi_invert'] = True
                             elif part == 'ca':
+                                options['has_custom_audio'] = True
                                 options['custom_audio_l_enc'] = True
                                 options['custom_audio_r_enc'] = True
+                                options['track_l_enc'] = True
+                                options['track_r_enc'] = True
+                            elif part == 'cal0':
+                                options['has_custom_audio'] = True
+                                options['custom_audio_l_enc'] = False
+                                options['track_l_enc'] = False
+                            elif part == 'car0':
+                                options['has_custom_audio'] = True
+                                options['custom_audio_r_enc'] = False
+                                options['track_r_enc'] = False
                     out_path = os.path.join(self.decrypted_folder, f"restored_{base_name}{out_ext}")
                     LiveDebugger.log("Start Process", f"Decrypting '{display_name}' -> '{out_path}' | Key: '{raw_key}'", level="INFO", module="JOB")
                     process_media(file_path, out_path, options, p_dict, task_id)

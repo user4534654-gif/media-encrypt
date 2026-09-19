@@ -1,3 +1,52 @@
+                                                                            
+CENTER_SCALE_LEGACY = {'1/4': 0.5, '2/4': 0.7071, '3/4': 0.866}
+def normalize_center_value(value):
+    if value is None:
+        return 1.0
+    if isinstance(value, (int, float)):
+        n = float(value)
+    else:
+        s = str(value).strip()
+        if '/' in s:
+            try:
+                a, b = s.split('/', 1)
+                n = float(a) / float(b) * 4.0
+            except (ValueError, ZeroDivisionError):
+                n = 1.0
+        else:
+            try:
+                n = float(s)
+            except ValueError:
+                n = 1.0
+    if n != n:             
+        n = 1.0
+    return max(0.25, min(3.99, n))
+def center_size_to_scale(center_size):
+    if isinstance(center_size, str) and center_size.strip() in CENTER_SCALE_LEGACY:
+        return CENTER_SCALE_LEGACY[center_size.strip()]
+    n = normalize_center_value(center_size)
+    if abs(n - 1.0) < 1e-9:
+        return 0.5
+    if abs(n - 2.0) < 1e-9:
+        return 0.7071
+    if abs(n - 3.0) < 1e-9:
+        return 0.866
+    import math
+    return math.sqrt(max(0.0625, min(0.999, n / 4.0)))
+def format_center_key(center_size):
+    n = normalize_center_value(center_size)
+    if abs(n - 1.0) < 1e-9:
+        return '|c'
+    if abs(n - 2.0) < 1e-9:
+        return '|c_2/4'
+    if abs(n - 3.0) < 1e-9:
+        return '|c_3/4'
+    return f"|c_{float(f'{n:.2f}'):g}"
+def center_inner_grid(cols, rows, center_size):
+    s = center_size_to_scale(center_size)
+    cols_inner = max(1, min(cols - 1, int(cols * s)))
+    rows_inner = max(1, min(rows - 1, int(rows * s)))
+    return cols_inner, rows_inner
 def find_best_grid(n, target_ratio=1.0):
     best_c, best_r = 1, n
     min_diff = float('inf')
@@ -27,14 +76,7 @@ def get_blocks(w, h, cols, rows):
             blocks.append((x1, y1, x2, y2))
     return blocks
 def get_outer_blocks(cols, rows, out_w, out_h, center_size='1/4'):
-    if center_size == '2/4':
-        s = 0.7071
-    elif center_size == '3/4':
-        s = 0.866
-    else:
-        s = 0.5
-    cols_inner = max(1, min(cols - 1, int(cols * s)))
-    rows_inner = max(1, min(rows - 1, int(rows * s)))
+    cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
     c_start = (cols - cols_inner) // 2
     c_end = c_start + cols_inner
     r_start = (rows - rows_inner) // 2

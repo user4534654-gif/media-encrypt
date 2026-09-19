@@ -8,6 +8,23 @@
             <span class="channel-badge blue-badge" id="badgeL">BG</span>
             <span style="font-size: 13px; font-weight: 600; color: #007aff;">Background Video</span>
         </div>
+        <div class="track-info" style="margin-top: 4px;">
+            <span class="channel-badge" id="badgeLa">L</span>
+            <select class="track-source-select blue-source" id="trackLSourceSelect" onchange="updateTrackRouting('L', this.value)">
+                <option value="background" selected>Background Audio (Blue)</option>
+                <option value="center">Center Audio (Red)</option>
+                <option value="custom">Custom Audio/Video...</option>
+            </select>
+            <label class="track-enc-checkbox" style="font-size: 11px;">
+                <input type="checkbox" id="trackLEncCheckbox" checked onchange="updateTrackEncState('L', this.checked)"> 🔒 Encrypt
+            </label>
+        </div>
+        <div id="trackLCustomRow" style="display: none; gap: 8px; align-items: center; padding: 4px 12px 8px 12px; font-size: 12px;">
+            <span style="color: #007aff; font-weight: 600;">Custom L:</span>
+            <input type="file" id="trackLCustomFile" accept="audio/*,video/*" class="ios-file-input" style="flex: 1;" onchange="onCustomTrackFileSelected('L', this.files[0])">
+            <button type="button" class="ios-btn-small" onclick="openInputVaultPicker('track_l_custom', false)">📂 Vault</button>
+            <span id="trackLCustomName" style="color: #555; font-style: italic;"></span>
+        </div>
         <div class="track-timeline-bar-container" id="trackLContainer">
             <div class="track-active-segment blue-segment" id="trackLActiveSeg">
                 <span class="segment-label" id="trackLActiveLabel">Background Video (10s)</span>
@@ -22,6 +39,23 @@
         <div class="track-info">
             <span class="channel-badge red-badge" id="badgeR">CTR</span>
             <span style="font-size: 13px; font-weight: 600; color: #ff3b30;">Center Overlay Video</span>
+        </div>
+        <div class="track-info" style="margin-top: 4px;">
+            <span class="channel-badge" id="badgeRa">R</span>
+            <select class="track-source-select red-source" id="trackRSourceSelect" onchange="updateTrackRouting('R', this.value)">
+                <option value="center" selected>Center Audio (Red)</option>
+                <option value="background">Background Audio (Blue)</option>
+                <option value="custom">Custom Audio/Video...</option>
+            </select>
+            <label class="track-enc-checkbox" style="font-size: 11px;">
+                <input type="checkbox" id="trackREncCheckbox" checked onchange="updateTrackEncState('R', this.checked)"> 🔒 Encrypt
+            </label>
+        </div>
+        <div id="trackRCustomRow" style="display: none; gap: 8px; align-items: center; padding: 4px 12px 8px 12px; font-size: 12px;">
+            <span style="color: #ff3b30; font-weight: 600;">Custom R:</span>
+            <input type="file" id="trackRCustomFile" accept="audio/*,video/*" class="ios-file-input" style="flex: 1;" onchange="onCustomTrackFileSelected('R', this.files[0])">
+            <button type="button" class="ios-btn-small" onclick="openInputVaultPicker('track_r_custom', false)">📂 Vault</button>
+            <span id="trackRCustomName" style="color: #555; font-style: italic;"></span>
         </div>
         <div class="track-timeline-bar-container" id="trackRContainer">
             <div class="track-active-segment red-segment" id="trackRActiveSeg">

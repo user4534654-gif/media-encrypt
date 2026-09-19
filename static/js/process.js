@@ -172,14 +172,26 @@ async function startBatch(action) {
             fd.append('generate_qr', document.getElementById('generateQr') ? document.getElementById('generateQr').checked : false);
             if (typeof getCustomAudioFiles === 'function') {
                 const customAud = getCustomAudioFiles();
+                const useRouted = !!(customAud.fileL || customAud.fileR || customAud.vaultL || customAud.vaultR ||
+                    (customAud.srcL && customAud.srcL !== 'background' && customAud.srcL !== '') ||
+                    (customAud.srcR && customAud.srcR !== 'center' && customAud.srcR !== ''));
                 if (customAud.fileL) {
                     fd.append('custom_audio_l', customAud.fileL);
-                    fd.append('enc_custom_l', customAud.encL ? 'true' : 'false');
+                } else if (customAud.vaultL) {
+                    fd.append('custom_audio_l_vault', customAud.vaultL.name);
                 }
                 if (customAud.fileR) {
                     fd.append('custom_audio_r', customAud.fileR);
-                    fd.append('enc_custom_r', customAud.encR ? 'true' : 'false');
+                } else if (customAud.vaultR) {
+                    fd.append('custom_audio_r_vault', customAud.vaultR.name);
                 }
+                if (useRouted) {
+                    if (customAud.srcL) fd.append('track_l_source', customAud.srcL);
+                    if (customAud.srcR) fd.append('track_r_source', customAud.srcR);
+                    fd.set('aud_track', 'both');
+                }
+                fd.append('custom_audio_l_enc', customAud.encL ? 'true' : 'false');
+                fd.append('custom_audio_r_enc', customAud.encR ? 'true' : 'false');
             }
             const enableSpatial = document.getElementById('enableSpatialZones') ? document.getElementById('enableSpatialZones').checked : false;
             if (enableSpatial && typeof getSpatialPatchConfig === 'function') {
