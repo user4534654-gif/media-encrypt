@@ -136,11 +136,28 @@ def _close_ffmpeg_proc(p, name="FFmpeg"):
     if p.returncode != 0 and stderr_bytes:
         err_text = stderr_bytes.decode('utf-8', errors='ignore')
         LiveDebugger.log("FFMPEG_ERROR", f"{name} encoding failed with returncode {p.returncode}: {err_text.strip()}", level="ERROR", module="VIDEO")
-def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode='off', rows=1, cols=1, extra_hw_args=None):
+def _parse_bitrate_envelope(envelope):
+    try:
+        if not isinstance(envelope, dict):
+            return None, None
+        pts = [int(v) for v in (envelope.get('points') or []) if int(v) > 0]
+        if len(pts) < 2:
+            return None, None
+        pts = [max(100, min(25000, v)) for v in pts]
+        return max(100, int(round(sum(pts) / len(pts)))), max(pts)
+    except Exception:
+        return None, None
+def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode='off', rows=1, cols=1, extra_hw_args=None, envelope=None):
     if extra_hw_args is None:
         extra_hw_args = {}
     args = ['-c:v', chosen_codec]
-    b_val = vid_bitrate or '3000k'
+    env_avg, env_max = _parse_bitrate_envelope(envelope)
+    if env_avg and spatial_mode in ('zone', 'tiles'):
+        b_val = f"{env_max}k"
+    elif env_avg and spatial_mode == 'off':
+        b_val = f"{env_avg}k"
+    else:
+        b_val = vid_bitrate or '3000k'
     buf_val = '6000k'
     try:
         raw_num = int(''.join(filter(str.isdigit, str(b_val))))
@@ -209,7 +226,10 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
         else:
             args.extend(['-slices', str(n_slices), '-flags', '-loop', '-b:v', b_val, '-preset', vid_preset, '-pix_fmt', 'yuv420p'])
     else:
-        args.extend(['-b:v', b_val])
+        if env_avg and env_max and not is_prores:
+            args.extend(['-b:v', f'{env_avg}k', '-maxrate', f'{env_max}k', '-bufsize', f'{env_max * 2}k'])
+        else:
+            args.extend(['-b:v', b_val])
         if is_vp9:
             args.extend(['-deadline', 'good', '-cpu-used', '2'])
         elif is_nvenc:
@@ -783,6 +803,17 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             export_scrambled_grid_to_svg(f"{base}_grid_scrambled.svg", out_w, out_h, cols, rows, seed, has_center=options.get('center', False), center_size=center_size, prefix_original=False)
         except Exception as e:
             LiveDebugger.log("SVG_EXPORT_WARN", f"Failed to export SVG grids: {e}", level="WARNING", module="VIDEO")
+    if not reverse and options.get('export_map', False):
+        try:
+            from core.gridmap import build_gridmap, export_gridmap_json, export_gridmap_png
+            base, _ = os.path.splitext(output_path)
+            _gm = build_gridmap(out_w, out_h, cols, rows, seed,
+                                has_center=bool(options.get('center', False)),
+                                center_size=center_size)
+            export_gridmap_json(f"{base}_gridmap.json", _gm)
+            export_gridmap_png(f"{base}_gridmap.png", _gm)
+        except Exception as e:
+            LiveDebugger.log("GRIDMAP_EXPORT_WARN", f"Failed to export gridmap: {e}", level="WARNING", module="VIDEO")
     cap_center = None
     fps_c = 30.0
     total_frames_c = 0
@@ -824,8 +855,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         spatial_mode=spatial_mode,
         rows=rows,
         cols=cols,
-        extra_hw_args=extra_hw_args
+        extra_hw_args=extra_hw_args,
+        envelope=options.get('vid_bitrate_envelope')
     )
+    if options.get('vid_bitrate_envelope'):
+        _ea, _em = _parse_bitrate_envelope(options.get('vid_bitrate_envelope'))
+        if _ea and _em:
+            LiveDebugger.log("WAVE_BR", f"Wave envelope active: target={_ea}k ceiling={_em}k (constrained VBR)", level="INFO", module="VIDEO")
     cmd.extend(enc_args)
     if has_audio:
         aud_c = options.get('aud_codec', 'aac')
@@ -877,7 +913,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             spatial_mode=spatial_mode,
             rows=rows_inner if options.get('center') else rows,
             cols=cols_inner if options.get('center') else cols,
-            extra_hw_args=extra_hw_args
+            extra_hw_args=extra_hw_args,
+            envelope=options.get('vid_bitrate_envelope')
         )
         cmd_center.extend(enc_args_center)
         if has_center_aud_out:
@@ -1303,7 +1340,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             s_roi = matched_seg["roi"]
                             rx1, ry1, rx2, ry2 = s_roi
                             if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
-                                rx1, ry1, rx2, ry2 = int(rx1 * out_w), int(ry1 * out_h), int(rx2 * out_w), int(ry2 * out_h)
+                                rx1, ry1, rx2, ry2 = int(round(rx1 * out_w)), int(round(ry1 * out_h)), int(round(rx2 * out_w)), int(round(ry2 * out_h))
                             placement = options.get('marker_placement', 'outside')
                             new_frame, opt_payload = stamp_optical_markers(new_frame, rx1, ry1, rx2, ry2, placement=placement)
                             if 'optical_payload' not in options:
@@ -1316,7 +1353,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                 if s_roi:
                                     rx1, ry1, rx2, ry2 = s_roi
                                     if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
-                                        rx1, ry1, rx2, ry2 = int(rx1 * out_w), int(ry1 * out_h), int(rx2 * out_w), int(ry2 * out_h)
+                                        rx1, ry1, rx2, ry2 = int(round(rx1 * out_w)), int(round(ry1 * out_h)), int(round(rx2 * out_w)), int(round(ry2 * out_h))
                                     placement = options.get('marker_placement', 'outside')
                                     new_frame = inpaint_optical_markers(new_frame, rx1, ry1, rx2, ry2, placement=placement)
                         write_pipe_frame(proc, new_frame.tobytes())

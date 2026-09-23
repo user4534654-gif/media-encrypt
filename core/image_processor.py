@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 from core.crypto import seeded_shuffle, stamp_optical_markers, restore_optical_markers, detect_optical_markers, inpaint_optical_markers
+from core.metadata_prober import writable_image_ext
 from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks, get_roi_blocks, center_inner_grid
 from core.logger import LiveDebugger
 def save_image(path, img):
@@ -10,6 +11,9 @@ def save_image(path, img):
     if ext in ('.mp4', '.mkv', '.avi', '.mov', '.webm', ''):
         path = base_p + '.png'
         ext = '.png'
+    if ext in ('.jfif', '.jif', '.jfi', '.ico'):
+        path = base_p + writable_image_ext(ext)
+        ext = writable_image_ext(ext)
     if ext in ('.jpg', '.jpeg'):
         try:
             from PIL import Image
@@ -28,6 +32,90 @@ def save_image(path, img):
         except Exception as e:
             raise RuntimeError(f"Failed to save as AVIF: {e}. Ensure 'pillow' and a suitable writer plugin are installed.")
     cv2.imwrite(path, img)
+def _polish_zone_roi(gray, w, h, roi_norm, cols, rows, seed, max_rounds=4):
+    from core.grid_utils import get_roi_blocks as _grb
+    try:
+        cols, rows = max(1, int(cols)), max(1, int(rows))
+    except Exception:
+        return list(roi_norm)
+    if cols * rows <= 1:
+        return list(roi_norm)
+    def to_px(roi):
+        return [int(round(roi[0] * w)), int(round(roi[1] * h)),
+                int(round(roi[2] * w)), int(round(roi[3] * h))]
+    def boundary_cost(roi_px):
+        x1, y1, x2, y2 = roi_px
+        if x2 - x1 < 16 or y2 - y1 < 16:
+            return float('inf')
+        cx1, cy1 = x1 + (x2 - x1) // 4, y1 + (y2 - y1) // 4
+        cx2, cy2 = x2 - (x2 - x1) // 4, y2 - (y2 - y1) // 4
+        try:
+            rb = _grb(w, h, [x1, y1, x2, y2], cols, rows, invert=False)
+        except Exception:
+            return float('inf')
+        n = len(rb)
+        if n != cols * rows:
+            return float('inf')
+        fwd = seeded_shuffle(list(range(n)), seed)
+        d2s = {v: i for i, v in enumerate(fwd)}
+        cw, ch = cx2 - cx1, cy2 - cy1
+        out = np.zeros((ch, cw), dtype=np.uint8)
+        for i in range(n):
+            dx1, dy1, dx2, dy2 = rb[i]
+            ix1, iy1, ix2, iy2 = max(dx1, cx1), max(dy1, cy1), min(dx2, cx2), min(dy2, cy2)
+            if ix2 <= ix1 or iy2 <= iy1:
+                continue
+            t = d2s[i]
+            sx1, sy1, sx2, sy2 = rb[t]
+            tile = gray[sy1:sy2, sx1:sx2]
+            dw, dh = dx2 - dx1, dy2 - dy1
+            if tile.shape[1] != dw or tile.shape[0] != dh:
+                tile = cv2.resize(tile, (dw, dh))
+            ox, oy = ix1 - dx1, iy1 - dy1
+            out[iy1 - cy1:iy2 - cy1, ix1 - cx1:ix2 - cx1] = tile[oy:oy + (iy2 - iy1), ox:ox + (ix2 - ix1)]
+        xs = sorted(set([b[0] for b in rb] + [b[2] for b in rb]))
+        ys = sorted(set([b[1] for b in rb] + [b[3] for b in rb]))
+        cost, cnt = 0.0, 0
+        for bx in xs:
+            if bx <= cx1 or bx >= cx2:
+                continue
+            lx = bx - cx1
+            cost += float(np.abs(out[:, lx - 1].astype(np.int32) - out[:, lx].astype(np.int32)).sum())
+            cnt += ch
+        for by in ys:
+            if by <= cy1 or by >= cy2:
+                continue
+            ly = by - cy1
+            cost += float(np.abs(out[ly - 1, :].astype(np.int32) - out[ly, :].astype(np.int32)).sum())
+            cnt += cw
+        return cost / max(1, cnt)
+    cur = to_px(list(roi_norm))
+    cur[0], cur[1] = max(0, cur[0]), max(0, cur[1])
+    cur[2], cur[3] = min(w, cur[2]), min(h, cur[3])
+    try:
+        cur_cost = boundary_cost(cur)
+    except Exception:
+        return list(roi_norm)
+    for _ in range(max_rounds):
+        best, best_cost = cur, cur_cost
+        for e in range(4):
+            for d in (-1, 1):
+                cand = list(cur)
+                cand[e] += d
+                if cand[2] - cand[0] < 16 or cand[3] - cand[1] < 16:
+                    continue
+                if cand[0] < 0 or cand[1] < 0 or cand[2] > w or cand[3] > h:
+                    continue
+                try:
+                    c = boundary_cost(cand)
+                except Exception:
+                    continue
+                if c < best_cost * 0.995:
+                    best, best_cost = cand, c
+        if best == cur:
+            break
+        cur, cur_cost = best, best_cost
+    return [cur[0] / w, cur[1] / h, cur[2] / w, cur[3] / h]
 @LiveDebugger.trace(module_name="IMAGE")
 def process_image_file(input_path, output_path, options, progress_dict, task_id):
     is_cancelled_cb = options.get('is_cancelled')
@@ -69,6 +157,17 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             export_scrambled_grid_to_svg(f"{base}_grid_scrambled.svg", w, h, cols, rows, seed, has_center=options.get('center', False), center_size=options.get('center_size', '1/4'), prefix_original=False)
         except Exception as e:
             print("Failed to export SVG grids:", e)
+    if not reverse and options.get('export_map', False):
+        try:
+            from core.gridmap import build_gridmap, export_gridmap_json, export_gridmap_png
+            base, _ = os.path.splitext(output_path)
+            _gm = build_gridmap(w, h, cols, rows, seed,
+                                has_center=bool(options.get('center', False)),
+                                center_size=options.get('center_size', '1/4'))
+            export_gridmap_json(f"{base}_gridmap.json", _gm)
+            export_gridmap_png(f"{base}_gridmap.png", _gm)
+        except Exception as e:
+            LiveDebugger.log("GRIDMAP_EXPORT_WARN", f"Failed to export gridmap: {e}", level="WARNING", module="IMAGE")
     if proc_vid:
         _center_path = options.get('center_path')
         _zone_roi = options.get('patch_roi')
@@ -88,6 +187,12 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                 d_roi = detect_optical_markers(img, placement=placement)
                 if d_roi:
                     roi = list(d_roi)
+                    if not options.get('roi_invert', False):
+                        try:
+                            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+                            roi = _polish_zone_roi(gray, w, h, roi, cols, rows, seed)
+                        except Exception:
+                            pass
                     options['patch_roi'] = roi
                     LiveDebugger.log("MARKER_DETECT", f"Auto-detected optical markers in image! Reconstructed ROI: {roi}", level="SUCCESS", module="IMAGE")
                 else:
@@ -224,6 +329,12 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                 d_roi = detect_optical_markers(img, placement=placement)
                 if d_roi:
                     roi = list(d_roi)
+                    if not options.get('roi_invert', False):
+                        try:
+                            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+                            roi = _polish_zone_roi(gray, w, h, roi, cols, rows, seed)
+                        except Exception:
+                            pass
                     options['patch_roi'] = roi
                     LiveDebugger.log("MARKER_DETECT", f"Auto-detected optical markers in image! Reconstructed ROI: {roi}", level="SUCCESS", module="IMAGE")
                 else:
@@ -255,7 +366,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             if not reverse and options.get('optical_markers'):
                 rx1, ry1, rx2, ry2 = roi
                 if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
-                    rx1, ry1, rx2, ry2 = int(rx1 * w), int(ry1 * h), int(rx2 * w), int(ry2 * h)
+                    rx1, ry1, rx2, ry2 = int(round(rx1 * w)), int(round(ry1 * h)), int(round(rx2 * w)), int(round(ry2 * h))
                 placement = options.get('marker_placement', 'outside')
                 new_img, optical_payload = stamp_optical_markers(new_img, rx1, ry1, rx2, ry2, placement=placement)
                 options['optical_payload'] = optical_payload
@@ -265,7 +376,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                 elif roi:
                     rx1, ry1, rx2, ry2 = roi
                     if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
-                        rx1, ry1, rx2, ry2 = int(rx1 * w), int(ry1 * h), int(rx2 * w), int(ry2 * h)
+                        rx1, ry1, rx2, ry2 = int(round(rx1 * w)), int(round(ry1 * h)), int(round(rx2 * w)), int(round(ry2 * h))
                     placement = options.get('marker_placement', 'outside')
                     new_img = inpaint_optical_markers(new_img, rx1, ry1, rx2, ry2, placement=placement)
             save_image(output_path, new_img)

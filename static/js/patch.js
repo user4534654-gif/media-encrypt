@@ -149,6 +149,7 @@ function onRegionPointerMove(e) {
         x2: parseFloat(x2.toFixed(4)),
         y2: parseFloat(y2.toFixed(4))
     };
+    patchRegion = applyOutsideMarkerLimits(patchRegion, videoOutsideMarkerMargin());
     updateRegionBoxVisuals();
 }
 function onRegionPointerUp(e) {
@@ -190,6 +191,7 @@ function onManualCoordInput() {
         x2: Math.max(0, Math.min(1, Math.max(inX1, inX2))),
         y2: Math.max(0, Math.min(1, Math.max(inY1, inY2)))
     };
+    patchRegion = applyOutsideMarkerLimits(patchRegion, videoOutsideMarkerMargin());
     updateRegionBoxVisuals();
 }
 function setPatchInteractionMode(mode) {
@@ -206,6 +208,7 @@ function setPatchInteractionMode(mode) {
 }
 function setPatchFullscreen() {
     patchRegion = { x1: 0.0, y1: 0.0, x2: 1.0, y2: 1.0 };
+    patchRegion = applyOutsideMarkerLimits(patchRegion, videoOutsideMarkerMargin());
     updateRegionBoxVisuals();
 }
 function resetPatchBoxToCenter() {
@@ -216,9 +219,52 @@ function toggleOpticalPlacement(enabled) {
     const row = document.getElementById('patchMarkerPlacementRow');
     if (row) row.classList.toggle('hidden', !enabled);
 }
+function toggleImgOpticalPlacement(enabled) {
+    const row = document.getElementById('imgMarkerPlacementRow');
+    if (row) row.classList.toggle('hidden', !enabled);
+}
+var OPTICAL_MARKER_PX = 18;
+function videoOutsideMarkerMargin() {
+    const optEl = document.getElementById('patchOpticalMarkers');
+    const placeEl = document.getElementById('patchMarkerPlacement');
+    const optOn = optEl ? optEl.checked : false;
+    const placement = placeEl ? placeEl.value : 'outside';
+    if (!optOn || placement !== 'outside') return { mx: 0, my: 0 };
+    const player = document.getElementById('patchVideoPlayer');
+    const imgPrev = document.getElementById('patchImagePreview');
+    let w = 0, h = 0;
+    if (player && player.videoWidth) { w = player.videoWidth; h = player.videoHeight; }
+    else if (imgPrev && imgPrev.naturalWidth) { w = imgPrev.naturalWidth; h = imgPrev.naturalHeight; }
+    if (!w || !h) return { mx: 0, my: 0 };
+    return { mx: OPTICAL_MARKER_PX / w, my: OPTICAL_MARKER_PX / h };
+}
+function imgOutsideMarkerMargin() {
+    const optEl = document.getElementById('imgOpticalMarkers');
+    const placeEl = document.getElementById('imgMarkerPlacement');
+    const optOn = optEl ? optEl.checked : false;
+    const placement = placeEl ? placeEl.value : 'outside';
+    if (!optOn || placement !== 'outside') return { mx: 0, my: 0 };
+    const prev = document.getElementById('imgPatchPreview');
+    const w = prev ? (prev.naturalWidth || 0) : 0;
+    const h = prev ? (prev.naturalHeight || 0) : 0;
+    if (!w || !h) return { mx: 0, my: 0 };
+    return { mx: OPTICAL_MARKER_PX / w, my: OPTICAL_MARKER_PX / h };
+}
+function applyOutsideMarkerLimits(box, m) {
+    if (!m || (m.mx <= 0 && m.my <= 0)) return box;
+    const minW = 0.05, minH = 0.05;
+    if (m.mx * 2 + minW >= 1 || m.my * 2 + minH >= 1) return box;
+    let x1 = Math.min(Math.max(box.x1, m.mx), 1 - m.mx - minW);
+    let y1 = Math.min(Math.max(box.y1, m.my), 1 - m.my - minH);
+    let x2 = Math.max(Math.min(box.x2, 1 - m.mx), m.mx + minW);
+    let y2 = Math.max(Math.min(box.y2, 1 - m.my), m.my + minH);
+    if (x2 - x1 < minW) { x1 = Math.max(m.mx, x2 - minW); }
+    if (y2 - y1 < minH) { y1 = Math.max(m.my, y2 - minH); }
+    return { x1: x1, y1: y1, x2: x2, y2: y2 };
+}
 function loadPatchMediaFile(file) {
     patchBaseFile = file;
-    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|tiff)$/i.test(file.name);
+    const isImage = file.type.startsWith('image/') || /\.(jpe?g|jpe|jfif|jif|jfi|png|webp|avif|bmp|tiff?|gif|ico)$/i.test(file.name);
     const player = document.getElementById('patchVideoPlayer');
     const imagePreview = document.getElementById('patchImagePreview');
     const timelineSection = document.getElementById('veTimelineSection');
@@ -691,6 +737,7 @@ function onManualImgCoordInput() {
         x2: Math.min(1, Math.max(x2, x1 + 0.05)),
         y2: Math.min(1, Math.max(y2, y1 + 0.05))
     };
+    imgPatchBoxCoords = applyOutsideMarkerLimits(imgPatchBoxCoords, imgOutsideMarkerMargin());
     updateImgRegionBoxDOM();
 }
 function setImgPatchInteractionMode(mode) {
@@ -707,6 +754,7 @@ function setImgPatchInteractionMode(mode) {
 }
 function setImgPatchFullscreen() {
     imgPatchBoxCoords = { x1: 0, y1: 0, x2: 1, y2: 1 };
+    imgPatchBoxCoords = applyOutsideMarkerLimits(imgPatchBoxCoords, imgOutsideMarkerMargin());
     updateImgRegionBoxDOM();
 }
 function resetImgPatchBoxToCenter() {
@@ -762,6 +810,7 @@ function setupImgPatchBoxInteractions() {
             imgPatchBoxCoords.x2 = nx1 + w;
             imgPatchBoxCoords.y2 = ny1 + h;
         }
+        imgPatchBoxCoords = applyOutsideMarkerLimits(imgPatchBoxCoords, imgOutsideMarkerMargin());
         updateImgRegionBoxDOM();
     });
     const endImgInteraction = function() {

@@ -130,8 +130,18 @@
                         <div style="font-size: 11px; color: #666;">Enables automatic coordinate-free discovery during decryption</div>
                     </div>
                     <label class="ios-switch-label">
-                        <input type="checkbox" id="imgOpticalMarkers">
+                        <input type="checkbox" id="imgOpticalMarkers" onchange="toggleImgOpticalPlacement(this.checked)">
                     </label>
+                </div>
+                <div id="imgMarkerPlacementRow" class="hidden" style="border-top: 1px solid #edf2f7; padding-top: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                    <div>
+                        <label class="ios-label" style="margin-bottom: 2px;">Marker Placement</label>
+                        <div style="font-size: 11px; color: #666;">Inside keeps markers within the zone; outside stamps them around it (needs margin to the frame edge)</div>
+                    </div>
+                    <select id="imgMarkerPlacement" class="ios-select" style="max-width: 190px;">
+                        <option value="outside" selected>Outside Zone Border</option>
+                        <option value="inside">Inside Zone Border</option>
+                    </select>
                 </div>
             </div>
         </div>

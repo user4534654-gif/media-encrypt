@@ -6,7 +6,7 @@ import traceback
 from core.crypto import clean_key, hash_str, compress_key, decompress_key, generate_qr_code
 from core.grid_utils import format_center_key
 from core.pipeline import process_media
-from core.metadata_prober import probe_media_file
+from core.metadata_prober import probe_media_file, is_image_filename, IMAGE_EXTENSIONS, writable_image_ext
 from core.logger import LiveDebugger
 class JobManager:
     def __init__(self, input_folder, encrypted_folder, decrypted_folder, save_key_fn, resolve_quality_fn, sanitize_sr_fn):
@@ -147,14 +147,34 @@ class JobManager:
                     'use_gpu': form_data.get('use_gpu') in [True, 'true', 'True', '1'],
                     'is_cancelled': lambda: self.cancel_event.is_set()
                 }
+                _center_pre = file_item.get('center_path') or form_data.get('center_path')
+                if form_data.get('center_mode') in [True, 'true', 'True', '1'] and _center_pre and os.path.exists(_center_pre):
+                    options['center'] = True
+                    options['center_path'] = _center_pre
+                _raw_env = form_data.get('vid_bitrate_envelope')
+                if _raw_env:
+                    try:
+                        import json as _json
+                        _env = _json.loads(_raw_env) if isinstance(_raw_env, str) else _raw_env
+                        _pts = [int(round(float(v))) for v in ((_env or {}).get('points') or [])]
+                        _pts = [max(100, min(25000, v)) for v in _pts]
+                        if len(_pts) >= 2:
+                            options['vid_bitrate_envelope'] = {
+                                'points': _pts,
+                                'avg': max(100, int(round(sum(_pts) / len(_pts)))),
+                                'max': max(_pts),
+                            }
+                    except Exception:
+                        pass
                 options = self.resolve_quality_fn(file_path, options)
                 fn_lower = filename.lower()
-                is_image = fn_lower.endswith(('.jpg', '.png', '.jpeg', '.bmp', '.webp', '.avif')) or (info.get('format') == 'image') or (file_item.get('type') == 'image')
+                is_image = is_image_filename(fn_lower) or (info.get('format') == 'image') or (file_item.get('type') == 'image')
                 if is_image:
                     out_ext = form_data.get('img_format', '.png')
                     if out_ext == 'auto' or not out_ext or out_ext in ('.mp4', '.mkv', '.avi', '.mov', '.webm'):
                         _, f_ext = os.path.splitext(filename)
-                        out_ext = f_ext.lower() if f_ext.lower() in ('.jpg', '.png', '.jpeg', '.bmp', '.webp', '.avif') else '.png'
+                        out_ext = f_ext.lower() if f_ext.lower() in IMAGE_EXTENSIONS else '.png'
+                        out_ext = writable_image_ext(out_ext)
                 elif fn_lower.endswith(('.mp3', '.wav', '.ogg', '.flac', '.m4a')) or (info.get('format') == 'audio'):
                     out_ext = form_data.get('aud_format', '.wav')
                     if out_ext == 'auto' or not out_ext:

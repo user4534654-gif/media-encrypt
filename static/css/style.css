@@ -118,6 +118,10 @@ body.ios-linen-bg {
 .ios-group-row:last-child {
     border-bottom: none;
 }
+.ios-group > :last-child {
+    border-bottom-left-radius: 9px;
+    border-bottom-right-radius: 9px;
+}
 .ios-group-row-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

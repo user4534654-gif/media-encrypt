@@ -3,6 +3,14 @@ import subprocess
 import re
 import sys
 import imageio_ffmpeg
+IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.jpe', '.jfif', '.jif', '.jfi',
+                    '.png', '.webp', '.avif', '.bmp',
+                    '.tiff', '.tif', '.gif', '.ico')
+def is_image_filename(filename):
+    return str(filename or '').lower().endswith(IMAGE_EXTENSIONS)
+WRITER_ALIASES = {'.jfif': '.jpg', '.jif': '.jpg', '.jfi': '.jpg', '.ico': '.png'}
+def writable_image_ext(ext):
+    return WRITER_ALIASES.get(str(ext or '').lower(), str(ext or '').lower())
 def _creation_flags():
     if sys.platform == "win32":
         return subprocess.CREATE_NO_WINDOW
@@ -62,6 +70,24 @@ def _probe_with_pyav(file_path, info):
     if info.get('audio_bitrate_bps'):
         info['audio_bitrate'] = f"{max(1, round(info['audio_bitrate_bps'] / 1000))}k"
     return info
+def parse_bitrate_kbps(bitrate_str):
+    if bitrate_str is None:
+        return 0
+    try:
+        s = str(bitrate_str).lower().replace('bps', '').replace('k', '').strip()
+        val = int(float(s))
+        if val > 10000:
+            val = round(val / 1000)
+        return max(0, val)
+    except Exception:
+        return 0
+def pick_max_video_bitrate(*bitrate_strs, fallback='3000k'):
+    best = 0
+    for b in bitrate_strs:
+        best = max(best, parse_bitrate_kbps(b))
+    if best > 0:
+        return f"{best}k"
+    return fallback
 def sanitize_audio_bitrate(bitrate_str, codec=None):
     if not bitrate_str or bitrate_str == 'auto':
         return '320k'

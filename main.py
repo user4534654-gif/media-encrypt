@@ -21,7 +21,7 @@ from flask import Flask, request, jsonify, render_template, send_from_directory,
 from core.crypto import clean_key, hash_str
 from core.grid_utils import format_center_key
 from core.pipeline import process_media
-from core.metadata_prober import probe_media_file
+from core.metadata_prober import probe_media_file, is_image_filename, writable_image_ext
 from core.metadata import load_project_metadata
 from core.logger import LiveDebugger
 from core.job_manager import JobManager
@@ -168,8 +168,29 @@ def resolve_auto_quality(file_path, options):
                 options['vid_codec'] = 'prores'
             else:
                 options['vid_codec'] = 'libx264'
-    if options.get('vid_bitrate') == 'auto':
-        options['vid_bitrate'] = info.get('video_bitrate') or '3000k'
+    _env = options.get('vid_bitrate_envelope')
+    _env_avg = None
+    if isinstance(_env, dict) and _env.get('points'):
+        try:
+            _env_avg = max(100, int(round(sum(_env['points']) / len(_env['points']))))
+        except Exception:
+            _env_avg = None
+    if options.get('vid_bitrate') == 'auto' and _env_avg:
+        options['vid_bitrate'] = f"{_env_avg}k"
+        LiveDebugger.log("AUTO_BR", f"Auto bitrate overridden by wave envelope (avg={_env_avg}k, max={_env.get('max')}k)", level="INFO", module="HTTP")
+    elif options.get('vid_bitrate') == 'auto':
+        from core.metadata_prober import pick_max_video_bitrate
+        bg_br = info.get('video_bitrate')
+        center_br = None
+        center_path = options.get('center_path')
+        if center_path and os.path.exists(center_path):
+            try:
+                center_br = probe_media_file(center_path).get('video_bitrate')
+            except Exception as e:
+                LiveDebugger.log("AUTO_BR_WARN", f"Center probe failed, using background bitrate: {e}", level="WARNING", module="HTTP")
+        options['vid_bitrate'] = pick_max_video_bitrate(bg_br, center_br)
+        if center_br:
+            LiveDebugger.log("AUTO_BR", f"Auto bitrate: background={bg_br or 'unknown'} center={center_br} -> picked {options['vid_bitrate']} (max)", level="INFO", module="HTTP")
     if options.get('vid_preset') == 'auto':
         options['vid_preset'] = 'medium'
     if options.get('aud_sr') == 'auto':
@@ -251,7 +272,7 @@ def download_stream():
                     clean_name = re.sub(r'[^a-zA-Z0-9_\.\-]', '_', path_part)
                 else:
                     clean_name = f"downloaded_image_{int(time.time())}.{img_format}"
-                if not any(clean_name.lower().endswith(f".{ext}") for ext in ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'avif']):
+                if not is_image_filename(clean_name):
                     clean_name = f"{clean_name}.{img_format}"
                 target_file_path = os.path.join(abs_input_dir, clean_name)
                 counter = 1
@@ -495,10 +516,10 @@ def process_api():
             options[f'custom_audio_{_ch}_enc'] = options[f'track_{_ch}_enc']
         options = resolve_auto_quality(path, options)
         fn_lower = filename.lower()
-        if fn_lower.endswith(('.jpg', '.png', '.jpeg', '.bmp', '.webp', '.avif')):
+        if is_image_filename(fn_lower):
             out_ext = request.form.get('img_format', '.png')
             if out_ext == 'auto':
-                out_ext = os.path.splitext(filename)[1].lower()
+                out_ext = writable_image_ext(os.path.splitext(filename)[1])
         elif fn_lower.endswith(('.mp3', '.wav', '.ogg', '.flac', '.m4a')):
             out_ext = request.form.get('aud_format', '.wav')
             if out_ext == 'auto':

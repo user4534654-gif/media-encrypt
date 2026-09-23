@@ -81,6 +81,33 @@ def get_cached_marker_pattern_gray(size=18):
         pat = create_marker_pattern(size)
         _CACHED_PATTERNS[size] = cv2.cvtColor(pat, cv2.COLOR_BGR2GRAY)
     return _CACHED_PATTERNS[size]
+def _marker_match_scores(img, boxes, marker_size=18):
+    if img is None or not boxes:
+        return []
+    h, w = img.shape[:2]
+    pat_gray = get_cached_marker_pattern_gray(marker_size)
+    pw, ph = pat_gray.shape[1], pat_gray.shape[0]
+    scores = []
+    for (x1, y1, x2, y2) in boxes:
+        if x2 <= x1 or y2 <= y1:
+            scores.append(0.0)
+            continue
+        sx1 = max(0, x1 - 3)
+        sy1 = max(0, y1 - 3)
+        sx2 = min(w, x2 + 3)
+        sy2 = min(h, y2 + 3)
+        if (sx2 - sx1) < pw or (sy2 - sy1) < ph:
+            scores.append(0.0)
+            continue
+        search_patch = img[sy1:sy2, sx1:sx2]
+        if len(search_patch.shape) == 3:
+            patch_gray = cv2.cvtColor(search_patch, cv2.COLOR_BGR2GRAY)
+        else:
+            patch_gray = search_patch
+        res = cv2.matchTemplate(patch_gray, pat_gray, cv2.TM_CCOEFF_NORMED)
+        _min_val, max_val, _min_loc, _max_loc = cv2.minMaxLoc(res)
+        scores.append(float(max_val))
+    return scores
 def check_marker_presence(img, coords, marker_size=18, threshold=0.65, search_padding=3):
     if img is None or not coords or len(coords) < 4:
         return False
@@ -140,7 +167,7 @@ def inpaint_optical_markers(img, rx1, ry1, rx2, ry2, placement='outside', marker
         return img
     h, w = img.shape[:2]
     if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
-        rx1, ry1, rx2, ry2 = int(rx1 * w), int(ry1 * h), int(rx2 * w), int(ry2 * h)
+        rx1, ry1, rx2, ry2 = int(round(rx1 * w)), int(round(ry1 * h)), int(round(rx2 * w)), int(round(ry2 * h))
     coords = _calculate_marker_boxes(w, h, rx1, ry1, rx2, ry2, placement, marker_size)
     mask = np.zeros((h, w), dtype=np.uint8)
     for (x1, y1, x2, y2) in coords:
@@ -264,6 +291,250 @@ def _group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside', i
             if i in used_pts:
                 break
     return detected_rois
+def _refine_marker_box(img, approx_box, radius=8):
+    h, w = img.shape[:2]
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+    base = get_cached_marker_pattern_gray(18)
+    ax1, ay1, ax2, ay2 = approx_box
+    best = None
+    for sw in range(12, 33, 2):
+        for sh in range(12, 33, 2):
+            pat = base if (sw == 18 and sh == 18) else cv2.resize(base, (sw, sh), interpolation=cv2.INTER_NEAREST)
+            sx1, sy1 = max(0, ax1 - radius), max(0, ay1 - radius)
+            sx2, sy2 = min(w, ax2 + radius), min(h, ay2 + radius)
+            if sx2 - sx1 < sw or sy2 - sy1 < sh:
+                continue
+            res = cv2.matchTemplate(gray[sy1:sy2, sx1:sx2], pat, cv2.TM_CCOEFF_NORMED)
+            _mn, mx, _mnl, mxl = cv2.minMaxLoc(res)
+            cand = (float(mx), sx1 + mxl[0], sy1 + mxl[1], sw, sh)
+            if best is None or cand[0] > best[0] + 1e-9 or (abs(cand[0] - best[0]) <= 1e-9 and sw * sh > best[3] * best[4]):
+                best = cand
+    if best is None or best[0] < 0.45:
+        return None
+    _v, bx, by, sw, sh = best
+    return (bx, by, bx + sw, by + sh, _v)
+def refine_roi_from_centers(img, roi, placement='outside', m_size=18):
+    if img is None or not roi or len(roi) < 4:
+        return roi
+    h, w = img.shape[:2]
+    rx1, ry1, rx2, ry2 = roi
+    if max(rx1, ry1, rx2, ry2) <= 1.0 and min(rx1, ry1, rx2, ry2) >= 0:
+        px1, py1, px2, py2 = int(round(rx1 * w)), int(round(ry1 * h)), int(round(rx2 * w)), int(round(ry2 * h))
+    else:
+        px1, py1, px2, py2 = int(rx1), int(ry1), int(rx2), int(ry2)
+    boxes = _calculate_marker_boxes(w, h, px1, py1, px2, py2, placement, m_size)
+    refined = []
+    for box in boxes:
+        bw, bh = box[2] - box[0], box[3] - box[1]
+        if bw <= 4 or bh <= 4:
+            refined.append(None)
+            continue
+        refined.append(_refine_marker_box(img, box))
+    TL, TR, BL, BR = refined
+    if sum(1 for b in refined if b) < 3:
+        return roi
+    if placement == 'inside':
+        ex1 = [b[0] for b in (TL, BL) if b]
+        ey1 = [b[1] for b in (TL, TR) if b]
+        ex2 = [b[2] for b in (TR, BR) if b]
+        ey2 = [b[3] for b in (BL, BR) if b]
+    else:
+        ex1 = [b[2] for b in (TL, BL) if b]
+        ey1 = [b[3] for b in (TL, TR) if b]
+        ex2 = [b[0] for b in (TR, BR) if b]
+        ey2 = [b[1] for b in (BL, BR) if b]
+    nx1 = int(round(sum(ex1) / len(ex1))) if ex1 else px1
+    ny1 = int(round(sum(ey1) / len(ey1))) if ey1 else py1
+    nx2 = int(round(sum(ex2) / len(ex2))) if ex2 else px2
+    ny2 = int(round(sum(ey2) / len(ey2))) if ey2 else py2
+    nx1, ny1 = max(0, nx1), max(0, ny1)
+    nx2, ny2 = min(w, nx2), min(h, ny2)
+    if nx2 <= nx1 or ny2 <= ny1:
+        return roi
+    return (round(nx1 / w, 4), round(ny1 / h, 4), round(nx2 / w, 4), round(ny2 / h, 4))
+def _find_marker_core_centers(gray, min_area=20, max_area=400, max_candidates=60):
+    mask = np.where(gray < 80, 255, 0).astype(np.uint8)
+    n, _labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
+    scored = []
+    for i in range(1, n):
+        area = int(stats[i, cv2.CC_STAT_AREA])
+        if area < min_area or area > max_area:
+            continue
+        w = int(stats[i, cv2.CC_STAT_WIDTH])
+        h = int(stats[i, cv2.CC_STAT_HEIGHT])
+        if w <= 0 or h <= 0 or max(w, h) / max(1, min(w, h)) > 2.0:
+            continue
+        if area < 0.6 * w * h:
+            continue
+        scored.append((area, float(centroids[i][0]), float(centroids[i][1])))
+    scored.sort(key=lambda t: -t[0])
+    out = []
+    for (_a, cx, cy) in scored[:max_candidates]:
+        if not any(abs(cx - qx) < 6 and abs(cy - qy) < 6 for (qx, qy) in out):
+            out.append((cx, cy))
+    return out
+def _anamorphic_pattern(sw, sh):
+    w1x = max(2, sw // 6)
+    w2x = max(w1x + 2, sw // 3)
+    w1y = max(2, sh // 6)
+    w2y = max(w1y + 2, sh // 3)
+    pat = np.zeros((sh, sw), dtype=np.uint8)
+    pat[w1y:sh - w1y, w1x:sw - w1x] = 255
+    pat[w2y:sh - w2y, w2x:sw - w2x] = 0
+    return pat
+def _anamorphic_score(gray, cx, cy, sw, sh):
+    h, w = gray.shape[:2]
+    x1, y1 = int(round(cx - sw / 2)), int(round(cy - sh / 2))
+    if x1 < 0 or y1 < 0 or x1 + sw > w or y1 + sh > h:
+        return -1.0
+    win = gray[y1:y1 + sh, x1:x1 + sw].astype(np.float32).ravel()
+    pat = _anamorphic_pattern(sw, sh).astype(np.float32).ravel()
+    win -= win.mean()
+    pat -= pat.mean()
+    denom = float(np.sqrt((win * win).sum() * (pat * pat).sum()))
+    if denom <= 1e-9:
+        return -1.0
+    return float((win * pat).sum() / denom)
+def _measure_anamorphic_size(gray, cx, cy, sizes=range(10, 37, 2)):
+    best = (18, 18, -1.0)
+    for sw in sizes:
+        for sh in sizes:
+            v = _anamorphic_score(gray, cx, cy, sw, sh)
+            if v > best[2]:
+                best = (sw, sh, v)
+    return best
+def _measure_corner_marker(gray, corner, win=56):
+    h, w = gray.shape[:2]
+    win = max(24, min(win, w // 2, h // 2))
+    if corner == 'tl':
+        patch, ox, oy = gray[0:win, 0:win], 0, 0
+        touch = lambda x, y, bw, bh: x <= 2 and y <= 2
+        anchor = lambda sw, sh: (ox, oy, ox + sw, oy + sh)
+    elif corner == 'tr':
+        patch, ox, oy = gray[0:win, w - win:w], w - win, 0
+        touch = lambda x, y, bw, bh: x + bw >= win - 1 - 2 and y <= 2
+        anchor = lambda sw, sh: (ox + win - sw, oy, ox + win, oy + sh)
+    elif corner == 'bl':
+        patch, ox, oy = gray[h - win:h, 0:win], 0, h - win
+        touch = lambda x, y, bw, bh: x <= 2 and y + bh >= win - 1 - 2
+        anchor = lambda sw, sh: (ox, oy + win - sh, ox + sw, oy + win)
+    else:
+        patch, ox, oy = gray[h - win:h, w - win:w], w - win, h - win
+        touch = lambda x, y, bw, bh: x + bw >= win - 1 - 2 and y + bh >= win - 1 - 2
+        anchor = lambda sw, sh: (ox + win - sw, oy + win - sh, ox + win, oy + win)
+    dark = (patch < 100).astype(np.uint8) * 255
+    n, _labels, stats, _cent = cv2.connectedComponentsWithStats(dark, 8)
+    best, best_area = None, 0
+    for i in range(1, n):
+        x, y = int(stats[i, cv2.CC_STAT_LEFT]), int(stats[i, cv2.CC_STAT_TOP])
+        bw, bh = int(stats[i, cv2.CC_STAT_WIDTH]), int(stats[i, cv2.CC_STAT_HEIGHT])
+        area = int(stats[i, cv2.CC_STAT_AREA])
+        if bw < 8 or bh < 8 or bw > win or bh > win:
+            continue
+        if area < 0.30 * bw * bh or area <= best_area:
+            continue
+        if not touch(x, y, bw, bh):
+            continue
+        best, best_area = (x, y, bw, bh), area
+    if best is None:
+        return None
+    _x, _y, bw0, bh0 = best
+    top = None
+    for sw in range(max(8, bw0 - 3), min(win, bw0 + 3) + 1):
+        for sh in range(max(8, bh0 - 3), min(win, bh0 + 3) + 1):
+            ax1, ay1, ax2, ay2 = anchor(sw, sh)
+            cx, cy = (ax1 + ax2) / 2.0, (ay1 + ay2) / 2.0
+            v = _anamorphic_score(gray, cx, cy, sw, sh)
+            if top is None or v > top[0]:
+                top = (v, ax1, ay1, ax2, ay2)
+    if top is None or top[0] < 0.50:
+        return None
+    return (top[1], top[2], top[3], top[4], top[0])
+def _detect_corner_anchored_roi(img, placement='outside'):
+    if img is None:
+        return []
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+    h, w = gray.shape[:2]
+    if h < 32 or w < 32:
+        return []
+    boxes = {}
+    for corner in ('tl', 'tr', 'bl', 'br'):
+        m = _measure_corner_marker(gray, corner)
+        if m is None:
+            return []
+        boxes[corner] = m
+    if placement == 'inside':
+        nx1 = min(boxes['tl'][0], boxes['bl'][0])
+        ny1 = min(boxes['tl'][1], boxes['tr'][1])
+        nx2 = max(boxes['tr'][2], boxes['br'][2])
+        ny2 = max(boxes['bl'][3], boxes['br'][3])
+    else:
+        nx1 = max(boxes['tl'][2], boxes['bl'][2])
+        ny1 = max(boxes['tl'][3], boxes['tr'][3])
+        nx2 = min(boxes['tr'][0], boxes['br'][0])
+        ny2 = min(boxes['bl'][1], boxes['br'][1])
+    nx1, ny1 = max(0, nx1), max(0, ny1)
+    nx2, ny2 = min(w, nx2), min(h, ny2)
+    if nx2 <= nx1 + 10 or ny2 <= ny1 + 10:
+        return []
+    return [(round(nx1 / w, 4), round(ny1 / h, 4), round(nx2 / w, 4), round(ny2 / h, 4))]
+def _detect_anamorphic_roi(img, placement='outside', min_score=0.50):
+    corner = _detect_corner_anchored_roi(img, placement)
+    if corner:
+        return corner
+    if img is None:
+        return []
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+    h, w = gray.shape[:2]
+    if h < 32 or w < 32:
+        return []
+    centers = _find_marker_core_centers(gray)
+    if len(centers) < 4:
+        return []
+    measured = []
+    for (cx, cy) in centers:
+        sw, sh, v = _measure_anamorphic_size(gray, cx, cy)
+        if v >= min_score:
+            measured.append((cx, cy, sw, sh, v))
+    if len(measured) < 4:
+        return []
+    by_y = sorted(measured, key=lambda t: t[1])
+    top = sorted(by_y[:2], key=lambda t: t[0])
+    bot = sorted(by_y[-2:], key=lambda t: t[0])
+    (tlx, tly, tlsw, tlsh) = (top[0][0], top[0][1], top[0][2], top[0][3])
+    (trx, try_, trsw, trsh) = (top[1][0], top[1][1], top[1][2], top[1][3])
+    (blx, bly, blsw, blsh) = (bot[0][0], bot[0][1], bot[0][2], bot[0][3])
+    (brx, bry, brsw, brsh) = (bot[1][0], bot[1][1], bot[1][2], bot[1][3])
+    tol = 12
+    if abs(tly - try_) > tol or abs(bly - bry) > tol:
+        return []
+    if abs(tlx - blx) > tol or abs(trx - brx) > tol:
+        return []
+    if trx <= tlx + 30 or bry <= tly + 30:
+        return []
+    import statistics
+    sw = int(round(statistics.median([tlsw, trsw, blsw, brsw])))
+    sh = int(round(statistics.median([tlsh, trsh, blsh, brsh])))
+    if placement == 'inside':
+        nx1 = min(tlx - sw / 2, blx - sw / 2)
+        ny1 = min(tly - sh / 2, try_ - sh / 2)
+        nx2 = max(trx + sw / 2, brx + sw / 2)
+        ny2 = max(bly + sh / 2, bry + sh / 2)
+    else:
+        nx1 = max(tlx + sw / 2, blx + sw / 2)
+        ny1 = max(tly + sh / 2, try_ + sh / 2)
+        nx2 = min(trx - sw / 2, brx - sw / 2)
+        ny2 = min(bly - sh / 2, bry - sh / 2)
+    nx1, ny1 = max(0, int(round(nx1))), max(0, int(round(ny1)))
+    nx2, ny2 = min(w, int(round(nx2))), min(h, int(round(ny2)))
+    if nx2 - nx1 < 2 * sw or ny2 - ny1 < 2 * sh:
+        return []
+    verify = []
+    for (cx, cy) in ((tlx, tly), (trx, try_), (blx, bly), (brx, bry)):
+        verify.append(_anamorphic_score(gray, cx, cy, sw, sh))
+    if sum(1 for v in verify if v >= 0.45) < 3:
+        return []
+    return [(round(nx1 / w, 4), round(ny1 / h, 4), round(nx2 / w, 4), round(ny2 / h, 4))]
 def detect_all_optical_markers(img, placement='outside'):
     if img is None:
         return []
@@ -272,6 +543,7 @@ def detect_all_optical_markers(img, placement='outside'):
         return []
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
     all_rois = []
+    candidates = []                 
     for m_size in [18, 24, 16, 32]:
         pattern = create_marker_pattern(m_size)
         pat_gray = cv2.cvtColor(pattern, cv2.COLOR_BGR2GRAY)
@@ -295,9 +567,31 @@ def detect_all_optical_markers(img, placement='outside'):
                         for ex in all_rois
                     ):
                         all_rois.append(r)
-        if all_rois:
-            return all_rois
-    return all_rois
+                        candidates.append((r, m_size))
+    if not candidates:
+        try:
+            return _detect_anamorphic_roi(img, placement=placement)
+        except Exception:
+            return []
+    scored = []
+    for (r, m) in candidates:
+        boxes = _calculate_marker_boxes(w, h, r[0], r[1], r[2], r[3], placement, m)
+        scores = _marker_match_scores(img, boxes, m)
+        scored.append(((sum(1 for v in scores if v >= 0.65), sum(scores)), r, m))
+    scored.sort(key=lambda t: t[0], reverse=True)
+    refined_rois = []
+    for (_key, r, m) in scored:
+        try:
+            rr = refine_roi_from_centers(img, r, placement, m)
+        except Exception:
+            rr = r
+        if not any(
+            abs(rr[0] - ex[0]) < 0.03 and abs(rr[1] - ex[1]) < 0.03 and
+            abs(rr[2] - ex[2]) < 0.03 and abs(rr[3] - ex[3]) < 0.03
+            for ex in refined_rois
+        ):
+            refined_rois.append(rr)
+    return refined_rois
 def detect_optical_markers(img, placement='outside'):
     rois = detect_all_optical_markers(img, placement=placement)
     return rois[0] if rois else None

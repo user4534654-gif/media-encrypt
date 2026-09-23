@@ -222,45 +222,77 @@ if (upload) {
         }
     });
 }
-function displayUploadVideoBitrate(files) {
+function probeFileKbps(file) {
+    return new Promise((resolve) => {
+        if (!file || !file.type || !file.type.startsWith('video/')) return resolve(null);
+        const url = URL.createObjectURL(file);
+        const vid = document.createElement('video');
+        vid.preload = 'metadata';
+        vid.onloadedmetadata = () => {
+            let kbps = null;
+            if (vid.duration > 0 && file.size > 0) {
+                kbps = Math.max(1, Math.round((file.size * 8) / vid.duration / 1000));
+            }
+            URL.revokeObjectURL(url);
+            resolve(kbps);
+        };
+        vid.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(null);
+        };
+        vid.src = url;
+    });
+}
+async function refreshUploadBitrateInfo() {
     const infoEl = document.getElementById('uploadVideoBitrateInfo');
     if (!infoEl) return;
-    const videoFiles = files.filter(f => f.type.startsWith('video/'));
-    if (!videoFiles.length) {
+    const mainFiles = (typeof upload !== 'undefined' && upload && upload.files)
+        ? Array.from(upload.files).filter(f => f.type.startsWith('video/')) : [];
+    const centerFiles = (typeof centerUpload !== 'undefined' && centerUpload && centerUpload.files)
+        ? Array.from(centerUpload.files).filter(f => f.type.startsWith('video/')) : [];
+    if (!mainFiles.length && !centerFiles.length) {
         infoEl.style.display = 'none';
         infoEl.innerHTML = '';
         return;
     }
     infoEl.style.display = 'block';
     infoEl.innerHTML = 'Computing upload bitrate…';
-    let pending = videoFiles.length;
-    let rowsHtml = '';
-    videoFiles.forEach(file => {
-        const url = URL.createObjectURL(file);
-        const vid = document.createElement('video');
-        vid.preload = 'metadata';
-        vid.onloadedmetadata = () => {
-            if (vid.duration > 0 && file.size > 0) {
-                const kbps = Math.max(1, Math.round((file.size * 8) / vid.duration / 1000));
-                rowsHtml += `<div style="font-size: 12px; color: #007aff;">📊 ${file.name} — upload bitrate: ${kbps} kbps</div>`;
-            }
-            URL.revokeObjectURL(url);
-            pending--;
-            if (pending === 0) infoEl.innerHTML = rowsHtml;
-        };
-        vid.onerror = () => {
-            URL.revokeObjectURL(url);
-            pending--;
-            if (pending === 0) infoEl.innerHTML = rowsHtml;
-        };
-        vid.src = url;
-    });
+    const rows = [];
+    let best = 0;
+    let bgBest = 0, centerBest = 0;
+    for (const file of mainFiles) {
+        const kbps = await probeFileKbps(file);
+        if (kbps) {
+            best = Math.max(best, kbps);
+            bgBest = Math.max(bgBest, kbps);
+            rows.push(`<div style="font-size: 12px; color: #007aff;">📊 ${file.name} — upload bitrate: ${kbps} kbps</div>`);
+        }
+    }
+    for (const file of centerFiles) {
+        const kbps = await probeFileKbps(file);
+        if (kbps) {
+            best = Math.max(best, kbps);
+            centerBest = Math.max(centerBest, kbps);
+            rows.push(`<div style="font-size: 12px; color: #c0392b;">📊 Center ${file.name} — upload bitrate: ${kbps} kbps</div>`);
+        }
+    }
+    try { window._lastBitrates = { bg: bgBest, center: centerBest, max: best }; } catch (e) {}
+    if (best > 0 && (mainFiles.length + centerFiles.length) > 1) {
+        rows.push(`<div style="font-size: 12px; font-weight: 700; color: #2e7d32;">⚡ Auto will encode at max = ${best} kbps (covers the sharper source)</div>`);
+    } else if (best > 0 && centerFiles.length > 0) {
+        rows.push(`<div style="font-size: 12px; font-weight: 700; color: #2e7d32;">⚡ Auto will encode at max = ${best} kbps</div>`);
+    }
+    infoEl.innerHTML = rows.join('');
+}
+function displayUploadVideoBitrate(files) {
+    refreshUploadBitrateInfo();
 }
 if (centerUpload) {
     centerUpload.addEventListener('change', (e) => {
         const files = Array.from(e.target.files);
         const list = document.getElementById('centerFileList');
         if (list) list.innerText = files.map(f => f.name).join(', ');
+        refreshUploadBitrateInfo();
     });
 }
 if (imageUpload) {

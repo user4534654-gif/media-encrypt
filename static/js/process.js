@@ -100,13 +100,14 @@ async function startBatch(action) {
             fd.append('files', f);
         });
     }
-    if (action === 'scramble') {
+            if (action === 'scramble') {
         if (activeMediaType === 'video') {
             const fmtVal = document.getElementById('v_fmt').value;
+            const IMG_RE = /\.(jpe?g|jpe|jfif|jif|jfi|png|webp|avif|bmp|tiff?|gif|ico)$/i;
             const isInputImage = rawFiles.length > 0 && (
                 typeof rawFiles[0] === 'string'
-                    ? /\.(jpe?g|png|webp|avif|bmp)$/i.test(rawFiles[0])
-                    : (rawFiles[0].type ? rawFiles[0].type.startsWith('image/') : /\.(jpe?g|png|webp|avif|bmp)$/i.test(rawFiles[0].name))
+                    ? IMG_RE.test(rawFiles[0])
+                    : (rawFiles[0].type ? rawFiles[0].type.startsWith('image/') : IMG_RE.test(rawFiles[0].name))
             );
             if (isInputImage) {
                 let imgFmt = fmtVal;
@@ -127,6 +128,10 @@ async function startBatch(action) {
             fd.append('vid_codec', document.getElementById('v_codec').value);
             const isAutoBitrate = document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : true;
             fd.append('vid_bitrate', isAutoBitrate ? 'auto' : document.getElementById('v_bit_slider').value + 'k');
+            const waveEnv = document.getElementById('vid_bitrate_envelope');
+            if (waveEnv && waveEnv.value) {
+                fd.append('vid_bitrate_envelope', waveEnv.value);
+            }
             const spatialMode = document.getElementById('v_spatial_mode') ? document.getElementById('v_spatial_mode').value : 'off';
             fd.append('spatial_compression_mode', spatialMode);
             fd.append('vid_preset', document.getElementById('v_preset').value);
@@ -241,6 +246,8 @@ async function startBatch(action) {
                 fd.append('patch_roi', JSON.stringify([x1, y1, x2, y2]));
                 fd.append('roi_invert', document.getElementById('imgRoiInvert').checked ? 'true' : 'false');
                 fd.append('optical_markers', document.getElementById('imgOpticalMarkers').checked ? 'true' : 'false');
+                const imgPlaceEl = document.getElementById('imgMarkerPlacement');
+                fd.append('marker_placement', imgPlaceEl ? imgPlaceEl.value : 'outside');
             }
         } else if (activeMediaType === 'audio') {
             fd.append('enc_video', 'false'); 

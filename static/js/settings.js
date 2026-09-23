@@ -6,79 +6,143 @@ let imgEncryptionMode = 'normal';
 let activeMainTab = 'encrypt';
 let activeMediaType = 'video';
 let activeImageFormat = 'auto';
-function saveAllSettings() {
+function collectSettings() {
     const bitSlider = document.getElementById('v_bit_slider');
     const freqSlider = document.getElementById('carrier_freq_slider');
     const encVideo = document.getElementById('encVideo');
     const encAudio = document.getElementById('encAudio');
-    const settings = {
+    const val = (id, def) => { const el = document.getElementById(id); return el ? el.value : def; };
+    const chk = (id, def) => { const el = document.getElementById(id); return el ? el.checked : def; };
+    return {
+        _preset: 'media-encrypt-settings',
+        _version: 1,
+        _savedAt: new Date().toISOString(),
         encryptionMode: encryptionMode,
         imgEncryptionMode: imgEncryptionMode,
         activeMediaType: activeMediaType,
         activeImageFormat: activeImageFormat,
-        theme: document.getElementById('themeToggle') ? document.getElementById('themeToggle').checked : false,
+        theme: chk('themeToggle', false),
         encVideo: encVideo ? encVideo.checked : true,
         encAudio: encAudio ? encAudio.checked : true,
-        v_fmt: document.getElementById('v_fmt') ? document.getElementById('v_fmt').value : 'auto',
-        v_codec: document.getElementById('v_codec') ? document.getElementById('v_codec').value : 'auto',
-        v_preset: document.getElementById('v_preset') ? document.getElementById('v_preset').value : 'auto',
+        v_fmt: val('v_fmt', 'auto'),
+        v_codec: val('v_codec', 'auto'),
+        v_preset: val('v_preset', 'auto'),
         v_bit: bitSlider ? bitSlider.value : '3000',
-        v_spatial_mode: document.getElementById('v_spatial_mode') ? document.getElementById('v_spatial_mode').value : 'off',
-        autoVidBitrate: document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : true,
-        a_sr_auto: document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true,
-        a_sr_slider: document.getElementById('a_sr_slider') ? document.getElementById('a_sr_slider').value : '48000',
-        a_codec: document.getElementById('a_codec') ? document.getElementById('a_codec').value : 'auto',
-        a_bit_slider: document.getElementById('a_bit_slider') ? document.getElementById('a_bit_slider').value : '320',
-        a_bit_auto: document.getElementById('a_bit_auto') ? document.getElementById('a_bit_auto').checked : false,
-        cols: document.getElementById('cols') ? document.getElementById('cols').value : '10',
-        rows: document.getElementById('rows') ? document.getElementById('rows').value : '10',
-        sid: document.getElementById('sid') ? document.getElementById('sid').value : '',
-        aspectLock: document.getElementById('aspectLock') ? document.getElementById('aspectLock').checked : true,
-        noScale: document.getElementById('noScale') ? document.getElementById('noScale').checked : false,
-        resW: document.getElementById('resW') ? document.getElementById('resW').value : '',
-        resH: document.getElementById('resH') ? document.getElementById('resH').value : '',
-        img_cols: document.getElementById('img_cols') ? document.getElementById('img_cols').value : '10',
-        img_rows: document.getElementById('img_rows') ? document.getElementById('img_rows').value : '10',
-        img_sid: document.getElementById('img_sid') ? document.getElementById('img_sid').value : '',
+        v_spatial_mode: val('v_spatial_mode', 'off'),
+        autoVidBitrate: chk('autoVidBitrate', true),
+        a_sr_auto: chk('a_sr_auto', true),
+        a_sr_slider: val('a_sr_slider', '48000'),
+        a_codec: val('a_codec', 'auto'),
+        a_bit_slider: val('a_bit_slider', '320'),
+        a_bit_auto: chk('a_bit_auto', false),
+        cols: val('cols', '10'),
+        rows: val('rows', '10'),
+        sid: val('sid', ''),
+        aspectLock: chk('aspectLock', true),
+        noScale: chk('noScale', false),
+        resW: val('resW', ''),
+        resH: val('resH', ''),
+        img_cols: val('img_cols', '10'),
+        img_rows: val('img_rows', '10'),
+        img_sid: val('img_sid', ''),
         carrier_freq: freqSlider ? freqSlider.value : '8000',
-        audio_sr_auto: document.getElementById('audio_sr_auto') ? document.getElementById('audio_sr_auto').checked : true,
-        audio_sr_slider: document.getElementById('audio_sr_slider') ? document.getElementById('audio_sr_slider').value : '48000',
-        audio_codec: document.getElementById('audio_codec') ? document.getElementById('audio_codec').value : 'auto',
-        audio_bit_slider: document.getElementById('audio_bit_slider') ? document.getElementById('audio_bit_slider').value : '320',
-        audio_bit_auto: document.getElementById('audio_bit_auto') ? document.getElementById('audio_bit_auto').checked : false,
-        audio_fmt: document.getElementById('audio_fmt') ? document.getElementById('audio_fmt').value : 'auto',
-        decKey: document.getElementById('decKey') ? document.getElementById('decKey').value : '',
-        aud_method: document.getElementById('aud_method') ? document.getElementById('aud_method').value : 'inversion',
-        aud_splits: document.getElementById('aud_splits') ? document.getElementById('aud_splits').value : '10',
-        aud_seed: document.getElementById('aud_seed') ? document.getElementById('aud_seed').value : '',
-        aud_vol_factor: document.getElementById('aud_vol_factor_slider') ? document.getElementById('aud_vol_factor_slider').value : '100',
-        v_aud_method: document.getElementById('v_aud_method') ? document.getElementById('v_aud_method').value : 'inversion',
-        v_aud_splits: document.getElementById('v_aud_splits') ? document.getElementById('v_aud_splits').value : '10',
-        vol_factor: document.getElementById('vol_factor_slider') ? document.getElementById('vol_factor_slider').value : '100',
-        dual_track: document.getElementById('dual_track') ? document.getElementById('dual_track').checked : false,
-        track_l_source: document.getElementById('trackLSourceSelect') ? document.getElementById('trackLSourceSelect').value : 'background',
-        track_r_source: document.getElementById('trackRSourceSelect') ? document.getElementById('trackRSourceSelect').value : 'center',
-        track_l_enc: document.getElementById('trackLEncCheckbox') ? document.getElementById('trackLEncCheckbox').checked : true,
-        track_r_enc: document.getElementById('trackREncCheckbox') ? document.getElementById('trackREncCheckbox').checked : true,
-        center_size: document.getElementById('center_size') ? document.getElementById('center_size').value : '1/4',
-        img_center_size: document.getElementById('img_center_size') ? document.getElementById('img_center_size').value : '1/4',
-        outer_end_action: document.getElementById('outer_end_action') ? document.getElementById('outer_end_action').value : 'stop',
-        center_end_action: document.getElementById('center_end_action') ? document.getElementById('center_end_action').value : 'loop',
-        center_aud_action: document.getElementById('center_aud_action') ? document.getElementById('center_aud_action').value : 'silence',
-        exportSvg: document.getElementById('exportSvg') ? document.getElementById('exportSvg').checked : true,
-        imgExportSvg: document.getElementById('imgExportSvg') ? document.getElementById('imgExportSvg').checked : true,
-        useGpu: document.getElementById('useGpu') ? document.getElementById('useGpu').checked : false,
-        saveKeyFile: document.getElementById('saveKeyFile') ? document.getElementById('saveKeyFile').checked : true,
-        imgSaveKeyFile: document.getElementById('imgSaveKeyFile') ? document.getElementById('imgSaveKeyFile').checked : true,
-        audSaveKeyFile: document.getElementById('audSaveKeyFile') ? document.getElementById('audSaveKeyFile').checked : true
+        audio_sr_auto: chk('audio_sr_auto', true),
+        audio_sr_slider: val('audio_sr_slider', '48000'),
+        audio_codec: val('audio_codec', 'auto'),
+        audio_bit_slider: val('audio_bit_slider', '320'),
+        audio_bit_auto: chk('audio_bit_auto', false),
+        audio_fmt: val('audio_fmt', 'auto'),
+        decKey: val('decKey', ''),
+        aud_method: val('aud_method', 'inversion'),
+        aud_splits: val('aud_splits', '10'),
+        aud_seed: val('aud_seed', ''),
+        aud_vol_factor: val('aud_vol_factor_slider', '100'),
+        v_aud_method: val('v_aud_method', 'inversion'),
+        v_aud_splits: val('v_aud_splits', '10'),
+        vol_factor: val('vol_factor_slider', '100'),
+        dual_track: chk('dual_track', false),
+        track_l_source: val('trackLSourceSelect', 'background'),
+        track_r_source: val('trackRSourceSelect', 'center'),
+        track_l_enc: chk('trackLEncCheckbox', true),
+        track_r_enc: chk('trackREncCheckbox', true),
+        center_size: val('center_size', '1/4'),
+        img_center_size: val('img_center_size', '1/4'),
+        outer_end_action: val('outer_end_action', 'stop'),
+        center_end_action: val('center_end_action', 'loop'),
+        center_aud_action: val('center_aud_action', 'silence'),
+        exportSvg: chk('exportSvg', true),
+        imgExportSvg: chk('imgExportSvg', true),
+        useGpu: chk('useGpu', false),
+        saveKeyFile: chk('saveKeyFile', true),
+        imgSaveKeyFile: chk('imgSaveKeyFile', true),
+        audSaveKeyFile: chk('audSaveKeyFile', true),
+        enableSpatialZones: chk('enableSpatialZones', false),
+        patchRoiInvert: chk('patchRoiInvert', false),
+        patchOpticalMarkers: chk('patchOpticalMarkers', false),
+        patchMarkerPlacement: val('patchMarkerPlacement', 'outside'),
+        patchCoordX1: val('patchCoordX1', ''),
+        patchCoordY1: val('patchCoordY1', ''),
+        patchCoordX2: val('patchCoordX2', ''),
+        patchCoordY2: val('patchCoordY2', ''),
+        imgEnableSpatialZones: chk('imgEnableSpatialZones', false),
+        imgRoiInvert: chk('imgRoiInvert', false),
+        imgOpticalMarkers: chk('imgOpticalMarkers', false),
+        imgMarkerPlacement: val('imgMarkerPlacement', 'outside'),
+        imgCoordX1: val('imgCoordX1', ''),
+        imgCoordY1: val('imgCoordY1', ''),
+        imgCoordX2: val('imgCoordX2', ''),
+        imgCoordY2: val('imgCoordY2', '')
     };
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+function saveAllSettings() {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(collectSettings()));
 }
 function loadAllSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return;
     try {
-        const settings = JSON.parse(raw);
+        applySettingsObject(JSON.parse(raw));
+    } catch (e) {
+        console.error("Error loading settings:", e);
+    }
+}
+function exportSettingsToJson() {
+    try {
+        const settings = collectSettings();
+        const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+        const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `media-encrypt-settings-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    } catch (e) {
+        console.error('Error exporting settings:', e);
+        alert('Could not export settings: ' + e.message);
+    }
+}
+function importSettingsFromJsonFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            const settings = JSON.parse(reader.result);
+            if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+                throw new Error('not a settings object');
+            }
+            applySettingsObject(settings);
+            saveAllSettings();
+            alert('Settings preset applied.');
+        } catch (e) {
+            console.error('Error importing settings:', e);
+            alert('Could not load settings preset: invalid .json file.');
+        }
+    };
+    reader.readAsText(file);
+}
+function applySettingsObject(settings) {
+    try {
         if (settings.theme !== undefined) {
             const toggle = document.getElementById('themeToggle');
             if (toggle) toggle.checked = settings.theme;
@@ -211,6 +275,40 @@ function loadAllSettings() {
         setChecked('saveKeyFile', settings.saveKeyFile !== false);
         setChecked('imgSaveKeyFile', settings.imgSaveKeyFile !== false);
         setChecked('audSaveKeyFile', settings.audSaveKeyFile !== false);
+        if (settings.enableSpatialZones !== undefined) {
+            setChecked('enableSpatialZones', settings.enableSpatialZones);
+            if (typeof onEnableSpatialZonesToggle === 'function') onEnableSpatialZonesToggle(!!settings.enableSpatialZones);
+        }
+        if (settings.patchRoiInvert !== undefined) setChecked('patchRoiInvert', settings.patchRoiInvert);
+        if (settings.patchOpticalMarkers !== undefined) {
+            setChecked('patchOpticalMarkers', settings.patchOpticalMarkers);
+            if (typeof toggleOpticalPlacement === 'function') toggleOpticalPlacement(!!settings.patchOpticalMarkers);
+        }
+        if (settings.patchMarkerPlacement) setVal('patchMarkerPlacement', settings.patchMarkerPlacement);
+        if (settings.patchCoordX1 !== undefined && settings.patchCoordX1 !== '') {
+            setVal('patchCoordX1', settings.patchCoordX1);
+            setVal('patchCoordY1', settings.patchCoordY1);
+            setVal('patchCoordX2', settings.patchCoordX2);
+            setVal('patchCoordY2', settings.patchCoordY2);
+            if (typeof onManualCoordInput === 'function') onManualCoordInput();
+        }
+        if (settings.imgEnableSpatialZones !== undefined) {
+            setChecked('imgEnableSpatialZones', settings.imgEnableSpatialZones);
+            if (typeof onEnableImgSpatialZonesToggle === 'function') onEnableImgSpatialZonesToggle(!!settings.imgEnableSpatialZones);
+        }
+        if (settings.imgRoiInvert !== undefined) setChecked('imgRoiInvert', settings.imgRoiInvert);
+        if (settings.imgOpticalMarkers !== undefined) {
+            setChecked('imgOpticalMarkers', settings.imgOpticalMarkers);
+            if (typeof toggleImgOpticalPlacement === 'function') toggleImgOpticalPlacement(!!settings.imgOpticalMarkers);
+        }
+        if (settings.imgMarkerPlacement) setVal('imgMarkerPlacement', settings.imgMarkerPlacement);
+        if (settings.imgCoordX1 !== undefined && settings.imgCoordX1 !== '') {
+            setVal('imgCoordX1', settings.imgCoordX1);
+            setVal('imgCoordY1', settings.imgCoordY1);
+            setVal('imgCoordX2', settings.imgCoordX2);
+            setVal('imgCoordY2', settings.imgCoordY2);
+            if (typeof onManualImgCoordInput === 'function') onManualImgCoordInput();
+        }
         updateVisibility();
         if (typeof toggleAudioMethodFields === 'function') toggleAudioMethodFields();
         if (typeof toggleVideoAudioMethodFields === 'function') toggleVideoAudioMethodFields();
@@ -225,7 +323,9 @@ function initAutoSave() {
         'img_cols', 'img_rows', 'img_sid', 'carrier_freq_slider', 'audio_sr_slider', 'audio_sr_auto', 'audio_codec',
         'audio_bit_slider', 'audio_bit_auto', 'audio_fmt', 'decKey', 'aud_method', 'aud_splits', 'aud_seed', 'aud_vol_factor_slider',
         'v_aud_method', 'v_aud_splits', 'vol_factor_slider', 'dual_track', 'trackLSourceSelect', 'trackRSourceSelect', 'trackLEncCheckbox', 'trackREncCheckbox', 'center_size', 'img_center_size',
-        'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg', 'useGpu', 'saveKeyFile', 'imgSaveKeyFile', 'audSaveKeyFile'
+        'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg', 'useGpu', 'saveKeyFile', 'imgSaveKeyFile', 'audSaveKeyFile',
+        'enableSpatialZones', 'patchRoiInvert', 'patchOpticalMarkers', 'patchMarkerPlacement', 'patchCoordX1', 'patchCoordY1', 'patchCoordX2', 'patchCoordY2',
+        'imgEnableSpatialZones', 'imgRoiInvert', 'imgOpticalMarkers', 'imgMarkerPlacement', 'imgCoordX1', 'imgCoordY1', 'imgCoordX2', 'imgCoordY2'
     ];
     inputs.forEach(id => {
         const el = document.getElementById(id);

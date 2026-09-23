@@ -1,0 +1,67 @@
+{
+  "checks": [
+    {
+      "name": "T1 golden vectors (py<->js contract)",
+      "status": "PASS",
+      "metrics": {
+        "goldens": "7/7 exact"
+      }
+    },
+    {
+      "name": "T2 grid area-conservation sweep",
+      "status": "PASS",
+      "metrics": {
+        "cases": 8,
+        "uncovered_or_overlap_max": 0
+      }
+    },
+    {
+      "name": "T3 image checkerboard roundtrip + proofs",
+      "status": "PASS",
+      "metrics": {
+        "div_exact_maxdiff": 0,
+        "div_enc_meanabs": 46.47,
+        "wrongseed_meanabs": 53.28,
+        "odd_enc_meanabs": 86.02,
+        "odd_dec_meanabs": 3.36
+      }
+    },
+    {
+      "name": "T4 audio scramble/fidelity/wrong-key",
+      "status": "PASS",
+      "metrics": {
+        "inversion_enc": 0.0,
+        "inversion_dec": 1.0,
+        "inversion_wrong": -0.0,
+        "band_scramble_enc": 0.001,
+        "band_scramble_dec": 0.747,
+        "band_scramble_wrong": -0.014,
+        "combined_enc": -0.0,
+        "combined_dec": 0.925,
+        "combined_wrong": 0.061
+      }
+    },
+    {
+      "name": "T6 gridmap sidecar exactness",
+      "status": "PASS",
+      "metrics": {
+        "json_checks": "exact",
+        "png_sha256": "d37754a597af",
+        "center_outer": 12,
+        "center_inner": 4
+      }
+    },
+    {
+      "name": "T5 video per-frame encrypt/restore",
+      "status": "PASS",
+      "metrics": {
+        "frames": 6,
+        "enc_meanabs_min": 74.55,
+        "enc_meanabs_max": 81.63,
+        "dec_meanabs_max": 5.67
+      }
+    }
+  ],
+  "passed": 6,
+  "failed": 0
+}

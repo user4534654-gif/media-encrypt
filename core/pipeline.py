@@ -9,6 +9,7 @@ if sys.platform == "win32":
 from core.audio import process_audio_file
 from core.image_processor import process_image_file
 from core.video_processor import process_video_file
+from core.metadata_prober import is_image_filename
 from core.tempdir import get_temp_file_path
 @LiveDebugger.trace(module_name="PIPELINE")
 def process_media(input_path, output_path, options, progress_dict, task_id):
@@ -18,7 +19,7 @@ def process_media(input_path, output_path, options, progress_dict, task_id):
     proc_aud = options.get('process_audio')
     reverse = options.get('reverse')
     carrier_freq = options.get('carrier_freq', 8000)
-    is_image = input_path.lower().endswith(('.jpg', '.png', '.jpeg', '.bmp', '.webp', '.avif'))
+    is_image = is_image_filename(input_path)
     is_audio = input_path.lower().endswith(('.mp3', '.wav', '.flac', '.ogg', '.m4a'))
     try:
         if is_image:
