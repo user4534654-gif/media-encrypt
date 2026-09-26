@@ -230,11 +230,13 @@ function probeFileKbps(file) {
         vid.preload = 'metadata';
         vid.onloadedmetadata = () => {
             let kbps = null;
-            if (vid.duration > 0 && file.size > 0) {
-                kbps = Math.max(1, Math.round((file.size * 8) / vid.duration / 1000));
+            let duration = null;
+            if (isFinite(vid.duration) && vid.duration > 0) duration = vid.duration;
+            if (duration && file.size > 0) {
+                kbps = Math.max(1, Math.round((file.size * 8) / duration / 1000));
             }
             URL.revokeObjectURL(url);
-            resolve(kbps);
+            resolve({ kbps, duration });
         };
         vid.onerror = () => {
             URL.revokeObjectURL(url);
@@ -259,9 +261,11 @@ async function refreshUploadBitrateInfo() {
     infoEl.innerHTML = 'Computing upload bitrate…';
     const rows = [];
     let best = 0;
-    let bgBest = 0, centerBest = 0;
+    let bgBest = 0, centerBest = 0, durationSec = null;
     for (const file of mainFiles) {
-        const kbps = await probeFileKbps(file);
+        const probe = await probeFileKbps(file);
+        const kbps = probe ? probe.kbps : null;
+        if (probe && probe.duration && durationSec === null) durationSec = probe.duration;
         if (kbps) {
             best = Math.max(best, kbps);
             bgBest = Math.max(bgBest, kbps);
@@ -269,14 +273,15 @@ async function refreshUploadBitrateInfo() {
         }
     }
     for (const file of centerFiles) {
-        const kbps = await probeFileKbps(file);
+        const probe = await probeFileKbps(file);
+        const kbps = probe ? probe.kbps : null;
         if (kbps) {
             best = Math.max(best, kbps);
             centerBest = Math.max(centerBest, kbps);
             rows.push(`<div style="font-size: 12px; color: #c0392b;">📊 Center ${file.name} — upload bitrate: ${kbps} kbps</div>`);
         }
     }
-    try { window._lastBitrates = { bg: bgBest, center: centerBest, max: best }; } catch (e) {}
+    try { window._lastBitrates = { bg: bgBest, center: centerBest, max: best, durationSec: durationSec }; } catch (e) {}
     if (best > 0 && (mainFiles.length + centerFiles.length) > 1) {
         rows.push(`<div style="font-size: 12px; font-weight: 700; color: #2e7d32;">⚡ Auto will encode at max = ${best} kbps (covers the sharper source)</div>`);
     } else if (best > 0 && centerFiles.length > 0) {

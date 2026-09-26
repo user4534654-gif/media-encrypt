@@ -134,6 +134,8 @@ async function startBatch(action) {
             }
             const spatialMode = document.getElementById('v_spatial_mode') ? document.getElementById('v_spatial_mode').value : 'off';
             fd.append('spatial_compression_mode', spatialMode);
+            const zoneStrength = document.getElementById('zone_priority_strength');
+            fd.append('zone_priority_strength', zoneStrength ? zoneStrength.value : '40');
             fd.append('vid_preset', document.getElementById('v_preset').value);
             const aSrAuto = document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true;
             fd.append('aud_sr', aSrAuto ? 'auto' : document.getElementById('a_sr_slider').value);
@@ -172,6 +174,7 @@ async function startBatch(action) {
             fd.append('center_end_action', document.getElementById('center_end_action').value);            const centerAudActionElem = document.getElementById('center_aud_action');
             fd.append('center_aud_action', centerAudActionElem ? centerAudActionElem.value : 'silence');
             fd.append('export_svg', document.getElementById('exportSvg').checked);
+            fd.append('export_timeline', document.getElementById('exportTimeline') ? document.getElementById('exportTimeline').checked : true);
             fd.append('use_gpu', document.getElementById('useGpu') ? document.getElementById('useGpu').checked : false);
             fd.append('save_key_file', document.getElementById('saveKeyFile') ? document.getElementById('saveKeyFile').checked : true);
             fd.append('generate_qr', document.getElementById('generateQr') ? document.getElementById('generateQr').checked : false);

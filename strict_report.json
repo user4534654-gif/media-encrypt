@@ -60,8 +60,19 @@
         "enc_meanabs_max": 81.63,
         "dec_meanabs_max": 5.67
       }
+    },
+    {
+      "name": "T7 optical markers in/outside + probe",
+      "status": "PASS",
+      "metrics": {
+        "detect": "in+out exact",
+        "key_rule": "inside-kept",
+        "dec_meanabs_max": 12.23,
+        "mif_meanabs_max": 14.31,
+        "zc_inside_meanabs_max": 14.38
+      }
     }
   ],
-  "passed": 6,
+  "passed": 7,
   "failed": 0
 }

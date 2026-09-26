@@ -65,16 +65,30 @@ def _calculate_marker_boxes(w, h, rx1, ry1, rx2, ry2, placement='outside', size=
     rx2_i = int(math.ceil(rx2))
     ry2_i = int(math.ceil(ry2))
     if placement == 'outside':
-        tl = (max(0, rx1_i - size), max(0, ry1_i - size), rx1_i, ry1_i)
-        tr = (rx2_i, max(0, ry1_i - size), min(w, rx2_i + size), ry1_i)
-        bl = (max(0, rx1_i - size), ry2_i, rx1_i, min(h, ry2_i + size))
-        br = (rx2_i, ry2_i, min(w, rx2_i + size), min(h, ry2_i + size))
+        def _shift(x1, y1):
+            if w > size:
+                x1 = min(max(x1, 0), w - size)
+            else:
+                x1 = 0
+            if h > size:
+                y1 = min(max(y1, 0), h - size)
+            else:
+                y1 = 0
+            return (x1, y1, min(w, x1 + size), min(h, y1 + size))
+        tl = _shift(rx1_i - size, ry1_i - size)
+        tr = _shift(rx2_i, ry1_i - size)
+        bl = _shift(rx1_i - size, ry2_i)
+        br = _shift(rx2_i, ry2_i)
     else:         
         tl = (rx1_i, ry1_i, min(rx2_i, rx1_i + size), min(ry2_i, ry1_i + size))
         tr = (max(rx1_i, rx2_i - size), ry1_i, rx2_i, min(ry2_i, ry1_i + size))
         bl = (rx1_i, max(ry1_i, ry2_i - size), min(rx2_i, rx1_i + size), ry2_i)
         br = (max(rx1_i, rx2_i - size), max(ry1_i, ry2_i - size), rx2_i, ry2_i)
     return [tl, tr, bl, br]
+def effective_marker_placement(center=False, center_path=None,
+                               patch_segments=None, patch_roi=None,
+                               optical_markers=False, placement='outside'):
+    return placement or 'outside'
 _CACHED_PATTERNS = {}
 def get_cached_marker_pattern_gray(size=18):
     if size not in _CACHED_PATTERNS:

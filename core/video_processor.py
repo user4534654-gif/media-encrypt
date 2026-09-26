@@ -12,6 +12,7 @@ from core.crypto import seeded_shuffle, stamp_optical_markers, restore_optical_m
 from core.audio import process_audio_file
 from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks, get_roi_blocks, center_inner_grid
 from core.svg_generator import export_grid_to_svg, export_scrambled_grid_to_svg
+from core.svg_generator import export_zone_to_svg, export_scrambled_zone_to_svg
 from core.tempdir import get_temp_file_path
 from core.logger import LiveDebugger
 _AVAILABLE_HW_ENCODERS = None
@@ -94,7 +95,7 @@ def _load_or_extract_audio_channel(file_path, target_sr, ffmpeg_exe, creation_fl
         if res.returncode == 0 and os.path.exists(temp_wav):
             data, sr = sf.read(temp_wav)
             if len(data.shape) > 1:
-                data = data[:, 0]
+                data = data.mean(axis=1)
             return data
     except Exception as e:
         LiveDebugger.log("AUD_EXTRACT_ERR", f"Failed to extract audio from {file_path}: {e}", level="WARNING", module="AUDIO")
@@ -152,7 +153,8 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
         extra_hw_args = {}
     args = ['-c:v', chosen_codec]
     env_avg, env_max = _parse_bitrate_envelope(envelope)
-    if env_avg and spatial_mode in ('zone', 'tiles'):
+    _prio = spatial_mode in ('priority', 'zone')
+    if env_avg and _prio:
         b_val = f"{env_max}k"
     elif env_avg and spatial_mode == 'off':
         b_val = f"{env_avg}k"
@@ -174,7 +176,7 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
     is_vt = 'videotoolbox' in codec_lower
     is_amf = 'amf' in codec_lower
     is_prores = 'prores' in codec_lower
-    if spatial_mode == 'zone':
+    if _prio:
         if is_nvenc:
             args.extend(['-rc', 'vbr', '-cq', '19', '-b:v', b_val, '-maxrate', b_val, '-bufsize', buf_val])
             args.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
@@ -194,42 +196,13 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
             args.extend(['-profile:v', '3'])
         else:
             args.extend(['-b:v', b_val, '-maxrate', b_val, '-bufsize', buf_val, '-preset', vid_preset, '-pix_fmt', 'yuv420p'])
-    elif spatial_mode == 'tiles':
-        n_slices = max(2, min(int(rows), 16))
-        if is_nvenc:
-            args.extend(['-slices', str(n_slices), '-rc', 'vbr', '-cq', '20', '-maxrate', b_val, '-bufsize', buf_val])
-            args.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
-        elif is_h264:
-            args.extend([
-                '-slices', str(n_slices),
-                '-flags', '-loop',
-                '-x264opts', 'no-deblock=1',
-                '-crf', '20',
-                '-maxrate', b_val,
-                '-bufsize', buf_val,
-                '-preset', vid_preset,
-                '-pix_fmt', 'yuv420p'
-            ])
-        elif is_h265:
-            args.extend([
-                '-x265-params', f'no-deblock=1:slices={n_slices}',
-                '-crf', '21',
-                '-maxrate', b_val,
-                '-bufsize', buf_val,
-                '-preset', vid_preset,
-                '-pix_fmt', 'yuv420p'
-            ])
-        elif is_qsv:
-            args.extend(['-slices', str(n_slices), '-b:v', b_val, '-preset', 'medium', '-pix_fmt', 'nv12'])
-        elif is_prores:
-            args.extend(['-profile:v', '3'])
-        else:
-            args.extend(['-slices', str(n_slices), '-flags', '-loop', '-b:v', b_val, '-preset', vid_preset, '-pix_fmt', 'yuv420p'])
     else:
         if env_avg and env_max and not is_prores:
             args.extend(['-b:v', f'{env_avg}k', '-maxrate', f'{env_max}k', '-bufsize', f'{env_max * 2}k'])
         else:
             args.extend(['-b:v', b_val])
+            if not is_prores:
+                args.extend(['-maxrate', b_val, '-bufsize', buf_val])
         if is_vp9:
             args.extend(['-deadline', 'good', '-cpu-used', '2'])
         elif is_nvenc:
@@ -281,6 +254,89 @@ def _resolve_zone_pixels(s_roi, out_w, out_h):
     px2 = max(0, min(out_w, px2))
     py2 = max(0, min(out_h, py2))
     return px1, py1, px2, py2
+def _soften_outside_zones(frame, keep_rects=None, cut_rects=None,
+                          marker_boxes=None, strength=0, feather=8):
+    if frame is None or strength <= 0:
+        return frame
+    h, w = frame.shape[:2]
+    keep_rects = keep_rects or []
+    cut_rects = cut_rects or []
+    if not keep_rects and not cut_rects:
+        return frame
+    keep = np.zeros((h, w), dtype=np.float32)
+    if not keep_rects and cut_rects:
+        keep[:] = 1.0                                                      
+    for (x1, y1, x2, y2) in keep_rects:
+        try:
+            keep[max(0, y1):min(h, y2), max(0, x1):min(w, x2)] = 1.0
+        except Exception:
+            pass
+    for (x1, y1, x2, y2) in cut_rects:
+        try:
+            keep[max(0, y1):min(h, y2), max(0, x1):min(w, x2)] = 0.0
+        except Exception:
+            pass
+    for b in (marker_boxes or []):
+        try:
+            keep[max(0, b['y1']):min(h, b['y2']),
+                 max(0, b['x1']):min(w, b['x2'])] = 1.0
+        except Exception:
+            pass
+    if keep.mean() >= 1.0:
+        return frame                                           
+    if keep.mean() <= 0.0:
+        return frame                                                  
+    sigma = max(0.3, min(6.0, strength / 100.0 * 6.0))
+    k = max(3, int(sigma * 4) | 1)              
+    fw = max(3, int(feather) * 2 + 1)
+    keep_soft = cv2.GaussianBlur(keep, (fw, fw), 0)
+    blurred = cv2.GaussianBlur(frame, (k, k), sigma)
+    m = keep_soft[:, :, None]
+    out = frame.astype(np.float32) * m + blurred.astype(np.float32) * (1.0 - m)
+    np.copyto(frame, np.clip(out, 0, 255).astype(np.uint8))
+    return frame
+def _sample_curve(pts, t):
+    if not pts:
+        return 0.0
+    if len(pts) == 1:
+        return float(pts[0])
+    t = max(0.0, min(1.0, float(t)))
+    pos = t * (len(pts) - 1)
+    i0 = int(pos)
+    i1 = min(len(pts) - 1, i0 + 1)
+    f = pos - i0
+    return float(pts[i0]) * (1.0 - f) + float(pts[i1]) * f
+def _dynamic_steer_strength(rest_pts, zone_pts, t):
+    r = _sample_curve(rest_pts, t)
+    z = _sample_curve(zone_pts, t)
+    if z <= 0 or r <= 0 or z <= r:
+        return 0
+    return max(0, min(85, int(round(70.0 * (1.0 - r / z)))))
+def _collect_priority_rects(active_segs, out_w, out_h, want_markers=False, placement='outside'):
+    keep, cut, marks = [], [], []
+    for seg in (active_segs or []):
+        if not isinstance(seg, dict):
+            continue
+        s_roi = seg.get("roi")
+        if not s_roi:
+            continue
+        try:
+            qx1, qy1, qx2, qy2 = _resolve_zone_pixels(s_roi, out_w, out_h)
+        except Exception:
+            continue
+        if qx2 <= qx1 or qy2 <= qy1:
+            continue
+        if seg.get("invert", False):
+            cut.append((qx1, qy1, qx2, qy2))
+        else:
+            keep.append((qx1, qy1, qx2, qy2))
+        if want_markers:
+            try:
+                marks.extend(_calculate_marker_boxes(out_w, out_h, qx1, qy1, qx2, qy2,
+                                                     placement=placement, size=18))
+            except Exception:
+                pass
+    return keep, cut, marks
 def _zone_nested_geometry(zw, zh, cols, rows, center_size, seed):
     outer_indices, inner_indices, (cx1, cy1, cx2, cy2) = get_outer_blocks(
         cols, rows, zw, zh, center_size=center_size)
@@ -672,18 +728,16 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     global_roi = options.get('patch_roi')
     global_invert = options.get('roi_invert', False)
     placement = options.get('marker_placement', 'outside')
-    _may_combine = bool(options.get('center_path') or options.get('center')) and (
-        bool(patch_segments_cfg) or bool(global_roi) or bool(options.get('optical_markers')))
-    if _may_combine and options.get('optical_markers') and placement == 'inside':
-        LiveDebugger.log("MARKER_PLACEMENT", "Zone+Center mode: 'inside' corner markers would be overwritten by the pasted center content. Coercing marker_placement to 'outside' (markers are stamped on the background after compositing).", level="WARNING", module="VIDEO")
-        placement = 'outside'
-        options['marker_placement'] = 'outside'
+    if 'marker_inside_full' not in options and options.get('optical_markers')
+            and placement == 'inside' and (patch_segments_cfg or global_roi):
+        options['marker_inside_full'] = True
     discovered_zones = []
     def _get_effective_roi_blocks(r_roi, inv):
         if not r_roi:
             return None
         rx1, ry1, rx2, ry2 = r_roi
-        if options.get('optical_markers') and placement == 'inside':
+        if options.get('optical_markers') and placement == 'inside'
+                and not options.get('marker_inside_full'):
             if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
                 px1, py1 = int(math.floor(rx1 * out_w)), int(math.floor(ry1 * out_h))
                 px2, py2 = int(math.ceil(rx2 * out_w)), int(math.ceil(ry2 * out_h))
@@ -728,23 +782,37 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             tot_p = int(probe_cap.get(cv2.CAP_PROP_FRAME_COUNT))
             sample_count = min(30, tot_p) if tot_p > 0 else 10
             step = max(1, tot_p // sample_count) if tot_p > 0 else 1
-            cur_idx = 0
-            while cur_idx < tot_p:
-                probe_cap.set(cv2.CAP_PROP_POS_FRAMES, cur_idx)
-                ret_p, frame_p = probe_cap.read()
-                if not ret_p or frame_p is None:
-                    break
-                found_rois = detect_all_optical_markers(frame_p, placement=placement)
-                for f_roi in found_rois:
-                    if not any(
-                        abs(f_roi[0] - z["roi"][0]) < 0.02 and
-                        abs(f_roi[1] - z["roi"][1]) < 0.02 and
-                        abs(f_roi[2] - z["roi"][2]) < 0.02 and
-                        abs(f_roi[3] - z["roi"][3]) < 0.02
-                        for z in discovered_zones
-                    ):
-                        discovered_zones.append(_create_zone_dict(f_roi))
-                cur_idx += step
+            def _scan_timeline(plc):
+                found = []
+                cur_idx = 0
+                cap = cv2.VideoCapture(input_path)
+                try:
+                    while cur_idx < tot_p:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, cur_idx)
+                        ret_p, frame_p = cap.read()
+                        if not ret_p or frame_p is None:
+                            break
+                        for f_roi in detect_all_optical_markers(frame_p, placement=plc):
+                            if not any(
+                                abs(f_roi[0] - ex[0]) < 0.02 and
+                                abs(f_roi[1] - ex[1]) < 0.02 and
+                                abs(f_roi[2] - ex[2]) < 0.02 and
+                                abs(f_roi[3] - ex[3]) < 0.02
+                                for ex in found
+                            ):
+                                found.append(f_roi)
+                        cur_idx += step
+                finally:
+                    cap.release()
+                return found
+            for f_roi in _scan_timeline(placement):
+                discovered_zones.append(_create_zone_dict(f_roi))
+            if not discovered_zones and placement == 'inside':
+                LiveDebugger.log("MARKER_DETECT", "No 'inside' markers found; retrying 'outside' (pre-fix Zone+Center files).", level="WARNING", module="VIDEO")
+                placement = 'outside'
+                options['marker_placement'] = 'outside'
+                for f_roi in _scan_timeline(placement):
+                    discovered_zones.append(_create_zone_dict(f_roi))
             probe_cap.release()
         if discovered_zones:
             global_roi = list(discovered_zones[0]["roi"])
@@ -801,6 +869,32 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             export_grid_to_svg(f"{base}_grid.svg", out_w, out_h, cols, rows, has_center=options.get('center', False), center_size=center_size)
             export_scrambled_grid_to_svg(f"{base}_grid_original.svg", out_w, out_h, cols, rows, seed, has_center=options.get('center', False), center_size=center_size, prefix_original=True)
             export_scrambled_grid_to_svg(f"{base}_grid_scrambled.svg", out_w, out_h, cols, rows, seed, has_center=options.get('center', False), center_size=center_size, prefix_original=False)
+            _zone_jobs = []
+            if segment_lookup and any(s.get('roi') and s.get('blocks') for s in segment_lookup):
+                for _i, _s in enumerate(segment_lookup):
+                    if _s.get('roi') and _s.get('blocks'):
+                        _zone_jobs.append((f"{base}_zone_seg{_i}", _s['roi'], _s['blocks']))
+            elif global_roi:
+                _g_blocks = _get_effective_roi_blocks(global_roi, global_invert)
+                if _g_blocks:
+                    _zone_jobs.append((f"{base}_zone", list(global_roi), _g_blocks))
+            if _zone_jobs:
+                _want_marks = bool(options.get('optical_markers'))
+                for _zp, _zr, _zb in _zone_jobs:
+                    _mboxes = None
+                    if _want_marks:
+                        try:
+                            _qx1, _qy1, _qx2, _qy2 = _resolve_zone_pixels(_zr, out_w, out_h)
+                            _mboxes = _calculate_marker_boxes(out_w, out_h, _qx1, _qy1, _qx2, _qy2, placement=placement, size=18)
+                        except Exception:
+                            _mboxes = None
+                    _cap = f"placement={placement}" if _want_marks else "markers=off"
+                    try:
+                        export_zone_to_svg(f"{_zp}.svg", out_w, out_h, _zr, _zb, marker_boxes=_mboxes, caption=_cap)
+                        export_scrambled_zone_to_svg(f"{_zp}_original.svg", out_w, out_h, _zr, _zb, seed, marker_boxes=_mboxes, prefix_original=True, caption=_cap)
+                        export_scrambled_zone_to_svg(f"{_zp}_scrambled.svg", out_w, out_h, _zr, _zb, seed, marker_boxes=_mboxes, prefix_original=False, caption=_cap)
+                    except Exception as _ze:
+                        LiveDebugger.log("SVG_EXPORT_WARN", f"Failed to export zone SVG set {_zp}: {_ze}", level="WARNING", module="VIDEO")
         except Exception as e:
             LiveDebugger.log("SVG_EXPORT_WARN", f"Failed to export SVG grids: {e}", level="WARNING", module="VIDEO")
     if not reverse and options.get('export_map', False):
@@ -835,15 +929,50 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         output_total_frames = max(total_frames, center_frames_adapted)
     else:
         output_total_frames = total_frames                                
+    if not reverse and options.get('export_timeline', True):
+        try:
+            from core.timeline_txt import export_timeline_txt as _export_tl
+            _base, _ = os.path.splitext(output_path)
+            _dur = (output_total_frames / fps) if fps else 0.0
+            _export_tl(f"{_base}_timeline.txt", options, _dur, fps=fps,
+                       source_name=os.path.basename(output_path))
+        except Exception as _te:
+            LiveDebugger.log("TIMELINE_EXPORT_WARN", f"Failed to export encrypt timeline: {_te}", level="WARNING", module="VIDEO")
     vid_codec = options.get('vid_codec', 'libx264')
     vid_preset = options.get('vid_preset', 'medium')
     use_gpu = options.get('use_gpu', False)
     spatial_mode = options.get('spatial_compression_mode', 'off')
+    _steer_strength = 0
+    try:
+        _steer_strength = max(0, min(100, int(options.get('zone_priority_strength', 40))))
+    except Exception:
+        _steer_strength = 40
+    _steer_base_on = bool(not reverse and spatial_mode in ('priority', 'zone'))
+    _steer_dyn = None
+    try:
+        _env_s = options.get('vid_bitrate_envelope') or {}
+        _zp = _env_s.get('zone_points')
+        _rp = _env_s.get('points')
+        _dur = float(_env_s.get('duration')) if _env_s.get('duration') else 0
+        if isinstance(_zp, list) and len(_zp) >= 2 and isinstance(_rp, list)
+                and len(_rp) >= 2 and _dur > 0:
+            _steer_dyn = ([max(100.0, min(25000.0, float(v))) for v in _rp],
+                          [max(100.0, min(25000.0, float(v))) for v in _zp],
+                          _dur)
+    except Exception:
+        _steer_dyn = None
+    _steer_now = _steer_strength
+    _steer_active = bool(_steer_base_on and _steer_now > 0)
     chosen_codec, hw_type, extra_hw_args = resolve_video_encoder(vid_codec, use_gpu=use_gpu)
     if hw_type != 'software':
         LiveDebugger.log("GPU_ACCEL", f"Hardware acceleration enabled: using {chosen_codec} ({hw_type})", level="INFO", module="VIDEO")
     if spatial_mode != 'off':
         LiveDebugger.log("SPATIAL_COMP", f"Spatial compression mode active: '{spatial_mode}' (rows={rows}, cols={cols})", level="INFO", module="VIDEO")
+    if _steer_active:
+        if _steer_dyn is not None:
+            LiveDebugger.log("ZONE_PRIORITY", f"Zone Priority DYNAMIC steering (green/blue wave ratio over time, #{len(_steer_dyn[0])} pts, { _steer_dyn[2]:.1f}s)", level="INFO", module="VIDEO")
+        else:
+            LiveDebugger.log("ZONE_PRIORITY", f"Zone Priority steering ON (strength={_steer_strength}): background outside encrypt zones is softened so rate control feeds the zones", level="INFO", module="VIDEO")
     cmd = [ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
            '-s', f'{out_w}x{out_h}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
     if has_audio:
@@ -985,6 +1114,14 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             is_in_patch = True
             if patch_intervals is not None:
                 is_in_patch = any(start_s <= current_sec <= end_s for start_s, end_s in patch_intervals)
+            _steer_now = _steer_strength
+            if _steer_dyn is not None and _steer_base_on:
+                try:
+                    _t = max(0.0, min(1.0, current_sec / _steer_dyn[2]))
+                    _steer_now = _dynamic_steer_strength(_steer_dyn[0], _steer_dyn[1], _t)
+                except Exception:
+                    _steer_now = _steer_strength
+            _steer_active = bool(_steer_base_on and _steer_now > 0)
             if reverse and options.get('optical_markers'):
                 is_in_patch = True
             if proc_vid and is_in_patch:
@@ -1034,10 +1171,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                     continue
                                 if patch.shape[1] != zw or patch.shape[0] != zh:
                                     patch = cv2.resize(patch, (zw, zh))
+                                _in_first = bool(options.get('optical_markers') and placement == 'inside')
+                                if _in_first:
+                                    patch = inpaint_optical_markers(patch, 0, 0, zw, zh, placement='inside')
                                 restored_zone, clean_center = _decrypt_zone_nested(
                                     patch, cols, rows, center_size, seed, video_encrypt_mode)
                                 new_frame[py1:py2, px1:px2] = restored_zone
-                                if options.get('optical_markers'):
+                                if options.get('optical_markers') and not _in_first:
                                     new_frame = inpaint_optical_markers(new_frame, px1, py1, px2, py2, placement=placement)
                                 if proc_center and z_i == 0:
                                     center_out = cv2.resize(clean_center, (center_w, center_h))
@@ -1103,6 +1243,14 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                             new_frame[dy1:dy2, dx1:dx2] = tile
                                 if options.get('optical_markers'):
                                     new_frame, _ = stamp_optical_markers(new_frame, px1, py1, px2, py2, placement=placement)
+                            if _steer_active and active_segs:
+                                _k, _c, _m = _collect_priority_rects(
+                                    active_segs, out_w, out_h,
+                                    want_markers=bool(options.get('optical_markers')),
+                                    placement=options.get('marker_placement', 'outside'))
+                                if _k or _c:
+                                    new_frame = _soften_outside_zones(
+                                        new_frame, _k, _c, _m, _steer_now)
                             write_pipe_frame(proc, new_frame.tobytes())
                         else:
                             write_pipe_frame(proc, frame.tobytes())
@@ -1296,6 +1444,14 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                         new_frame[dy1:dy2, dx1:dx2] = tile
                                 if options.get('optical_markers'):
                                     new_frame, _ = stamp_optical_markers(new_frame, px1, py1, px2, py2, placement=placement)
+                            if _steer_active and active_segs:
+                                _k, _c, _m = _collect_priority_rects(
+                                    active_segs, out_w, out_h,
+                                    want_markers=bool(options.get('optical_markers')),
+                                    placement=options.get('marker_placement', 'outside'))
+                                if _k or _c:
+                                    new_frame = _soften_outside_zones(
+                                        new_frame, _k, _c, _m, _steer_now)
                             write_pipe_frame(proc, new_frame.tobytes())
                         else:
                             write_pipe_frame(proc, frame.tobytes())
@@ -1309,12 +1465,23 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             s_blocks = matched_seg["blocks"]
                             s_mapping = matched_seg["mapping"]
                             n_s_blocks = len(s_blocks)
+                            src_img = frame
+                            if options.get('optical_markers') and options.get('marker_inside_full')
+                                    and options.get('marker_placement', 'outside') == 'inside':
+                                s_roi2 = matched_seg.get("roi")
+                                if s_roi2:
+                                    try:
+                                        qx1, qy1, qx2, qy2 = _resolve_zone_pixels(s_roi2, out_w, out_h)
+                                        if qx2 > qx1 and qy2 > qy1:
+                                            src_img = inpaint_optical_markers(frame, qx1, qy1, qx2, qy2, placement='inside')
+                                    except Exception:
+                                        src_img = frame
                             new_frame = frame.copy()
                             for i in range(n_s_blocks):
                                 t_idx = s_mapping[i]
                                 sx1, sy1, sx2, sy2 = s_blocks[t_idx]
                                 dx1, dy1, dx2, dy2 = s_blocks[i]
-                                tile = frame[sy1:sy2, sx1:sx2]
+                                tile = src_img[sy1:sy2, sx1:sx2]
                                 dw_blk, dh_blk = dx2 - dx1, dy2 - dy1
                                 if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
                                     tile = cv2.resize(tile, (dw_blk, dh_blk))

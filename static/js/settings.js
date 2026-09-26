@@ -29,6 +29,7 @@ function collectSettings() {
         v_preset: val('v_preset', 'auto'),
         v_bit: bitSlider ? bitSlider.value : '3000',
         v_spatial_mode: val('v_spatial_mode', 'off'),
+        zone_priority_strength: val('zone_priority_strength', '40'),
         autoVidBitrate: chk('autoVidBitrate', true),
         a_sr_auto: chk('a_sr_auto', true),
         a_sr_slider: val('a_sr_slider', '48000'),
@@ -159,7 +160,16 @@ function applySettingsObject(settings) {
         setVal('v_fmt', settings.v_fmt);
         setVal('v_codec', settings.v_codec);
         setVal('v_preset', settings.v_preset);
-        setVal('v_spatial_mode', settings.v_spatial_mode || 'off');
+        let _sm = settings.v_spatial_mode || 'off';
+        if (_sm === 'zone') _sm = 'priority';
+        else if (_sm !== 'priority') _sm = 'off';
+        setVal('v_spatial_mode', _sm);
+        if (typeof toggleZonePriority === 'function') toggleZonePriority(_sm);
+        if (settings.zone_priority_strength !== undefined) {
+            setVal('zone_priority_strength', settings.zone_priority_strength);
+            const _zpv = document.getElementById('zone_priority_val');
+            if (_zpv) _zpv.innerText = settings.zone_priority_strength;
+        }
         const bitSlider = document.getElementById('v_bit_slider');
         const bitVal = document.getElementById('v_bit_val');
         const bitLabel = document.getElementById('v_bit_label');
@@ -325,7 +335,8 @@ function initAutoSave() {
         'v_aud_method', 'v_aud_splits', 'vol_factor_slider', 'dual_track', 'trackLSourceSelect', 'trackRSourceSelect', 'trackLEncCheckbox', 'trackREncCheckbox', 'center_size', 'img_center_size',
         'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg', 'useGpu', 'saveKeyFile', 'imgSaveKeyFile', 'audSaveKeyFile',
         'enableSpatialZones', 'patchRoiInvert', 'patchOpticalMarkers', 'patchMarkerPlacement', 'patchCoordX1', 'patchCoordY1', 'patchCoordX2', 'patchCoordY2',
-        'imgEnableSpatialZones', 'imgRoiInvert', 'imgOpticalMarkers', 'imgMarkerPlacement', 'imgCoordX1', 'imgCoordY1', 'imgCoordX2', 'imgCoordY2'
+        'imgEnableSpatialZones', 'imgRoiInvert', 'imgOpticalMarkers', 'imgMarkerPlacement', 'imgCoordX1', 'imgCoordY1', 'imgCoordX2', 'imgCoordY2',
+        'v_spatial_mode', 'zone_priority_strength'
     ];
     inputs.forEach(id => {
         const el = document.getElementById(id);
@@ -341,4 +352,13 @@ function toggleVidBitrateAuto(isAuto) {
         sliderContainer.style.display = isAuto ? 'none' : 'flex';
     }
     saveAllSettings();
+}
+function toggleZonePriority(mode) {
+    const row = document.getElementById('zonePriorityRow');
+    if (row) {
+        row.style.display = (mode === 'priority') ? 'block' : 'none';
+    }
+    if (typeof saveAllSettings === 'function') {
+        try { saveAllSettings(); } catch (e) {}
+    }
 }

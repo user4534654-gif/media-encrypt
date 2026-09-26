@@ -151,10 +151,40 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
     if not reverse and options.get('export_svg', True):
         try:
             from core.svg_generator import export_grid_to_svg, export_scrambled_grid_to_svg
+            from core.svg_generator import export_zone_to_svg, export_scrambled_zone_to_svg
             base, _ = os.path.splitext(output_path)
             export_grid_to_svg(f"{base}_grid.svg", w, h, cols, rows, has_center=options.get('center', False), center_size=options.get('center_size', '1/4'))
             export_scrambled_grid_to_svg(f"{base}_grid_original.svg", w, h, cols, rows, seed, has_center=options.get('center', False), center_size=options.get('center_size', '1/4'), prefix_original=True)
             export_scrambled_grid_to_svg(f"{base}_grid_scrambled.svg", w, h, cols, rows, seed, has_center=options.get('center', False), center_size=options.get('center_size', '1/4'), prefix_original=False)
+            _zroi = options.get('patch_roi')
+            if _zroi and len(_zroi) >= 4:
+                from core.crypto import _calculate_marker_boxes as _img_mbox, effective_marker_placement as _img_eff
+                from core.grid_utils import get_roi_blocks as _img_rb
+                try:
+                    _zblocks = _img_rb(w, h, list(_zroi)[:4], cols, rows, invert=bool(options.get('roi_invert', False)))
+                except Exception:
+                    _zblocks = None
+                _eplc = options.get('marker_placement', 'outside')
+                try:
+                    _eplc = _img_eff(options.get('center'), options.get('center_path'), options.get('patch_segments'), _zroi, options.get('optical_markers'), _eplc)
+                except Exception:
+                    pass
+                _mb = None
+                if options.get('optical_markers'):
+                    try:
+                        _rx = [float(v) for v in list(_zroi)[:4]]
+                        if all(v <= 1.0 for v in _rx):
+                            _px = [int(round(_rx[0] * w)), int(round(_rx[1] * h)), int(round(_rx[2] * w)), int(round(_rx[3] * h))]
+                        else:
+                            _px = [int(_rx[0]), int(_rx[1]), int(_rx[2]), int(_rx[3])]
+                        _mb = _img_mbox(w, h, _px[0], _px[1], _px[2], _px[3], placement=_eplc, size=18)
+                    except Exception:
+                        _mb = None
+                if _zblocks:
+                    _cap = f"placement={_eplc}" if options.get('optical_markers') else "markers=off"
+                    export_zone_to_svg(f"{base}_zone.svg", w, h, list(_zroi)[:4], _zblocks, marker_boxes=_mb, caption=_cap)
+                    export_scrambled_zone_to_svg(f"{base}_zone_original.svg", w, h, list(_zroi)[:4], _zblocks, seed, marker_boxes=_mb, prefix_original=True, caption=_cap)
+                    export_scrambled_zone_to_svg(f"{base}_zone_scrambled.svg", w, h, list(_zroi)[:4], _zblocks, seed, marker_boxes=_mb, prefix_original=False, caption=_cap)
         except Exception as e:
             print("Failed to export SVG grids:", e)
     if not reverse and options.get('export_map', False):
@@ -178,10 +208,6 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
         if _img_combine_enc or _img_combine_dec:
             from core.video_processor import _encrypt_zone_nested, _decrypt_zone_nested
             placement = options.get('marker_placement', 'outside')
-            if options.get('optical_markers') and placement == 'inside':
-                LiveDebugger.log("MARKER_PLACEMENT", "Image Zone+Center mode: 'inside' corner markers would be overwritten by the pasted center content. Coercing marker_placement to 'outside'.", level="WARNING", module="IMAGE")
-                placement = 'outside'
-                options['marker_placement'] = 'outside'
             roi = list(_zone_roi) if _zone_roi else None
             if _img_combine_dec and options.get('optical_markers') and not roi:
                 d_roi = detect_optical_markers(img, placement=placement)
@@ -229,11 +255,14 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                 patch = img[py1:py2, px1:px2]
                 if patch.shape[1] != zw or patch.shape[0] != zh:
                     patch = cv2.resize(patch, (zw, zh))
+                _in_first = bool(options.get('optical_markers') and placement == 'inside')
+                if _in_first:
+                    patch = inpaint_optical_markers(patch, 0, 0, zw, zh, placement='inside')
                 restored_zone, clean_center = _decrypt_zone_nested(
                     patch, cols, rows, options.get('center_size', '1/4'), seed, video_encrypt_mode)
                 new_img = img.copy()
                 new_img[py1:py2, px1:px2] = restored_zone
-                if options.get('optical_markers'):
+                if options.get('optical_markers') and not _in_first:
                     if options.get('optical_payload'):
                         new_img = restore_optical_markers(new_img, options['optical_payload'])
                     else:

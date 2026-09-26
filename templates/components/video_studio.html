@@ -208,6 +208,7 @@
                                 <option value="outside" selected>Outside Zone Border</option>
                                 <option value="inside">Inside Zone Border</option>
                             </select>
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">Note: with Center video, Inside is stamped as Outside (inside markers would be destroyed by the pasted center) — the key records the effective placement.</div>
                         </div>
                     </div>
                 </div>
@@ -288,6 +289,17 @@
                         <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Drag the timeline points up / down to shape bitrate over time (start → middle → end). The master slider shifts the whole wave. Encoded as constrained VBR: average = target, peak = ceiling.</div>
                         <canvas id="bitrateWaveCanvas" width="560" height="220" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; touch-action: none; cursor: grab;"></canvas>
                         <div id="bitrateWaveReadout" style="font-size: 12px; color: #333; margin-top: 8px; font-family: monospace;">start — · mid — · end —</div>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
+                            <div class="segmented-control" style="display: flex; gap: 0;">
+                                <button type="button" id="waveCurveRest" class="segment-btn active" onclick="switchWaveCurve('rest')" style="border-color: #007aff; color: #007aff;">🌊 Rest (blue)</button>
+                                <button type="button" id="waveCurveZone" class="segment-btn" onclick="switchWaveCurve('zone')" style="border-color: #22c55e; color: #22c55e;">🟩 Zone (green)</button>
+                            </div>
+                            <div>
+                                <label class="ios-label" style="margin-bottom: 2px;">Points (2–100)<span class="help-tip">❔<span class="tooltip-text">How many timeline points each wave has. More points = finer shape for long videos.</span></span></label>
+                                <input type="number" id="bitrateWaveCount" min="2" max="100" step="1" value="3" class="ios-input" style="width: 70px;" onchange="onBitrateWaveCount(this.value)">
+                            </div>
+                        </div>
+                        <div style="font-size: 11px; color: #666; margin-top: 4px;">Blue drives the encode (target/ceiling). Green = encrypt zones over time: the per-frame green/blue ratio steers Zone Priority strength along the timeline (needs video duration; falls back to the Strength slider). First switch to green copies blue as a starting point.</div>
                         <div style="margin-top: 12px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                 <label class="ios-label" id="bitrateWaveGainLabel" style="margin-bottom: 0;">Master shift: +0 kbps (whole wave up / down)</label>
@@ -307,12 +319,22 @@
                     </div>
                 </div>
                 <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
-                    <label class="ios-label">Spatial Compression Mode<span class="help-tip">❔<span class="tooltip-text">Protects encrypted blocks from codec ringing, boundary blur, and color bleeding.<br><br>• <b>Off (Standard):</b> Classic fixed/auto bitrate.<br>• <b>Mode 1 (Zone Protection):</b> Dynamic CRF with high-fidelity edge preservation.<br>• <b>Mode 2 (Isolated Tiles):</b> Hardware/codec slices with deblocking disabled across tile boundaries.</span></span></label>
-                    <select id="v_spatial_mode" class="ios-select">
-                        <option value="off" selected>Off (Standard)</option>
-                        <option value="zone">Mode 1: Zone Protection (CRF + Edge Guard)</option>
-                        <option value="tiles">Mode 2: Isolated Tiles (Codec Slices & No Deblock)</option>
+                    <label class="ios-label">Spatial Compression Mode<span class="help-tip">❔<span class="tooltip-text">Off: capped ABR — target = ceiling = slider, enforced via maxrate.<br><br>Zone Priority: the background OUTSIDE your encrypt zones is gently softened before encoding, so the encoder's rate control feeds the saved bits into the sharp scrambled zones (measured: cleaner zone restore at the same file size). Works on any codec/GPU. Price: background gets slightly softer — tune with Strength.</span></span></label>
+                    <select id="v_spatial_mode" class="ios-select" onchange="toggleZonePriority(this.value)">
+                        <option value="off" selected>Off (Standard capped ABR)</option>
+                        <option value="priority">Zone Priority (bitrate into encrypt zones)</option>
                     </select>
+                    <div id="zonePriorityRow" style="display: none; margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label class="ios-label" style="margin-bottom: 0;">Zone Priority Strength<span class="help-tip">❔<span class="tooltip-text">How strongly the background outside encrypt zones is softened (0 = no steering, 100 = max). Higher = more bits pushed into zones, softer background. Applies to patch_roi / timeline segments on encrypt only.</span></span></label>
+                            <span id="zone_priority_val" style="font-size: 13px; font-weight: bold;">40</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 11px; color: #888;">0</span>
+                            <input type="range" id="zone_priority_strength" min="0" max="100" step="5" value="40" style="flex: 1; accent-color: #007aff;" oninput="document.getElementById('zone_priority_val').innerText = this.value">
+                            <span style="font-size: 11px; color: #888;">100</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
                     <div>
@@ -427,6 +449,12 @@
                     <label class="ios-label" style="margin-bottom: 0;">Export SVG Visual Grid<span class="help-tip">❔<span class="tooltip-text">Generates SVG files showing the original and permuted block grids for visualization/debugging.</span></span></label>
                     <label class="ios-switch-label">
                         <input type="checkbox" id="exportSvg" checked>
+                    </label>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <label class="ios-label" style="margin-bottom: 0;">Export Encrypt Timeline (.txt)<span class="help-tip">❔<span class="tooltip-text">Saves a companion _timeline.txt with millisecond encrypt/passthrough intervals for the video.</span></span></label>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="exportTimeline" checked>
                     </label>
                 </div>
                 <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">

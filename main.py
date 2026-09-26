@@ -505,6 +505,15 @@ def process_api():
             'outer_end_action': request.form.get('outer_end_action', 'stop'),
             'spatial_compression_mode': request.form.get('spatial_compression_mode', 'off'),
         }
+        if options['spatial_compression_mode'] == 'zone':
+            options['spatial_compression_mode'] = 'priority'
+        elif options['spatial_compression_mode'] not in ('off', 'priority'):
+            options['spatial_compression_mode'] = 'off'
+        try:
+            options['zone_priority_strength'] = max(
+                0, min(100, int(request.form.get('zone_priority_strength', 40))))
+        except Exception:
+            options['zone_priority_strength'] = 40
         for _ch in ('l', 'r'):
             _src = request.form.get(f'track_{_ch}_source')
             if _src in ('background', 'center', 'custom'):
@@ -536,7 +545,8 @@ def process_api():
                 'reverse': False,
                 'cols': int(request.form.get('cols', 10)) if request.form.get('cols') and request.form.get('cols').isdigit() else 10,
                 'rows': int(request.form.get('rows', 10)) if request.form.get('rows') and request.form.get('rows').isdigit() else 10,
-                'export_svg': request.form.get('export_svg', 'true') == 'true'
+                'export_svg': request.form.get('export_svg', 'true') == 'true',
+                'export_timeline': request.form.get('export_timeline', 'true') == 'true'
             })
             sid = request.form.get('sid', '').strip() or secrets.token_hex(4)
             options['seed'] = hash_str(sid)

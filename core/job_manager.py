@@ -8,6 +8,54 @@ from core.grid_utils import format_center_key
 from core.pipeline import process_media
 from core.metadata_prober import probe_media_file, is_image_filename, IMAGE_EXTENSIONS, writable_image_ext
 from core.logger import LiveDebugger
+def parse_wave_envelope(raw_env):
+    if not raw_env:
+        return None
+    try:
+        import json as _json
+        _env = _json.loads(raw_env) if isinstance(raw_env, str) else raw_env
+        _env = _env or {}
+        def _clean_pts(v):
+            pts = [int(round(float(x))) for x in (v or [])]
+            pts = [max(100, min(25000, x)) for x in pts]
+            return pts if 2 <= len(pts) <= 100 else None
+        _pts = _clean_pts(_env.get('points'))
+        if _pts is None:
+            return None
+        _parsed = {
+            'points': _pts,
+            'avg': max(100, int(round(sum(_pts) / len(_pts)))),
+            'max': max(_pts),
+        }
+        _zp = _clean_pts(_env.get('zone_points'))
+        if _zp is not None:
+            if len(_zp) != len(_pts):
+                _rs = []
+                for _i in range(len(_pts)):
+                    _t = _i * (len(_zp) - 1) / max(1, len(_pts) - 1)
+                    _i0 = int(_t)
+                    _i1 = min(len(_zp) - 1, _i0 + 1)
+                    _f = _t - _i0
+                    _rs.append(max(100, min(25000, int(round(_zp[_i0] * (1 - _f) + _zp[_i1] * _f)))))
+                _zp = _rs
+            _parsed['zone_points'] = _zp
+            _parsed['zone_avg'] = max(100, int(round(sum(_zp) / len(_zp))))
+        try:
+            _dur = float(_env.get('duration')) if _env.get('duration') is not None else None
+        except Exception:
+            _dur = None
+        if _dur and 0 < _dur < 86400:
+            _parsed['duration'] = _dur
+        for _k in ('zone_target', 'bg_target'):
+            try:
+                _v = int(round(float(_env.get(_k)))) if _env.get(_k) is not None else None
+            except Exception:
+                _v = None
+            if _v:
+                _parsed[_k] = max(100, min(25000, _v))
+        return _parsed
+    except Exception:
+        return None
 class JobManager:
     def __init__(self, input_folder, encrypted_folder, decrypted_folder, save_key_fn, resolve_quality_fn, sanitize_sr_fn):
         self.input_folder = input_folder
@@ -147,25 +195,24 @@ class JobManager:
                     'use_gpu': form_data.get('use_gpu') in [True, 'true', 'True', '1'],
                     'is_cancelled': lambda: self.cancel_event.is_set()
                 }
+                _sm = str(form_data.get('spatial_compression_mode', 'off') or 'off').lower()
+                if _sm == 'zone':
+                    _sm = 'priority'
+                elif _sm != 'priority':
+                    _sm = 'off'
+                options['spatial_compression_mode'] = _sm
+                try:
+                    options['zone_priority_strength'] = max(
+                        0, min(100, int(form_data.get('zone_priority_strength', 40))))
+                except Exception:
+                    options['zone_priority_strength'] = 40
                 _center_pre = file_item.get('center_path') or form_data.get('center_path')
                 if form_data.get('center_mode') in [True, 'true', 'True', '1'] and _center_pre and os.path.exists(_center_pre):
                     options['center'] = True
                     options['center_path'] = _center_pre
-                _raw_env = form_data.get('vid_bitrate_envelope')
-                if _raw_env:
-                    try:
-                        import json as _json
-                        _env = _json.loads(_raw_env) if isinstance(_raw_env, str) else _raw_env
-                        _pts = [int(round(float(v))) for v in ((_env or {}).get('points') or [])]
-                        _pts = [max(100, min(25000, v)) for v in _pts]
-                        if len(_pts) >= 2:
-                            options['vid_bitrate_envelope'] = {
-                                'points': _pts,
-                                'avg': max(100, int(round(sum(_pts) / len(_pts)))),
-                                'max': max(_pts),
-                            }
-                    except Exception:
-                        pass
+                _parsed_env = parse_wave_envelope(form_data.get('vid_bitrate_envelope'))
+                if _parsed_env:
+                    options['vid_bitrate_envelope'] = _parsed_env
                 options = self.resolve_quality_fn(file_path, options)
                 fn_lower = filename.lower()
                 is_image = is_image_filename(fn_lower) or (info.get('format') == 'image') or (file_item.get('type') == 'image')
@@ -191,7 +238,8 @@ class JobManager:
                         'reverse': False,
                         'cols': int(form_data.get('cols', 10)) if form_data.get('cols') and str(form_data.get('cols')).isdigit() else 10,
                         'rows': int(form_data.get('rows', 10)) if form_data.get('rows') and str(form_data.get('rows')).isdigit() else 10,
-                        'export_svg': form_data.get('export_svg') in [True, 'true', 'True', '1', None]
+                        'export_svg': form_data.get('export_svg') in [True, 'true', 'True', '1', None],
+                        'export_timeline': form_data.get('export_timeline') in [True, 'true', 'True', '1', None]
                     })
                     raw_patch = form_data.get('patch_intervals')
                     parsed_patch = []
@@ -279,6 +327,10 @@ class JobManager:
                             patch_str = ",".join(f"{s:.3f}-{e:.3f}" for s, e in options['patch_intervals'])
                             patch_tag = f"|patch:{patch_str}"
                     spatial_tag = ""
+                    if (options.get('optical_markers')
+                            and options.get('marker_placement') == 'inside'
+                            and (options.get('patch_segments') or options.get('patch_roi'))):
+                        options['marker_inside_full'] = True
                     if options.get('patch_segments'):
                         if not options.get('optical_markers'):
                             psegs_encoded = []
@@ -301,6 +353,8 @@ class JobManager:
                         plc = options.get('marker_placement', 'outside')[:3]
                         inv_sfx = "_inv" if options.get('roi_invert') else ""
                         spatial_tag += f"|opt_{plc}{inv_sfx}"
+                        if options.get('marker_inside_full'):
+                            spatial_tag += "|mif"
                     if options.get('custom_audio_l') or options.get('custom_audio_r'):
                         spatial_tag += "|ca"
                         if not options.get('track_l_enc', True):
@@ -543,6 +597,8 @@ class JobManager:
                                 options['marker_placement'] = 'inside' if 'ins' in part else 'outside'
                                 if 'inv' in part:
                                     options['roi_invert'] = True
+                            elif part == 'mif':
+                                options['marker_inside_full'] = True
                             elif part == 'ca':
                                 options['has_custom_audio'] = True
                                 options['custom_audio_l_enc'] = True

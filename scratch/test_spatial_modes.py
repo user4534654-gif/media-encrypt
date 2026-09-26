@@ -16,16 +16,18 @@ def test_encoder_args():
     print("Testing build_video_encoder_args...")
     args_off = build_video_encoder_args('libx264', '3000k', 'medium', spatial_mode='off')
     assert '-b:v' in args_off and '3000k' in args_off
-    assert '-crf' not in args_off
+    assert '-maxrate' in args_off and '-crf' not in args_off
     print("  PASS: Mode off args correct:", args_off)
-    args_zone = build_video_encoder_args('libx264', '4000k', 'medium', spatial_mode='zone')
+    args_zone = build_video_encoder_args('libx264', '4000k', 'medium', spatial_mode='priority')
     assert '-crf' in args_zone and '-maxrate' in args_zone and '4000k' in args_zone
     assert '-aq-mode' in args_zone
-    print("  PASS: Mode zone args correct:", args_zone)
+    print("  PASS: Mode priority args correct:", args_zone)
+    args_alias = build_video_encoder_args('libx264', '4000k', 'medium', spatial_mode='zone')
+    assert args_alias == args_zone
+    print("  PASS: Legacy 'zone' alias matches priority")
     args_tiles = build_video_encoder_args('libx264', '5000k', 'medium', spatial_mode='tiles', rows=4)
-    assert '-slices' in args_tiles and '-crf' in args_tiles
-    assert '-flags' in args_tiles and '-loop' in args_tiles
-    print("  PASS: Mode tiles args correct:", args_tiles)
+    assert '-b:v' in args_tiles and '-slices' not in args_tiles
+    print("  PASS: Legacy 'tiles' falls back to off:", args_tiles)
 def test_full_pipeline():
     print("\nTesting full video encrypt & decrypt roundtrip across all modes...")
     temp_dir = tempfile.mkdtemp()
@@ -43,7 +45,7 @@ def test_full_pipeline():
                     frame[y:y+20, x:x+20] = (15, 15, 15)
         vw.write(frame)
     vw.release()
-    modes = ['off', 'zone', 'tiles']
+    modes = ['off', 'priority']
     results = {}
     for mode in modes:
         enc_vid = os.path.join(temp_dir, f"enc_{mode}.mp4")

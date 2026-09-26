@@ -10,3 +10,6 @@ media_encrypt_vault/
 build/
 dist/
 *.spec.bak
+
+# Local launcher (personal, not for GitHub)
+start_local.bat

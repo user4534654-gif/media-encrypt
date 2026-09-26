@@ -7,7 +7,7 @@ def numpy_lowpass_filter(data, cutoff, sr):
     n = len(data)
     fft_vals = np.fft.rfft(data, n)
     freqs = np.fft.rfftfreq(n, d=1.0/sr)
-    trans_width = min(1000.0, cutoff * 0.15)
+    trans_width = min(250.0, cutoff * 0.03)
     f_start = max(0.0, cutoff - trans_width)
     f_end = min(sr / 2.0, cutoff)
     weights = np.ones_like(freqs)

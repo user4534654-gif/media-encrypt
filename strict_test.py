@@ -251,6 +251,98 @@ def t6_gridmap(tmp):
         "center shuffle not bijective"
     return {"json_checks": "exact", "png_sha256": digest1[:12],
             "center_outer": len(c["outer"]), "center_inner": len(c["inner"])}
+def t7_optical_markers(tmp):
+    from core.crypto import (stamp_optical_markers, detect_all_optical_markers,
+                             check_marker_presence, _calculate_marker_boxes,
+                             effective_marker_placement, hash_str as _hs)
+    from core.video_processor import process_video_file
+    W, H = 160, 120
+    for plc, want in (("outside", (0.25, 0.25, 0.75, 0.75)),
+                      ("inside", (0.25, 0.25, 0.75, 0.75))):
+        img = np.full((H, W, 3), 128, dtype=np.uint8)
+        stamped, _ = stamp_optical_markers(img, 40, 30, 120, 90, placement=plc)
+        boxes = _calculate_marker_boxes(W, H, 40, 30, 120, 90, plc, 18)
+        assert check_marker_presence(stamped, boxes), f"{plc}: stamped markers not detectable"
+        rois = detect_all_optical_markers(stamped, placement=plc)
+        assert rois, f"{plc}: no ROI detected"
+        assert all(abs(a - b) <= 0.01 for a, b in zip(rois[0], want)),
+            f"{plc}: ROI {rois[0]} != {want}"
+    assert effective_marker_placement(True, "c.mp4", None, [0.2, 0.2, 0.8, 0.8], True, "inside") == "inside"
+    assert effective_marker_placement(False, None, None, [0.2, 0.2, 0.8, 0.8], True, "inside") == "inside"
+    assert effective_marker_placement(True, "c.mp4", None, None, False, "inside") == "inside"
+    assert effective_marker_placement(True, "c.mp4", None, [0.2, 0.2, 0.8, 0.8], True, "outside") == "outside"
+    assert effective_marker_placement(False, None, None, None, False, None) == "outside"
+    src = os.path.join(tmp, "m_src.mp4")
+    wr = cv2.VideoWriter(src, cv2.VideoWriter_fourcc(*"mp4v"), 10.0, (W, H))
+    for i in range(6):
+        wr.write(checkerboard(W, H, phase=(i * 4) % 32))
+    wr.release()
+    seed = _hs("strict_markers")
+    enc, dec = os.path.join(tmp, "m_enc.mp4"), os.path.join(tmp, "m_dec.mp4")
+    eopts = {"process_video": True, "process_audio": False, "cols": 4, "rows": 3,
+             "seed": seed, "export_svg": False, "vid_codec": "libx264",
+             "vid_bitrate": "2000k", "vid_preset": "ultrafast",
+             "patch_roi": [0.25, 0.25, 0.75, 0.75], "optical_markers": True,
+             "marker_placement": "inside", "marker_inside_full": False,
+             "patch_segments": [{"start": 0.0, "end": 9.9, "roi": [0.25, 0.25, 0.75, 0.75], "invert": False}]}
+    process_video_file(src, enc, dict(eopts, reverse=False), {}, "sm_enc")
+    dopts = dict(eopts, reverse=True)
+    dopts.pop("patch_roi", None)
+    dopts.pop("patch_segments", None)
+    process_video_file(enc, dec, dopts, {}, "sm_dec")
+    def frames(p):
+        cap = cv2.VideoCapture(p)
+        fs = []
+        while True:
+            ok, f = cap.read()
+            if not ok:
+                break
+            fs.append(f)
+        cap.release()
+        return fs
+    fo, fd = frames(src), frames(dec)
+    assert len(fo) == len(fd) == 6, f"frame count {len(fo)}/{len(fd)} != 6"
+    dec_diffs = [meanabs(a, b) for a, b in zip(fo, fd)]
+    assert max(dec_diffs) < 30.0, f"optical decrypt did not restore: {dec_diffs}"
+    enc2, dec2 = os.path.join(tmp, "m_enc2.mp4"), os.path.join(tmp, "m_dec2.mp4")
+    eopts2 = dict(eopts, marker_inside_full=True)
+    process_video_file(src, enc2, dict(eopts2, reverse=False), {}, "sm_enc2")
+    dopts2 = dict(dopts, marker_inside_full=True)
+    process_video_file(enc2, dec2, dopts2, {}, "sm_dec2")
+    fo2, fd2 = frames(src), frames(dec2)
+    assert len(fo2) == len(fd2) == 6
+    dec_diffs2 = [meanabs(a, b) for a, b in zip(fo2, fd2)]
+    assert max(dec_diffs2) < 30.0, f"mif decrypt did not restore: {dec_diffs2}"
+    csrc = os.path.join(tmp, "zc_ct.mp4")
+    wr = cv2.VideoWriter(csrc, cv2.VideoWriter_fourcc(*"mp4v"), 10.0, (W, H))
+    for i in range(6):
+        wr.write(checkerboard(W, H, phase=(i * 7 + 3) % 32))
+    wr.release()
+    zenc, zdec = os.path.join(tmp, "zc_enc.mp4"), os.path.join(tmp, "zc_dec.mp4")
+    eopts3 = {"process_video": True, "process_audio": False, "cols": 4, "rows": 3,
+              "seed": seed, "export_svg": False, "vid_codec": "libx264",
+              "vid_bitrate": "2000k", "vid_preset": "ultrafast",
+              "center": True, "center_path": csrc, "center_size": "1/4",
+              "video_encrypt_mode": "both",
+              "patch_roi": [0.2, 0.2, 0.8, 0.8], "optical_markers": True,
+              "marker_placement": "inside", "marker_inside_full": True,
+              "patch_segments": [{"start": 0.0, "end": 9.9, "roi": [0.2, 0.2, 0.8, 0.8], "invert": False}]}
+    process_video_file(src, zenc, dict(eopts3, reverse=False), {}, "sm_zcenc")
+    dopts3 = {"process_video": True, "process_audio": False, "cols": 4, "rows": 3,
+              "seed": seed, "export_svg": False, "vid_codec": "libx264",
+              "vid_bitrate": "2000k", "vid_preset": "ultrafast",
+              "center": True, "center_size": "1/4", "video_encrypt_mode": "both",
+              "optical_markers": True, "marker_placement": "inside",
+              "marker_inside_full": True, "reverse": True}
+    process_video_file(zenc, zdec, dopts3, {}, "sm_zcdec")
+    fo3, fd3 = frames(src), frames(zdec)
+    assert len(fo3) == len(fd3) == 6, f"zc frame count {len(fo3)}/{len(fd3)} != 6"
+    dec_diffs3 = [meanabs(a, b) for a, b in zip(fo3, fd3)]
+    assert max(dec_diffs3) < 30.0, f"zone+center inside decrypt did not restore: {dec_diffs3}"
+    return {"detect": "in+out exact", "key_rule": "inside-kept",
+            "dec_meanabs_max": round(max(dec_diffs), 2),
+            "mif_meanabs_max": round(max(dec_diffs2), 2),
+            "zc_inside_meanabs_max": round(max(dec_diffs3), 2)}
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fast", action="store_true", help="skip video test")
@@ -268,6 +360,7 @@ def main():
             print("  [SKIP] T5 video (use without --fast to run)")
         else:
             check("T5 video per-frame encrypt/restore", lambda: t5_video(tmp))
+            check("T7 optical markers in/outside + probe", lambda: t7_optical_markers(tmp))
     print("-" * 70)
     print(f"  PASS={REPORT['passed']}  FAIL={REPORT['failed']}")
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
