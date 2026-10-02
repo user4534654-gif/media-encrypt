@@ -54,6 +54,9 @@ else:
     vault_base_dir = base_dir
 app = Flask(__name__, template_folder=os.path.join(base_dir, 'templates'), static_folder=os.path.join(base_dir, 'static'))
 PORT = 5050
+WEB_LAYOUT = os.environ.get("WEB_LAYOUT", "desktop").strip().lower()
+if WEB_LAYOUT not in ("desktop", "mobile"):
+    WEB_LAYOUT = "desktop"
 @app.context_processor
 def inject_metadata():
     return {'metadata': load_project_metadata()}
@@ -229,7 +232,7 @@ job_manager = JobManager(
 )
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', layout=WEB_LAYOUT)
 @app.route('/api/progress')
 def get_progress():
     return jsonify({"progress": task_progress.get(request.args.get('task_id'), 0)})
@@ -447,7 +450,17 @@ def vault_file_info():
     if not os.path.exists(path):
         return jsonify({"error": "file not found"}), 404
     info = probe_media_file(path)
-    return jsonify({"info": info, "filename": safe_filename, "url": f"/vault/{folder}/{safe_filename}"})
+    try:
+        size_bytes = os.path.getsize(path)
+    except OSError:
+        size_bytes = 0
+    return jsonify({
+        "info": info,
+        "filename": safe_filename,
+        "folder": folder,
+        "size_bytes": size_bytes,
+        "url": f"/vault/{folder}/{safe_filename}",
+    })
 @app.route('/api/process', methods=['POST'])
 def process_api():
     try:
@@ -1051,9 +1064,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Media-Encrypt Studio Local Server")
     parser.add_argument("--port", type=int, default=5050, help="Port to run Flask server on")
     parser.add_argument("--host", type=str, default=None, help="Host to bind Flask server to")
+    parser.add_argument("--layout", type=str, default=None, choices=["desktop", "mobile"],
+                        help="Responsive Web Design layout: desktop (default, unchanged UI) or mobile (compact touch-friendly scale). "
+                             "WEB_LAYOUT env is used as a fallback; plain `python main.py` always runs desktop.")
     args = parser.parse_args()
     PORT = args.port
     host = args.host
+    if args.layout:
+        WEB_LAYOUT = args.layout
+    elif os.environ.get("WEB_LAYOUT", "").strip().lower() in ("desktop", "mobile"):
+        WEB_LAYOUT = os.environ["WEB_LAYOUT"].strip().lower()
+    else:
+        WEB_LAYOUT = "desktop"
+    print(f"Web layout: {WEB_LAYOUT.upper()}")
     if is_colab():
         host = host or '0.0.0.0'
         from google.colab.output import eval_js

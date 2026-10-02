@@ -343,6 +343,29 @@ def t7_optical_markers(tmp):
             "dec_meanabs_max": round(max(dec_diffs), 2),
             "mif_meanabs_max": round(max(dec_diffs2), 2),
             "zc_inside_meanabs_max": round(max(dec_diffs3), 2)}
+def t8_forensic_window(tmp):
+    from core.crypto import (stamp_optical_markers, forensic_marker_window,
+                             _calculate_marker_boxes)
+    fps, W, H = 10, 320, 240
+    roi = [0.2, 0.2, 0.8, 0.8]
+    px = (int(roi[0] * W), int(roi[1] * H), int(roi[2] * W), int(roi[3] * H))
+    base = np.full((H, W, 3), 128, dtype=np.uint8)
+    marked, _ = stamp_optical_markers(base, *px, placement="outside", marker_size=18)
+    boxes = _calculate_marker_boxes(W, H, *px, placement="outside", size=18)
+    blank = np.full((H, W, 3), 128, dtype=np.uint8)
+    frames = [(marked if (i < 10 or i >= 20) else blank) for i in range(30)]
+    get = lambda i: frames[i] if 0 <= i < len(frames) else None
+    res = forensic_marker_window(get, fps, 15, boxes, roi, placement="outside",
+                                 marker_size=18, window_sec=1.0)
+    assert res["lost_idx"] == 10, res
+    assert res["recovered_idx"] == 20, res
+    assert res["lost_sec"] == 1.0 and res["recovered_sec"] == 2.0, res
+    assert res["moved_roi"] is None and res["glitch"] is False, res
+    res2 = forensic_marker_window(get, fps, 5, boxes, roi, placement="outside",
+                                  marker_size=18, window_sec=0.4)
+    assert res2["glitch"] is True and res2["lost_idx"] is None, res2
+    return {"lost_idx": res["lost_idx"], "recovered_idx": res["recovered_idx"],
+            "glitch_ok": True}
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fast", action="store_true", help="skip video test")
@@ -361,6 +384,7 @@ def main():
         else:
             check("T5 video per-frame encrypt/restore", lambda: t5_video(tmp))
             check("T7 optical markers in/outside + probe", lambda: t7_optical_markers(tmp))
+            check("T8 forensic +-1s loss/recovery/move", lambda: t8_forensic_window(tmp))
     print("-" * 70)
     print(f"  PASS={REPORT['passed']}  FAIL={REPORT['failed']}")
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),

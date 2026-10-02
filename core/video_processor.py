@@ -8,7 +8,7 @@ import imageio_ffmpeg
 creation_flags = 0
 if sys.platform == "win32":
     creation_flags = subprocess.CREATE_NO_WINDOW
-from core.crypto import seeded_shuffle, stamp_optical_markers, restore_optical_markers, detect_optical_markers, detect_all_optical_markers, inpaint_optical_markers, check_marker_presence, _calculate_marker_boxes
+from core.crypto import seeded_shuffle, stamp_optical_markers, restore_optical_markers, detect_optical_markers, detect_all_optical_markers, inpaint_optical_markers, check_marker_presence, _calculate_marker_boxes, forensic_marker_window
 from core.audio import process_audio_file
 from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks, get_roi_blocks, center_inner_grid
 from core.svg_generator import export_grid_to_svg, export_scrambled_grid_to_svg
@@ -1080,6 +1080,56 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         outer_exhausted = False
         center_exhausted = False
         zone_miss_counts = {}
+        def _run_zone_forensic(zone):
+            try:
+                fcap = cv2.VideoCapture(input_path)
+                if not fcap.isOpened():
+                    return
+                try:
+                    probe_fps = fcap.get(cv2.CAP_PROP_FPS) or fps
+                    total_p = int(fcap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+                    try:
+                        center_sec = frame_count / fps
+                    except Exception:
+                        center_sec = 0.0
+                    center_idx = int(round(center_sec * probe_fps))
+                    def _get_frame(i):
+                        if i < 0 or (total_p > 0 and i >= total_p):
+                            return None
+                        fcap.set(cv2.CAP_PROP_POS_FRAMES, int(i))
+                        ok, fr = fcap.read()
+                        if not ok or fr is None:
+                            return None
+                        if out_w != fr.shape[1] or out_h != fr.shape[0]:
+                            if no_scale:
+                                canvas = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+                                oh, ow = fr.shape[:2]
+                                cw, ch = min(out_w, ow), min(out_h, oh)
+                                cxo, cyo = (out_w - cw) // 2, (out_h - ch) // 2
+                                fxo, fyo = (ow - cw) // 2, (oh - ch) // 2
+                                canvas[cyo:cyo + ch, cxo:cxo + cw] = fr[fyo:fyo + ch, fxo:fxo + cw]
+                                fr = canvas
+                            else:
+                                fr = cv2.resize(fr, (out_w, out_h))
+                        return fr
+                    res = forensic_marker_window(
+                        _get_frame, probe_fps, center_idx,
+                        zone["marker_coords"], zone["roi"],
+                        placement=placement, marker_size=18, window_sec=1.0)
+                    zone["forensic"] = res
+                    if res.get("moved_roi"):
+                        LiveDebugger.log("FORENSIC_MOVED", f"Optical zone {zone['roi']} MOVED at ~{res['lost_sec']}s -> {res['moved_roi']} (frame {res['lost_idx']})", level="WARNING", module="VIDEO")
+                    elif res.get("glitch"):
+                        LiveDebugger.log("FORENSIC_GLITCH", f"Optical zone {zone['roi']} present on every +-1s resample around frame {center_idx} - transient miss, zone kept", level="INFO", module="VIDEO")
+                    else:
+                        LiveDebugger.log("FORENSIC_LOSS", f"Optical zone {zone['roi']} lost ~{res['lost_sec']}s (frame {res['lost_idx']}) recovered ~{res['recovered_sec']}s", level="WARNING", module="VIDEO")
+                finally:
+                    try:
+                        fcap.release()
+                    except Exception:
+                        pass
+            except Exception as e:
+                LiveDebugger.log("FORENSIC_ERR", f"Forensic scan failed: {e}", level="WARNING", module="VIDEO")
         accumulated_c = 0.0                                        
         center_read_cursor = 0                                                               
         while frame_count < output_total_frames:
@@ -1366,6 +1416,18 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                     if check_marker_presence(frame, new_z["marker_coords"], marker_size=18):
                                         if new_z not in active_marker_zones:
                                             active_marker_zones.append(new_z)
+                        for z in discovered_zones:
+                            z_id = id(z)
+                            _is_active = any(zz is z for zz in active_marker_zones)
+                            if _is_active:
+                                z["_was_active"] = True
+                                if z.get("_forensic_done") and zone_miss_counts.get(z_id, 0) == 0:
+                                    z["_forensic_done"] = False
+                            elif z.get("_was_active", False):
+                                z["_was_active"] = False
+                                if not z.get("_forensic_done"):
+                                    z["_forensic_done"] = True
+                                    _run_zone_forensic(z)
                         if active_marker_zones:
                             new_frame = frame.copy()
                             for z in active_marker_zones:

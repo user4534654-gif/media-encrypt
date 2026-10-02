@@ -150,6 +150,75 @@ def check_marker_presence(img, coords, marker_size=18, threshold=0.65, search_pa
             if matches >= 3:
                 return True
     return matches >= 3
+def forensic_marker_window(get_frame, fps, center_idx, marker_coords, roi,
+                           placement='outside', marker_size=18,
+                           window_sec=1.0, step_frames=None):
+    try:
+        fps = float(fps or 0) or 25.0
+    except Exception:
+        fps = 25.0
+    try:
+        span = max(1, int(round(float(window_sec) * fps)))
+    except Exception:
+        span = int(fps)
+    if step_frames is None:
+        step_frames = max(1, span // 10)
+    try:
+        step_frames = max(1, int(step_frames))
+    except Exception:
+        step_frames = 1
+    idxs = list(range(int(center_idx) - span, int(center_idx) + span + 1, step_frames))
+    samples = []
+    frames = {}
+    for i in idxs:
+        if i < 0:
+            continue
+        try:
+            fr = get_frame(i)
+        except Exception:
+            fr = None
+        if fr is None:
+            continue
+        frames[i] = fr
+        try:
+            present = bool(check_marker_presence(fr, marker_coords,
+                                                 marker_size=marker_size))
+        except Exception:
+            present = False
+        samples.append((i, present))
+    lost_idx, recovered_idx = None, None
+    seen_present = False
+    for (i, present) in samples:
+        if present:
+            seen_present = True
+            if lost_idx is not None and recovered_idx is None:
+                recovered_idx = i
+        elif seen_present and lost_idx is None:
+            lost_idx = i
+    glitch = bool(seen_present and lost_idx is None)
+    moved_roi = None
+    if lost_idx is not None and lost_idx in frames:
+        try:
+            for cand in detect_all_optical_markers(frames[lost_idx],
+                                                   placement=placement):
+                if (abs(cand[0] - roi[0]) >= 0.02 or abs(cand[1] - roi[1]) >= 0.02 or
+                        abs(cand[2] - roi[2]) >= 0.02 or abs(cand[3] - roi[3]) >= 0.02):
+                    moved_roi = [float(v) for v in cand]
+                    break
+        except Exception:
+            moved_roi = None
+    def _sec(i):
+        return round(i / fps, 2) if i is not None else None
+    return {
+        "lost_idx": lost_idx,
+        "recovered_idx": recovered_idx,
+        "moved_roi": moved_roi,
+        "samples": samples,
+        "glitch": glitch,
+        "lost_sec": _sec(lost_idx),
+        "recovered_sec": _sec(recovered_idx),
+        "fps": fps,
+    }
 def stamp_optical_markers(img, rx1, ry1, rx2, ry2, placement='outside', marker_size=18):
     h, w = img.shape[:2]
     coords = _calculate_marker_boxes(w, h, rx1, ry1, rx2, ry2, placement, marker_size)

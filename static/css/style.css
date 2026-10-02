@@ -1388,3 +1388,149 @@ body.ios-dark-theme .vault-picker-name {
     font-weight: 600;
     font-size: 10px;
 }
+.ve-tracks {
+    height: 66px;
+}
+.ve-filmstrip {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    display: flex;
+    gap: 2px;
+    padding: 0 2px;
+    opacity: 0.55;
+    pointer-events: none;
+}
+.ve-filmstrip-thumb {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: #000;
+}
+.ve-filmstrip-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: #475569;
+    font-family: ui-monospace, monospace;
+}
+.ve-grid-lines {
+    z-index: 2;
+}
+.ve-clips-container {
+    z-index: 5;
+}
+body.layout-mobile .ios-device-container {
+    max-width: 480px;
+    margin: 8px auto;
+    border-width: 6px;
+    border-radius: 18px;
+}
+body.layout-mobile .ios-group-row-grid,
+body.layout-mobile .symmetrical-settings-grid {
+    grid-template-columns: 1fr;
+}
+body.layout-mobile .segmented-control {
+    flex-wrap: wrap;
+}
+body.layout-mobile .segment-btn {
+    flex: 1 1 40%;
+    padding: 10px 6px;
+    font-size: 12px;
+}
+body.layout-mobile .ios-btn,
+body.layout-mobile .ios-btn-small {
+    min-height: 44px;
+}
+body.layout-mobile .ios-input,
+body.layout-mobile .ios-select {
+    font-size: 16px;
+    padding: 10px 12px;
+}
+body.layout-mobile .ve-timeline-header,
+body.layout-mobile .ve-controls-left,
+body.layout-mobile .ve-controls-right,
+body.layout-mobile .ve-active-zone-bar {
+    flex-direction: column;
+    align-items: stretch;
+}
+body.layout-mobile .ve-timeline-header .ve-btn,
+body.layout-mobile .ve-controls-right .ve-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+}
+body.layout-mobile .patch-coords-bar {
+    flex-direction: column;
+    align-items: stretch;
+}
+body.layout-mobile .ios-navigation-bar {
+    height: auto;
+    min-height: 48px;
+    padding: 6px 8px;
+}
+body.layout-mobile .ios-nav-title {
+    font-size: 15px;
+}
+@media (max-width: 768px) {
+    .ios-device-container {
+        max-width: 100%;
+        margin: 0;
+        border: none;
+        border-radius: 0;
+    }
+    .ios-group-row-grid,
+    .symmetrical-settings-grid {
+        grid-template-columns: 1fr;
+    }
+    .segmented-control {
+        flex-wrap: wrap;
+    }
+    .segment-btn {
+        flex: 1 1 40%;
+        padding: 10px 6px;
+        font-size: 12px;
+    }
+    .ios-btn,
+    .ios-btn-small {
+        min-height: 44px;
+    }
+    .ios-input,
+    .ios-select {
+        font-size: 16px;
+        padding: 10px 12px;
+    }
+    .ve-timeline-header,
+    .ve-controls-left,
+    .ve-controls-right,
+    .ve-active-zone-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .ve-timeline-header .ve-btn,
+    .ve-controls-right .ve-btn {
+        width: 100%;
+        justify-content: center;
+        min-height: 40px;
+    }
+    .patch-coords-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .ios-navigation-bar {
+        height: auto;
+        min-height: 48px;
+        padding: 6px 8px;
+    }
+    .ios-nav-title {
+        font-size: 15px;
+    }
+}

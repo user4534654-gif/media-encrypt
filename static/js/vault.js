@@ -98,10 +98,44 @@ function viewMedia(folder, filename) {
                 </div>
             </div>`;
     }
+    content += `<div id="vaultMediaMeta" class="mi-meta-loading">⏳ Loading file data…</div>`;
     const contentEl = document.getElementById('mediaViewerContent');
     const modalEl = document.getElementById('mediaModal');
     if (contentEl) contentEl.innerHTML = content;
     if (modalEl) modalEl.classList.remove('hidden');
+    fetch(`/api/vault_file_info?filename=${encodeURIComponent(filename)}&folder=${encodeURIComponent(folder)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+            const metaEl = document.getElementById('vaultMediaMeta');
+            if (!metaEl || !d) { if (metaEl) metaEl.innerHTML = ''; return; }
+            const info = d.info || {};
+            const sizeBytes = d.size_bytes;
+            const fmtSize = (function (b) {
+                if (b == null) return info.file_size_mb != null ? info.file_size_mb + ' MB' : '—';
+                if (b < 1024) return b + ' B';
+                const u = ['B', 'KB', 'MB', 'GB']; let i = 0; let v = b;
+                while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+                return v.toFixed(v >= 100 ? 1 : 2) + ' ' + u[i];
+            })(sizeBytes);
+            const rows = [
+                ['📄 File', filename],
+                ['💾 Size', fmtSize],
+                ['📐 Resolution', info.resolution || '—'],
+                ['⏱ Duration', info.duration || '—'],
+                ['🎬 Video', [info.video_codec, info.video_bitrate].filter(Boolean).join(' · ') || '—'],
+                ['🎵 Audio', [info.audio_codec, info.audio_sr ? info.audio_sr + ' Hz' : null, info.audio_bitrate].filter(Boolean).join(' · ') || '—'],
+                ['📦 Format', info.format || '—'],
+            ].map(([k, v]) => {
+                const safeV = String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                return `<div class="mi-row"><span class="mi-label">${k}</span><span class="mi-value">${safeV}</span></div>`;
+            }).join('');
+            metaEl.classList.remove('mi-meta-loading');
+            metaEl.innerHTML = `<div style="max-width:520px; margin:0 auto; width:100%;"><div class="mi-table">${rows}</div></div>`;
+        })
+        .catch(() => {
+            const metaEl = document.getElementById('vaultMediaMeta');
+            if (metaEl) metaEl.innerHTML = '';
+        });
 }
 function closeViewer() {
     const modalEl = document.getElementById('mediaModal');

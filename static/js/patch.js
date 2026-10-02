@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
             patchVideoDuration = player.duration || 0;
             updateDurationLabels();
             renderVeRulerTicks();
+            veBuildFilmstrip();
             if (patchSegments.length === 0 && patchVideoDuration > 0) {
                 const segEnd = Math.min(patchVideoDuration, Math.max(2.0, patchVideoDuration * 0.35));
                 addPatchSegment(0, segEnd);
@@ -262,8 +263,80 @@ function applyOutsideMarkerLimits(box, m) {
     if (y2 - y1 < minH) { y1 = Math.max(m.my, y2 - minH); }
     return { x1: x1, y1: y1, x2: x2, y2: y2 };
 }
+let veFilmstripToken = 0;
+function veClearFilmstrip() {
+    veFilmstripToken++;
+    const strip = document.getElementById('veFilmstrip');
+    if (strip) strip.innerHTML = '';
+}
+function veBuildFilmstrip() {
+    const strip = document.getElementById('veFilmstrip');
+    const player = document.getElementById('patchVideoPlayer');
+    if (!strip || !player) return;
+    const src = player.currentSrc || player.src;
+    const dur = patchVideoDuration;
+    if (!src || !(dur > 0)) return;
+    const myToken = ++veFilmstripToken;
+    strip.innerHTML = '<div class="ve-filmstrip-empty">loading preview…</div>';
+    const count = Math.max(6, Math.min(24, Math.floor(dur / 2) || 6));
+    const cap = document.createElement('video');
+    cap.muted = true;
+    cap.preload = 'auto';
+    cap.src = src;
+    const canvas = document.createElement('canvas');
+    canvas.width = 96;
+    canvas.height = 54;
+    const ctx = canvas.getContext('2d');
+    let idx = 0;
+    let started = false;
+    let stepTimer = 0;
+    function clearStepTimer() { if (stepTimer) { clearTimeout(stepTimer); stepTimer = 0; } }
+    function next() {
+        clearStepTimer();
+        if (myToken !== veFilmstripToken) return;
+        if (idx >= count) {
+            if (!strip.querySelector('.ve-filmstrip-thumb')) strip.innerHTML = '';
+            return;
+        }
+        const t = ((idx + 0.5) * dur) / count;
+        idx++;
+        try {
+            stepTimer = setTimeout(next, 4000);
+            cap.currentTime = Math.min(Math.max(0, t), Math.max(0, dur - 0.05));
+        } catch (e) { next(); }
+    }
+    function capture() {
+        if (myToken !== veFilmstripToken) return;
+        try {
+            const first = strip.querySelector('.ve-filmstrip-empty');
+            if (first) first.remove();
+            const vw = cap.videoWidth, vh = cap.videoHeight;
+            if (vw && vh) {
+                const scale = Math.max(vw / 96, vh / 54);
+                const sw = 96 * scale, sh = 54 * scale;
+                ctx.drawImage(cap, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, 96, 54);
+            } else {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, 96, 54);
+            }
+            const img = document.createElement('img');
+            img.className = 've-filmstrip-thumb';
+            img.alt = '';
+            img.src = canvas.toDataURL('image/jpeg', 0.6);
+            strip.appendChild(img);
+        } catch (e) {  }
+        next();
+    }
+    cap.addEventListener('loadedmetadata', () => { started = true; next(); });
+    cap.addEventListener('seeked', () => { if (started) capture(); });
+    cap.addEventListener('error', () => {
+        clearStepTimer();
+        if (!started && !strip.querySelector('.ve-filmstrip-thumb')) strip.innerHTML = '';
+    });
+}
 function loadPatchMediaFile(file) {
     patchBaseFile = file;
+    veClearFilmstrip();
     const isImage = file.type.startsWith('image/') || /\.(jpe?g|jpe|jfif|jif|jfi|png|webp|avif|bmp|tiff?|gif|ico)$/i.test(file.name);
     const player = document.getElementById('patchVideoPlayer');
     const imagePreview = document.getElementById('patchImagePreview');

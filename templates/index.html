@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ metadata.name }} v{{ metadata.version }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/preview.css') }}">
 </head>
-<body class="ios-linen-bg">
+<body class="ios-linen-bg layout-{{ layout|default('desktop') }}">
     <script>
         try {
             const settings = JSON.parse(localStorage.getItem('media_encrypt_settings_v20') || '{}');
@@ -82,6 +83,7 @@
     </div>
     {% include 'components/debugger.html' %}
     <script src="{{ url_for('static', filename='js/preview.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/media_inspector.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
     <script src="{{ url_for('static', filename='js/vault.js') }}"></script>
     <script src="{{ url_for('static', filename='js/process.js') }}"></script>

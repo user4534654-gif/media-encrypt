@@ -15,6 +15,7 @@
                 <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('video', false)">📂 Pick from Vault</button>
             </div>
             <div class="file-list" id="fileList"></div>
+            <div id="videoInspector" class="media-inspector hidden"></div>
             <div class="ios-group-info" id="uploadVideoBitrateInfo" style="display: none; margin-top: 6px;"></div>
             <div class="url-download-container" style="margin-top: 10px;">
                 <label class="ios-label" style="font-size: 12px; color: #555;">Or Download via URL / CLI (yt-dlp)<span class="help-tip">❔<span class="tooltip-text">Enter URL or custom arguments (without 'yt-dlp'). Press Enter to download directly to input vault.</span></span></label>
@@ -38,6 +39,7 @@
                 <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('video', true)">📂 Pick from Vault</button>
             </div>
             <div class="file-list" id="centerFileList"></div>
+            <div id="centerVideoInspector" class="media-inspector hidden"></div>
             <div class="url-download-container" style="margin-top: 10px;">
                 <label class="ios-label" style="font-size: 12px; color: #007aff;">Or Download Center Video via URL (yt-dlp)</label>
                 <div style="display: flex; gap: 6px; align-items: center;">
@@ -163,6 +165,7 @@
                                 <div class="ve-ruler-ticks" id="veRulerTicks"></div>
                             </div>
                             <div class="ve-tracks" id="veTimelineTrack">
+                                <div class="ve-filmstrip" id="veFilmstrip"></div>
                                 <div class="ve-grid-lines" id="veGridLines"></div>
                                 <div class="ve-playhead" id="vePlayhead">
                                     <div class="ve-playhead-head"></div>

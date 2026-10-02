@@ -71,8 +71,17 @@
         "mif_meanabs_max": 14.31,
         "zc_inside_meanabs_max": 14.38
       }
+    },
+    {
+      "name": "T8 forensic +-1s loss/recovery/move",
+      "status": "PASS",
+      "metrics": {
+        "lost_idx": 10,
+        "recovered_idx": 20,
+        "glitch_ok": true
+      }
     }
   ],
-  "passed": 7,
+  "passed": 8,
   "failed": 0
 }
