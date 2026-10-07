@@ -137,7 +137,7 @@
         if (serverInfo) { done(serverInfo, null); return; }
         var m = /folder=([^&]+)/.exec(fileUrl || '');
         var folder = m ? decodeURIComponent(m[1]) : 'input';
-        var vm = /\/vault\/([^/]+)\
+        var vm = /\/vault\/([^/]+)\//.exec(fileUrl || '');
         if (vm) folder = vm[1];
         fetch('/api/vault_file_info?filename=' + encodeURIComponent(filename || '') + '&folder=' + encodeURIComponent(folder))
             .then(function (r) { return r.ok ? r.json() : null; })

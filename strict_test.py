@@ -48,13 +48,13 @@ def checkerboard(w, h, cell=16, base=(40, 40, 40), phase=0):
     img[~on] = inv
     return img
 def t1_goldens():
-    assert hash_str("test_key") == GOLD_HASH_TEST_KEY,
+    assert hash_str("test_key") == GOLD_HASH_TEST_KEY,\
         f"hash drift: {hash_str('test_key')} != {GOLD_HASH_TEST_KEY}"
-    assert seeded_shuffle(list(range(16)), GOLD_HASH_TEST_KEY) == GOLD_SHUFFLE16,
+    assert seeded_shuffle(list(range(16)), GOLD_HASH_TEST_KEY) == GOLD_SHUFFLE16,\
         "LCG shuffle drift on 16 elements"
-    assert seeded_shuffle(list(range(10)), 12345) == GOLD_SHUFFLE10,
+    assert seeded_shuffle(list(range(10)), 12345) == GOLD_SHUFFLE10,\
         "LCG shuffle drift on 10 elements"
-    assert get_blocks(10, 10, 4, 4)[0] == GOLD_BLOCKS_10x10_4x4_FIRST,
+    assert get_blocks(10, 10, 4, 4)[0] == GOLD_BLOCKS_10x10_4x4_FIRST,\
         f"grid drift: {get_blocks(10,10,4,4)[0]}"
     assert get_blocks(10, 10, 4, 4)[-1] == GOLD_BLOCKS_10x10_4x4_LAST
     assert get_blocks(127, 131, 5, 7)[:3] == GOLD_BLOCKS_PRIME_FIRST3
@@ -78,7 +78,7 @@ def t2_grid_sweep():
         uncovered = int(np.sum(mask == 0))
         overlap = int(np.sum(mask > 1))
         worst_gap = max(worst_gap, uncovered + overlap)
-        assert uncovered == 0 and overlap == 0,
+        assert uncovered == 0 and overlap == 0,\
             f"{w}x{h} {c}x{r}: uncovered={uncovered} overlap={overlap}"
         tested += 1
     outer, inner, _ = get_outer_blocks(4, 4, 128, 96, center_size="1/4")
@@ -183,7 +183,7 @@ def t5_video(tmp):
         cap.release()
         return fs
     fo, fe, fd = frames(bgr), frames(enc), frames(dec)
-    assert len(fe) == len(fo) == len(fd) == N,
+    assert len(fe) == len(fo) == len(fd) == N,\
         f"frame count {len(fo)}/{len(fe)}/{len(fd)} != {N}"
     enc_diffs = [meanabs(a, b) for a, b in zip(fe, fo)]
     dec_diffs = [meanabs(a, b) for a, b in zip(fd, fo)]
@@ -209,9 +209,9 @@ def t6_gridmap(tmp):
     assert gm["format"] == "media-encrypt-gridmap/1", "format tag drift"
     assert (gm["w"], gm["h"], gm["cols"], gm["rows"], gm["seed"]) == (120, 120, 4, 4, 8888)
     assert gm["has_center"] is False and gm["perm"]["mode"] == "full"
-    assert gm["blocks"] == [list(b) for b in get_blocks(120, 120, 4, 4)],
+    assert gm["blocks"] == [list(b) for b in get_blocks(120, 120, 4, 4)],\
         "gridmap blocks != pipeline grid"
-    assert gm["perm"]["shuffled"] == seeded_shuffle(list(range(16)), 8888),
+    assert gm["perm"]["shuffled"] == seeded_shuffle(list(range(16)), 8888),\
         "gridmap perm != pipeline shuffle (SVG could never catch this)"
     assert sorted(gm["perm"]["shuffled"]) == list(range(16)), "perm not bijective"
     assert all(isinstance(v, int) for b in gm["blocks"]
@@ -247,7 +247,7 @@ def t6_gridmap(tmp):
     assert len(c["outer"]) + len(c["inner"]) == 16
     assert set(c["outer"]).isdisjoint(c["inner"]), "outer/inner overlap"
     assert sorted(c["shuffled_outer"]) == sorted(c["outer"]), "outer shuffle corrupt"
-    assert sorted(c["shuffled_center"]) == list(range(len(c["shuffled_center"]))),
+    assert sorted(c["shuffled_center"]) == list(range(len(c["shuffled_center"]))),\
         "center shuffle not bijective"
     return {"json_checks": "exact", "png_sha256": digest1[:12],
             "center_outer": len(c["outer"]), "center_inner": len(c["inner"])}
@@ -265,7 +265,7 @@ def t7_optical_markers(tmp):
         assert check_marker_presence(stamped, boxes), f"{plc}: stamped markers not detectable"
         rois = detect_all_optical_markers(stamped, placement=plc)
         assert rois, f"{plc}: no ROI detected"
-        assert all(abs(a - b) <= 0.01 for a, b in zip(rois[0], want)),
+        assert all(abs(a - b) <= 0.01 for a, b in zip(rois[0], want)),\
             f"{plc}: ROI {rois[0]} != {want}"
     assert effective_marker_placement(True, "c.mp4", None, [0.2, 0.2, 0.8, 0.8], True, "inside") == "inside"
     assert effective_marker_placement(False, None, None, [0.2, 0.2, 0.8, 0.8], True, "inside") == "inside"

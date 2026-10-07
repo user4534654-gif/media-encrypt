@@ -734,7 +734,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     global_roi = options.get('patch_roi')
     global_invert = options.get('roi_invert', False)
     placement = options.get('marker_placement', 'outside')
-    if 'marker_inside_full' not in options and options.get('optical_markers')
+    if 'marker_inside_full' not in options and options.get('optical_markers')\
             and placement == 'inside' and (patch_segments_cfg or global_roi):
         options['marker_inside_full'] = True
     discovered_zones = []
@@ -742,7 +742,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         if not r_roi:
             return None
         rx1, ry1, rx2, ry2 = r_roi
-        if options.get('optical_markers') and placement == 'inside'
+        if options.get('optical_markers') and placement == 'inside'\
                 and not options.get('marker_inside_full'):
             if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
                 px1, py1 = int(math.floor(rx1 * out_w)), int(math.floor(ry1 * out_h))
@@ -960,7 +960,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         _zp = _env_s.get('zone_points')
         _rp = _env_s.get('points')
         _dur = float(_env_s.get('duration')) if _env_s.get('duration') else 0
-        if isinstance(_zp, list) and len(_zp) >= 2 and isinstance(_rp, list)
+        if isinstance(_zp, list) and len(_zp) >= 2 and isinstance(_rp, list)\
                 and len(_rp) >= 2 and _dur > 0:
             _steer_dyn = ([max(100.0, min(25000.0, float(v))) for v in _rp],
                           [max(100.0, min(25000.0, float(v))) for v in _zp],
@@ -1536,7 +1536,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             s_mapping = matched_seg["mapping"]
                             n_s_blocks = len(s_blocks)
                             src_img = frame
-                            if options.get('optical_markers') and options.get('marker_inside_full')
+                            if options.get('optical_markers') and options.get('marker_inside_full')\
                                     and options.get('marker_placement', 'outside') == 'inside':
                                 s_roi2 = matched_seg.get("roi")
                                 if s_roi2:

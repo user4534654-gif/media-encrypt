@@ -761,7 +761,7 @@ def run_quick_tests():
             _oA.update({'center_path': _ctA, 'dual_track': True})
             process_video_file(_bgA, _encA, _oA, prog, "task_t10_encA")
             _lA, _rA = _extract_stereo10(_encA)
-            assert not _near10(_peak10(_lA), 440) and _peak10(_lA) > 3000,
+            assert not _near10(_peak10(_lA), 440) and _peak10(_lA) > 3000,\
                 f"dual L is not modulated background (peak={_peak10(_lA):.0f}Hz)"
             assert _near10(_peak10(_rA), 880), f"dual R is not center audio (peak={_peak10(_rA):.0f}Hz)"
             _decA = os.path.join(temp_dir, "t10_decA.mp4")
@@ -799,11 +799,11 @@ def run_quick_tests():
                         'custom_audio_l_enc': True, 'custom_audio_r_enc': True})
             process_video_file(_bgA, _encC, _oC, prog, "task_t10_encC")
             _lC, _rC = _extract_stereo10(_encC)
-            assert not _near10(_peak10(_lC), 660) and _peak10(_lC) > 3000,
+            assert not _near10(_peak10(_lC), 660) and _peak10(_lC) > 3000,\
                 f"custom L was not modulated into place (peak={_peak10(_lC):.0f}Hz)"
             _prC = _peak10(_rC)
             assert (not _near10(_prC, 880)
-                    and (_near10(_prC, 7120) or _near10(_prC, 8880))),
+                    and (_near10(_prC, 7120) or _near10(_prC, 8880))),\
                 f"center R missing/wrong with custom L (peak={_prC:.0f}Hz)"
             _decC = os.path.join(temp_dir, "t10_decC.mp4")
             _dC = _base_opts10(reverse=True)
