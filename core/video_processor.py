@@ -148,7 +148,7 @@ def _parse_bitrate_envelope(envelope):
         return max(100, int(round(sum(pts) / len(pts)))), max(pts)
     except Exception:
         return None, None
-def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode='off', rows=1, cols=1, extra_hw_args=None, envelope=None):
+def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode='off', rows=1, cols=1, extra_hw_args=None, envelope=None, scramble_tune=False):
     if extra_hw_args is None:
         extra_hw_args = {}
     args = ['-c:v', chosen_codec]
@@ -217,6 +217,12 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
             args.extend(['-preset', vid_preset])
         if not is_prores and not is_qsv:
             args.extend(['-pix_fmt', 'yuv420p'])
+    if scramble_tune:
+        if codec_lower == 'libx264':
+            args.extend(['-x264-params', 'no-deblock=1', '-psy', '0',
+                         '-tune', 'ssim', '-chromaoffset', '-2'])
+        elif codec_lower == 'libx265':
+            args.extend(['-x265-params', 'no-deblock=1', '-tune', 'ssim'])
     return args
 def _scramble_frame_ordinary(frame, cols, rows, seed, reverse=False):
     h, w = frame.shape[:2]
@@ -985,7 +991,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         rows=rows,
         cols=cols,
         extra_hw_args=extra_hw_args,
-        envelope=options.get('vid_bitrate_envelope')
+        envelope=options.get('vid_bitrate_envelope'),
+        scramble_tune=options.get('scramble_tune') == 'on'
     )
     if options.get('vid_bitrate_envelope'):
         _ea, _em = _parse_bitrate_envelope(options.get('vid_bitrate_envelope'))
@@ -1043,7 +1050,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             rows=rows_inner if options.get('center') else rows,
             cols=cols_inner if options.get('center') else cols,
             extra_hw_args=extra_hw_args,
-            envelope=options.get('vid_bitrate_envelope')
+            envelope=options.get('vid_bitrate_envelope'),
+            scramble_tune=options.get('scramble_tune') == 'on'
         )
         cmd_center.extend(enc_args_center)
         if has_center_aud_out:

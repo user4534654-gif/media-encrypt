@@ -191,9 +191,16 @@ def resolve_auto_quality(file_path, options):
                 center_br = probe_media_file(center_path).get('video_bitrate')
             except Exception as e:
                 LiveDebugger.log("AUTO_BR_WARN", f"Center probe failed, using background bitrate: {e}", level="WARNING", module="HTTP")
-        options['vid_bitrate'] = pick_max_video_bitrate(bg_br, center_br)
-        if center_br:
-            LiveDebugger.log("AUTO_BR", f"Auto bitrate: background={bg_br or 'unknown'} center={center_br} -> picked {options['vid_bitrate']} (max)", level="INFO", module="HTTP")
+        weight_br = None
+        try:
+            dur = info.get('duration_sec') or 0
+            fsize = os.path.getsize(file_path) if file_path and os.path.exists(file_path) else 0
+            if dur > 0 and fsize > 0:
+                weight_br = f"{max(int((fsize * 8) / dur / 1000) - 128, 500)}k"
+        except Exception as e:
+            LiveDebugger.log("AUTO_BR_WARN", f"Weight-derived bitrate failed: {e}", level="WARNING", module="HTTP")
+        options['vid_bitrate'] = pick_max_video_bitrate(bg_br, center_br, weight_br)
+        LiveDebugger.log("AUTO_BR", f"Auto bitrate: background={bg_br or 'unknown'} center={center_br or 'unknown'} weight={weight_br or 'unknown'} -> picked {options['vid_bitrate']} (max)", level="INFO", module="HTTP")
     if options.get('vid_preset') == 'auto':
         options['vid_preset'] = 'medium'
     if options.get('aud_sr') == 'auto':
@@ -499,6 +506,7 @@ def process_api():
             'vid_codec': request.form.get('vid_codec', 'libx264'),
             'vid_bitrate': request.form.get('vid_bitrate', '3000k'),
             'vid_preset': request.form.get('vid_preset', 'medium'),
+            'scramble_tune': request.form.get('scramble_tune', 'off'),
             'aud_sr': sanitize_audio_sr(raw_aud_sr, raw_aud_codec),
             'aud_codec': raw_aud_codec,
             'aud_bitrate': request.form.get('aud_bitrate', '192k'),

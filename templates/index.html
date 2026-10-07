@@ -15,6 +15,9 @@
             if (settings.theme) {
                 document.body.classList.add('ios-dark-theme');
             }
+            if (localStorage.getItem('media_encrypt_devmode_v20') === 'true') {
+                document.body.classList.add('dev-mode');
+            }
         } catch(e) {}
     </script>
     <div class="ios-device-container">
@@ -26,7 +29,7 @@
                 <button type="button" id="tabBtnVault" class="segment-btn" onclick="switchMainTab('vault')">📁 Vault</button>
             </div>
         </div>
-        <div class="ios-group" style="margin: 0 12px 12px 12px; padding: 8px 10px;">
+        <div class="ios-group dev-only" id="settingsPresetBlock" style="margin: 0 12px 12px 12px; padding: 8px 10px;">
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <span style="font-size: 12px; font-weight: 700; color: #4c566c;">⚙️ Settings preset:</span>
                 <button type="button" class="ios-btn-small" onclick="exportSettingsToJson()" title="Download all studio settings as a .json preset file">⬇ Export settings (.json)</button>
@@ -76,7 +79,7 @@
             </div>
             <div id="vaultPickerList" class="vault-picker-list">
             </div>
-            <div style="padding: 10px 15px; text-align: right; border-top: 1px solid #e0e0e0; background: #f9f9f9; border-radius: 0 0 12px 12px;">
+            <div class="vault-picker-footer" style="padding: 10px 15px; text-align: right; border-top: 1px solid #e0e0e0; border-radius: 0 0 12px 12px;">
                 <button type="button" class="ios-btn-small" onclick="closeVaultPicker()">Close</button>
             </div>
         </div>

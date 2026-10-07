@@ -143,6 +143,27 @@ function toggleTheme(isDark) {
     localStorage.setItem('ios-dark-theme', isDark ? 'true' : 'false');
     saveAllSettings();
 }
+function isDevMode() {
+    try {
+        return document.body.classList.contains('dev-mode');
+    } catch (e) {
+        return false;
+    }
+}
+function syncDevModeBtn() {
+    try {
+        const btn = document.getElementById('devModeBtn');
+        if (btn) btn.textContent = isDevMode() ? '🛠️ Dev: On' : '🛠️ Dev: Off';
+    } catch (e) {}
+}
+function toggleDevMode() {
+    const on = !isDevMode();
+    document.body.classList.toggle('dev-mode', on);
+    try {
+        localStorage.setItem('media_encrypt_devmode_v20', on ? 'true' : 'false');
+    } catch (e) {}
+    syncDevModeBtn();
+}
 function toggleFullscreen() {
     const btn = document.getElementById('fullscreenBtn');
     if (window.pywebview && window.pywebview.api && window.pywebview.api.toggle_fullscreen) {
@@ -567,6 +588,7 @@ window.addEventListener('DOMContentLoaded', () => {
     loadAllSettings();
     initAutoSave();
     loadCustomIcons();
+    syncDevModeBtn();
     switchMainTab('encrypt');
     switchFolder('input');
 });

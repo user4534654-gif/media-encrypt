@@ -443,3 +443,154 @@
 }
 .mi-note { padding: 6px 12px 10px 12px; font-size: 11px; color: #666; }
 .mi-meta-loading { padding: 10px; font-size: 12px; color: #888; text-align: center; }
+body.ios-dark-theme .visual-canvas-container,
+body.ios-dark-theme .visual-preview-container,
+body.ios-dark-theme .settings-card {
+    background: #1c1f26;
+    border-color: #2d3139;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+body.ios-dark-theme .settings-card.blue-card { background: rgba(0, 122, 255, 0.08); }
+body.ios-dark-theme .settings-card.red-card { background: rgba(255, 59, 48, 0.08); }
+body.ios-dark-theme .blue-card .card-header { color: #58a6ff; }
+body.ios-dark-theme .red-card .card-header { color: #ff7b72; }
+body.ios-dark-theme .preview-canvas-wrapper {
+    background: #14161b;
+}
+body.ios-dark-theme .preview-bg-label { color: #79b8ff; }
+body.ios-dark-theme .preview-center-label { color: #ffa198; }
+body.ios-dark-theme .preview-selection-hint { color: #9aa3b2; }
+body.ios-dark-theme .audio-timeline-wrapper {
+    background: #1c1f26;
+    border-color: #2d3139;
+}
+body.ios-dark-theme .audio-timeline-header { color: #e6e9ef; }
+body.ios-dark-theme .channel-badge {
+    background: #2d3139;
+    color: #c9d1d9;
+}
+body.ios-dark-theme .track-source-select {
+    background: #24272e;
+    border-color: #3e4451;
+    color: #e6e9ef;
+}
+body.ios-dark-theme .track-method-badge {
+    background: #2d3139;
+    color: #9aa3b2;
+}
+body.ios-dark-theme .track-timeline-bar-container { background: #101216; }
+body.ios-dark-theme .timeline-tick-mark { background: rgba(255,255,255,0.25); }
+body.ios-dark-theme .timeline-legend { color: #9aa3b2; }
+body.ios-dark-theme .media-inspector {
+    background: #1c1f26;
+    border-color: #2d3139;
+}
+body.ios-dark-theme .mi-header {
+    color: #e6e9ef;
+    background: #24272e;
+    border-bottom-color: #2d3139;
+}
+body.ios-dark-theme .mi-row {
+    background: #24272e;
+    border-color: #2d3139;
+}
+body.ios-dark-theme .mi-label { color: #9aa3b2; }
+body.ios-dark-theme .mi-value { color: #e6e9ef; }
+body.ios-dark-theme .mi-note { color: #9aa3b2; }
+body.ios-dark-theme .mi-meta-loading { color: #8b949e; }
+.patch-coords-bar {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+.zone-options-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+#bitrateWaveModal .wave-modal-card {
+    background: #fff;
+}
+#bitrateWaveCanvas {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+body.ios-dark-theme .patch-coords-bar,
+body.ios-dark-theme .zone-options-box {
+    background: #1c1f26;
+    border-color: #2d3139;
+    color: #c9d1d9;
+}
+body.ios-dark-theme #bitrateWaveModal .wave-modal-card {
+    background: #1c1f26;
+    color: #e6e9ef;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+body.ios-dark-theme #bitrateWaveModal div[style*="#666"],
+body.ios-dark-theme #bitrateWaveModal div[style*="#888"],
+body.ios-dark-theme #bitrateWaveModal span[style*="#888"],
+body.ios-dark-theme #bitrateWaveModal label[style*="#888"] {
+    color: #9aa3b2 !important;
+}
+body.ios-dark-theme #bitrateWaveReadout {
+    color: #c9d1d9 !important;
+}
+body.ios-dark-theme #bitrateWaveCanvas {
+    background: #14161b !important;
+    border-color: #2d3139 !important;
+}
+body.ios-dark-theme #debugModal .modal-content {
+    background: #1c1f26 !important;
+    border-color: #7a2e2e;
+}
+body.ios-dark-theme #debugModal div[style*="color: #333"] {
+    color: #e6e9ef !important;
+}
+body.ios-dark-theme #debugModal div[style*="color: #555"],
+body.ios-dark-theme #debugModal td[style*="color: #888"] {
+    color: #9aa3b2 !important;
+}
+body.ios-dark-theme #debugModal div[style*="#fff8e6"] {
+    background: #2a230f !important;
+    border-color: #8a6d1b !important;
+}
+body.ios-dark-theme #debugModal div[style*="#ffe5e5"] {
+    background: #2a1518 !important;
+}
+body.ios-dark-theme #debugModal table[style*="#fafafa"] {
+    background: #24272e !important;
+}
+body.ios-dark-theme #debugModal tr[style*="#eee"] {
+    background: #2d3139 !important;
+}
+body.ios-dark-theme #debugModal div[style*="#dcdcdc"] {
+    border-color: #2d3139 !important;
+}
+body.ios-dark-theme #debugModal div[style*="#eaeaea"] {
+    background: #24272e !important;
+    border-color: #2d3139 !important;
+}
+html, body {
+    overflow-x: hidden; 
+    overflow-x: clip; 
+}
+.ios-device-container {
+    max-width: 100%;
+}
+img, video, canvas, svg {
+    max-width: 100%;
+}
+.mi-value, .mi-label, .vault-item-name, .file-list,
+.mini-terminal-log, .ve-clip-body {
+    overflow-wrap: anywhere;
+}
+.mi-table, .mi-row, .vault-item {
+    min-width: 0;
+}
+.ios-group-row-grid > *,
+.symmetrical-settings-grid > *,
+.ve-timeline-header > *,
+.ve-active-zone-bar > * {
+    min-width: 0;
+}
+.ios-input, .ios-select, .ios-file-input {
+    min-width: 0;
+}

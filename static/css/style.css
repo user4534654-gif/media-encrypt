@@ -25,6 +25,7 @@ body.ios-linen-bg {
 .ios-device-container {
     width: 100%;
     max-width: 960px;
+    box-sizing: border-box;
     background: #cbd3d8;
     border: 10px solid #222222;
     border-radius: 24px;
@@ -1033,6 +1034,13 @@ body.ios-dark-theme .vault-picker-item:hover {
 body.ios-dark-theme .vault-picker-name {
     color: #e5e7eb;
 }
+.vault-picker-footer {
+    background: #f9f9f9;
+}
+body.ios-dark-theme .vault-picker-footer {
+    background: #24272e;
+    border-top-color: #2d3139;
+}
 .patch-preview-container {
     position: relative;
     background: #000;
@@ -1428,6 +1436,17 @@ body.ios-dark-theme .vault-picker-name {
 .ve-clips-container {
     z-index: 5;
 }
+body:not(.dev-mode) .dev-only {
+    display: none !important;
+}
+body.dev-mode #devModeBtn {
+    background: linear-gradient(to bottom, #fff8e1 0%, #ffe082 100%);
+    border-color: #ff8f00;
+    color: #5d4037;
+}
+body.layout-mobile {
+    padding: 8px 6px;
+}
 body.layout-mobile .ios-device-container {
     max-width: 480px;
     margin: 8px auto;
@@ -1438,12 +1457,19 @@ body.layout-mobile .ios-group-row-grid,
 body.layout-mobile .symmetrical-settings-grid {
     grid-template-columns: 1fr;
 }
+body.layout-mobile .ios-group-row {
+    padding: 10px 12px;
+}
 body.layout-mobile .segmented-control {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 body.layout-mobile .segment-btn {
-    flex: 1 1 40%;
-    padding: 10px 6px;
+    flex: 1 0 auto;
+    white-space: nowrap;
+    padding: 10px 12px;
     font-size: 12px;
 }
 body.layout-mobile .ios-btn,
@@ -1468,6 +1494,9 @@ body.layout-mobile .ve-controls-right .ve-btn {
     justify-content: center;
     min-height: 40px;
 }
+body.layout-mobile .ve-zone-times {
+    flex-wrap: wrap;
+}
 body.layout-mobile .patch-coords-bar {
     flex-direction: column;
     align-items: stretch;
@@ -1478,59 +1507,158 @@ body.layout-mobile .ios-navigation-bar {
     padding: 6px 8px;
 }
 body.layout-mobile .ios-nav-title {
-    font-size: 15px;
+    font-size: 14px;
+}
+body.layout-mobile .ios-nav-controls {
+    gap: 6px !important;
+    right: 8px !important;
+}
+body.layout-mobile #fullscreenBtn,
+body.layout-mobile #devModeBtn {
+    font-size: 10px !important;
+    padding: 4px 6px !important;
+}
+body.layout-mobile .audio-track-line {
+    flex-wrap: wrap;
+}
+body.layout-mobile .audio-timeline-header {
+    flex-wrap: wrap;
+    gap: 6px;
+}
+body.layout-mobile .track-info {
+    width: auto;
+    flex: 1 1 100%;
+    min-width: 0;
+}
+body.layout-mobile .timeline-legend {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+body.layout-mobile .preview-canvas-wrapper {
+    height: 180px;
+}
+body.layout-mobile .mini-terminal-log {
+    height: 100px;
+}
+body.layout-mobile .modal-content {
+    padding: 10px;
+    border-width: 3px;
+}
+body.layout-mobile #patchVideoPlayer,
+body.layout-mobile #patchImagePreview,
+body.layout-mobile #imgPatchPreview {
+    max-height: 280px !important;
+}
+body.layout-mobile #bitrateWaveModal .wave-modal-card {
+    padding: 12px;
 }
 @media (max-width: 768px) {
-    .ios-device-container {
+    body.ios-linen-bg {
+        padding: 8px 6px;
+    }
+    body .ios-device-container {
         max-width: 100%;
         margin: 0;
         border: none;
         border-radius: 0;
     }
-    .ios-group-row-grid,
-    .symmetrical-settings-grid {
+    body .ios-group-row-grid,
+    body .symmetrical-settings-grid {
         grid-template-columns: 1fr;
     }
-    .segmented-control {
-        flex-wrap: wrap;
+    body .ios-group-row {
+        padding: 10px 12px;
     }
-    .segment-btn {
-        flex: 1 1 40%;
-        padding: 10px 6px;
+    body .segmented-control {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+    body .segment-btn {
+        flex: 1 0 auto;
+        white-space: nowrap;
+        padding: 10px 12px;
         font-size: 12px;
     }
-    .ios-btn,
-    .ios-btn-small {
+    body .ios-btn,
+    body .ios-btn-small {
         min-height: 44px;
     }
-    .ios-input,
-    .ios-select {
+    body .ios-input,
+    body .ios-select {
         font-size: 16px;
         padding: 10px 12px;
     }
-    .ve-timeline-header,
-    .ve-controls-left,
-    .ve-controls-right,
-    .ve-active-zone-bar {
+    body .ve-timeline-header,
+    body .ve-controls-left,
+    body .ve-controls-right,
+    body .ve-active-zone-bar {
         flex-direction: column;
         align-items: stretch;
     }
-    .ve-timeline-header .ve-btn,
-    .ve-controls-right .ve-btn {
+    body .ve-timeline-header .ve-btn,
+    body .ve-controls-right .ve-btn {
         width: 100%;
         justify-content: center;
         min-height: 40px;
     }
-    .patch-coords-bar {
+    body .ve-zone-times {
+        flex-wrap: wrap;
+    }
+    body .patch-coords-bar {
         flex-direction: column;
         align-items: stretch;
     }
-    .ios-navigation-bar {
+    body .ios-navigation-bar {
         height: auto;
         min-height: 48px;
         padding: 6px 8px;
     }
-    .ios-nav-title {
-        font-size: 15px;
+    body .ios-nav-title {
+        font-size: 14px;
+    }
+    body .ios-nav-controls {
+        gap: 6px !important;
+        right: 8px !important;
+    }
+    body #fullscreenBtn,
+    body #devModeBtn {
+        font-size: 10px !important;
+        padding: 4px 6px !important;
+    }
+    body .audio-track-line {
+        flex-wrap: wrap;
+    }
+    body .audio-timeline-header {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    body .track-info {
+        width: auto;
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+    body .timeline-legend {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    body .preview-canvas-wrapper {
+        height: 180px;
+    }
+    body .mini-terminal-log {
+        height: 100px;
+    }
+    body .modal-content {
+        padding: 10px;
+        border-width: 3px;
+    }
+    body #patchVideoPlayer,
+    body #patchImagePreview,
+    body #imgPatchPreview {
+        max-height: 280px !important;
+    }
+    body #bitrateWaveModal .wave-modal-card {
+        padding: 12px;
     }
 }

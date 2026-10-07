@@ -139,7 +139,7 @@
                             00:00.000 / 00:00.000
                         </div>
                     </div>
-                    <div class="patch-coords-bar" style="display: flex; gap: 8px; align-items: center; justify-content: space-between; background: #f8fafc; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12px; flex-wrap: wrap; margin-top: 10px; margin-bottom: 12px;">
+                    <div class="patch-coords-bar" style="display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 8px; font-size: 12px; flex-wrap: wrap; margin-top: 10px; margin-bottom: 12px;">
                         <span style="font-weight: 600; color: #2d3748;">🎯 Bounding Box [x1, y1, x2, y2]:</span>
                         <div style="display: flex; gap: 4px; align-items: center; font-family: monospace;">
                             <span>X1</span><input type="number" id="patchCoordX1" step="0.01" min="0" max="1" class="ios-input" style="width: 58px; padding: 2px 4px; font-size: 11px; text-align: center;" onchange="onManualCoordInput()">
@@ -186,7 +186,7 @@
                             <span class="ve-zone-roi-tag" id="veActiveRoiBadge">ROI: [0.20, 0.20, 0.80, 0.80]</span>
                         </div>
                     </div>
-                    <div style="background: #f8fafc; border-radius: 8px; padding: 10px 14px; border: 1px solid #e2e8f0; margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+                    <div class="zone-options-box" style="border-radius: 8px; padding: 10px 14px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <label class="ios-label" style="margin-bottom: 2px;">Invert Encryption Zone</label>
@@ -284,13 +284,13 @@
                     <input type="hidden" id="vid_bitrate_envelope" value="">
                 </div>
                 <div id="bitrateWaveModal" style="position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 16px;">
-                    <div style="background: #fff; border-radius: 14px; max-width: 600px; width: 100%; padding: 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.35);">
+                    <div class="wave-modal-card" style="border-radius: 14px; max-width: 600px; width: 100%; padding: 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.35);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                             <div style="font-weight: 700; font-size: 15px;">🌊 Dynamic Bitrate Wave</div>
                             <button type="button" class="ios-btn-small" onclick="closeBitrateWave()">✕</button>
                         </div>
                         <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Drag the timeline points up / down to shape bitrate over time (start → middle → end). The master slider shifts the whole wave. Encoded as constrained VBR: average = target, peak = ceiling.</div>
-                        <canvas id="bitrateWaveCanvas" width="560" height="220" style="width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; touch-action: none; cursor: grab;"></canvas>
+                        <canvas id="bitrateWaveCanvas" width="560" height="220" style="width: 100%; height: auto; border-radius: 10px; touch-action: none; cursor: grab;"></canvas>
                         <div id="bitrateWaveReadout" style="font-size: 12px; color: #333; margin-top: 8px; font-family: monospace;">start — · mid — · end —</div>
                         <div style="display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
                             <div class="segmented-control" style="display: flex; gap: 0;">
@@ -346,6 +346,15 @@
                     </div>
                     <label class="ios-switch-label">
                         <input type="checkbox" id="useGpu">
+                    </label>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <div>
+                        <label class="ios-label" style="margin-bottom: 2px;">Scramble-Tuned Encode<span class="help-tip">❔<span class="tooltip-text">Encoder flags tuned for block-shuffled video (no-deblock, psy-off, SSIM tune, extra chroma bits on x264/x265). Measured +3-5 dB restore quality at the same bitrate. No effect on VP9/AV1/HW encoders.</span></span></label>
+                        <span style="font-size: 11px; color: #888;">x264/x265 software encoders only</span>
+                    </div>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="scrambleTune" checked>
                     </label>
                 </div>
             </div>
@@ -448,13 +457,13 @@
                     <label class="ios-label">SID Seed (Blank = Random)<span class="help-tip">❔<span class="tooltip-text">A custom key, password, or string to lock/unlock your scrambled visual blocks.</span></span></label>
                     <input type="text" id="sid" placeholder="e.g. apple123" class="ios-input">
                 </div>
-                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                <div class="ios-group-row dev-only" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
                     <label class="ios-label" style="margin-bottom: 0;">Export SVG Visual Grid<span class="help-tip">❔<span class="tooltip-text">Generates SVG files showing the original and permuted block grids for visualization/debugging.</span></span></label>
                     <label class="ios-switch-label">
                         <input type="checkbox" id="exportSvg" checked>
                     </label>
                 </div>
-                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                <div class="ios-group-row dev-only" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
                     <label class="ios-label" style="margin-bottom: 0;">Export Encrypt Timeline (.txt)<span class="help-tip">❔<span class="tooltip-text">Saves a companion _timeline.txt with millisecond encrypt/passthrough intervals for the video.</span></span></label>
                     <label class="ios-switch-label">
                         <input type="checkbox" id="exportTimeline" checked>
@@ -466,7 +475,7 @@
                         <input type="checkbox" id="saveKeyFile" checked>
                     </label>
                 </div>
-                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                <div class="ios-group-row dev-only" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
                     <label class="ios-label" style="margin-bottom: 0;">Generate QR Code (Optional)<span class="help-tip">❔<span class="tooltip-text">Creates a companion QR code PNG for mobile key scanning. Disabled by default to keep output vault clean.</span></span></label>
                     <label class="ios-switch-label">
                         <input type="checkbox" id="generateQr">

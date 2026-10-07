@@ -74,6 +74,7 @@ function collectSettings() {
         exportSvg: chk('exportSvg', true),
         imgExportSvg: chk('imgExportSvg', true),
         useGpu: chk('useGpu', false),
+        scrambleTune: chk('scrambleTune', true),
         saveKeyFile: chk('saveKeyFile', true),
         imgSaveKeyFile: chk('imgSaveKeyFile', true),
         audSaveKeyFile: chk('audSaveKeyFile', true),
@@ -282,6 +283,7 @@ function applySettingsObject(settings) {
         setChecked('exportSvg', settings.exportSvg !== false);
         setChecked('imgExportSvg', settings.imgExportSvg !== false);
         setChecked('useGpu', settings.useGpu === true);
+        setChecked('scrambleTune', settings.scrambleTune !== false);
         setChecked('saveKeyFile', settings.saveKeyFile !== false);
         setChecked('imgSaveKeyFile', settings.imgSaveKeyFile !== false);
         setChecked('audSaveKeyFile', settings.audSaveKeyFile !== false);
@@ -333,7 +335,7 @@ function initAutoSave() {
         'img_cols', 'img_rows', 'img_sid', 'carrier_freq_slider', 'audio_sr_slider', 'audio_sr_auto', 'audio_codec',
         'audio_bit_slider', 'audio_bit_auto', 'audio_fmt', 'decKey', 'aud_method', 'aud_splits', 'aud_seed', 'aud_vol_factor_slider',
         'v_aud_method', 'v_aud_splits', 'vol_factor_slider', 'dual_track', 'trackLSourceSelect', 'trackRSourceSelect', 'trackLEncCheckbox', 'trackREncCheckbox', 'center_size', 'img_center_size',
-        'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg', 'useGpu', 'saveKeyFile', 'imgSaveKeyFile', 'audSaveKeyFile',
+        'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg', 'useGpu', 'scrambleTune', 'saveKeyFile', 'imgSaveKeyFile', 'audSaveKeyFile',
         'enableSpatialZones', 'patchRoiInvert', 'patchOpticalMarkers', 'patchMarkerPlacement', 'patchCoordX1', 'patchCoordY1', 'patchCoordX2', 'patchCoordY2',
         'imgEnableSpatialZones', 'imgRoiInvert', 'imgOpticalMarkers', 'imgMarkerPlacement', 'imgCoordX1', 'imgCoordY1', 'imgCoordX2', 'imgCoordY2',
         'v_spatial_mode', 'zone_priority_strength'

@@ -84,6 +84,7 @@ async function startBatch(action) {
     currentJobStartTime = Date.now();
     const fd = new FormData();
     fd.append('action', action);
+    const devMode = (typeof isDevMode === 'function') ? isDevMode() : true;
     if (isVaultSelection) {
         fd.append('vault_filenames', JSON.stringify(rawFiles));
         let chosenFolder = 'input';
@@ -137,6 +138,8 @@ async function startBatch(action) {
             const zoneStrength = document.getElementById('zone_priority_strength');
             fd.append('zone_priority_strength', zoneStrength ? zoneStrength.value : '40');
             fd.append('vid_preset', document.getElementById('v_preset').value);
+            const scrambleTuneEl = document.getElementById('scrambleTune');
+            fd.append('scramble_tune', scrambleTuneEl && scrambleTuneEl.checked ? 'on' : 'off');
             const aSrAuto = document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true;
             fd.append('aud_sr', aSrAuto ? 'auto' : document.getElementById('a_sr_slider').value);
             fd.append('aud_codec', document.getElementById('a_codec').value);
@@ -173,11 +176,11 @@ async function startBatch(action) {
             fd.append('outer_end_action', document.getElementById('outer_end_action').value);
             fd.append('center_end_action', document.getElementById('center_end_action').value);            const centerAudActionElem = document.getElementById('center_aud_action');
             fd.append('center_aud_action', centerAudActionElem ? centerAudActionElem.value : 'silence');
-            fd.append('export_svg', document.getElementById('exportSvg').checked);
-            fd.append('export_timeline', document.getElementById('exportTimeline') ? document.getElementById('exportTimeline').checked : true);
+            fd.append('export_svg', devMode && document.getElementById('exportSvg').checked);
+            fd.append('export_timeline', devMode && (document.getElementById('exportTimeline') ? document.getElementById('exportTimeline').checked : true));
             fd.append('use_gpu', document.getElementById('useGpu') ? document.getElementById('useGpu').checked : false);
             fd.append('save_key_file', document.getElementById('saveKeyFile') ? document.getElementById('saveKeyFile').checked : true);
-            fd.append('generate_qr', document.getElementById('generateQr') ? document.getElementById('generateQr').checked : false);
+            fd.append('generate_qr', devMode && (document.getElementById('generateQr') ? document.getElementById('generateQr').checked : false));
             if (typeof getCustomAudioFiles === 'function') {
                 const customAud = getCustomAudioFiles();
                 const useRouted = !!(customAud.fileL || customAud.fileR || customAud.vaultL || customAud.vaultR ||
@@ -237,9 +240,9 @@ async function startBatch(action) {
             }
             fd.append('center_size', document.getElementById('img_center_size').value);
             fd.append('video_encrypt_mode', document.getElementById('img_video_encrypt_mode').value);
-            fd.append('export_svg', document.getElementById('imgExportSvg').checked);
+            fd.append('export_svg', devMode && document.getElementById('imgExportSvg').checked);
             fd.append('save_key_file', document.getElementById('imgSaveKeyFile') ? document.getElementById('imgSaveKeyFile').checked : true);
-            fd.append('generate_qr', document.getElementById('imgGenerateQr') ? document.getElementById('imgGenerateQr').checked : false);
+            fd.append('generate_qr', devMode && (document.getElementById('imgGenerateQr') ? document.getElementById('imgGenerateQr').checked : false));
             const enableZones = document.getElementById('imgEnableSpatialZones');
             if (enableZones && enableZones.checked) {
                 const x1 = parseFloat(document.getElementById('imgCoordX1').value) || 0.20;
@@ -269,7 +272,7 @@ async function startBatch(action) {
             fd.append('vol_factor', parseFloat(document.getElementById('aud_vol_factor_slider').value) / 100.0);
             fd.append('aud_track', document.getElementById('audio_track_select').value);
             fd.append('save_key_file', document.getElementById('audSaveKeyFile') ? document.getElementById('audSaveKeyFile').checked : true);
-            fd.append('generate_qr', document.getElementById('audGenerateQr') ? document.getElementById('audGenerateQr').checked : false);
+            fd.append('generate_qr', devMode && (document.getElementById('audGenerateQr') ? document.getElementById('audGenerateQr').checked : false));
         }
     } else {
         fd.append('key', document.getElementById('decKey').value);
