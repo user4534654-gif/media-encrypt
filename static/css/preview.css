@@ -1,3 +1,4 @@
+/* Visual Layout & Audio Track Timeline Preview Styles */
 
 .visual-canvas-container, .visual-preview-container {
     background: #ffffff;
@@ -7,17 +8,21 @@
     border: 1px solid #d1d1d6;
     box-shadow: 0 4px 12px rgba(0,0,0,0.04);
 }
+
+/* Symmetrical Settings Grid Cards */
 .symmetrical-settings-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
     margin-top: 14px;
 }
+
 @media (max-width: 600px) {
     .symmetrical-settings-grid {
         grid-template-columns: 1fr;
     }
 }
+
 .settings-card {
     background: #ffffff;
     border-radius: 10px;
@@ -26,14 +31,17 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.03);
     transition: all 0.2s ease;
 }
+
 .settings-card.blue-card {
     border: 1.5px solid rgba(0, 122, 255, 0.4);
     background: rgba(0, 122, 255, 0.02);
 }
+
 .settings-card.red-card {
     border: 1.5px solid rgba(255, 59, 48, 0.4);
     background: rgba(255, 59, 48, 0.02);
 }
+
 .settings-card .card-header {
     font-size: 12px;
     font-weight: 700;
@@ -42,16 +50,19 @@
     align-items: center;
     gap: 6px;
 }
+
 .blue-card .card-header {
     color: #0056b3;
     border-bottom: 1px solid rgba(0, 122, 255, 0.2);
     padding-bottom: 6px;
 }
+
 .red-card .card-header {
     color: #d70015;
     border-bottom: 1px solid rgba(255, 59, 48, 0.2);
     padding-bottom: 6px;
 }
+
 .preview-target-badge {
     font-size: 12px;
     font-weight: 600;
@@ -61,6 +72,8 @@
     color: #007aff;
     border: 1px solid rgba(0, 122, 255, 0.3);
 }
+
+/* Canvas Wrapper */
 .preview-canvas-wrapper {
     width: 100%;
     height: 220px;
@@ -73,6 +86,8 @@
     padding: 10px;
     box-sizing: border-box;
 }
+
+/* Background (Blue) Box */
 .preview-background-box {
     position: relative;
     width: 100%;
@@ -89,10 +104,12 @@
     overflow: hidden;
     user-select: none;
 }
+
 .preview-background-box.active-selection {
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.4), 0 4px 14px rgba(0, 122, 255, 0.25);
     border-color: #0056b3;
 }
+
 .preview-bg-label {
     position: absolute;
     top: 8px;
@@ -104,6 +121,8 @@
     align-items: center;
     gap: 6px;
 }
+
+/* Center Overlay (Red) Box */
 .preview-center-box {
     position: absolute;
     background: rgba(255, 59, 48, 0.2);
@@ -117,23 +136,28 @@
     z-index: 5;
     user-select: none;
 }
+
 .preview-center-box.size-1-4 {
     width: 50%;
     height: 50%;
 }
+
 .preview-center-box.size-2-4 {
     width: 70.7%;
     height: 70.7%;
 }
+
 .preview-center-box.size-3-4 {
     width: 86.6%;
     height: 86.6%;
 }
+
 .preview-center-box.active-selection {
     border-style: solid;
     box-shadow: 0 0 0 3.5px rgba(255, 59, 48, 0.5), 0 4px 14px rgba(255, 59, 48, 0.35);
     background: rgba(255, 59, 48, 0.3);
 }
+
 .preview-center-label {
     font-size: 10px;
     font-weight: 700;
@@ -144,14 +168,17 @@
     text-align: center;
     gap: 2px;
 }
+
 .color-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     display: inline-block;
 }
+
 .blue-dot { background: #007aff; }
 .red-dot { background: #ff3b30; }
+
 .enc-status-badge {
     font-size: 9px;
     font-weight: bold;
@@ -161,18 +188,22 @@
     color: #333;
     border: 1px solid rgba(0,0,0,0.15);
 }
+
 .preview-selection-hint {
     font-size: 11px;
     color: #666;
     text-align: center;
     margin-bottom: 12px;
 }
+
+/* Audio Track Timeline Styles */
 .audio-timeline-wrapper {
     background: #f8f9fa;
     border-radius: 8px;
     padding: 10px;
     border: 1px solid #e5e5ea;
 }
+
 .audio-timeline-header {
     display: flex;
     justify-content: space-between;
@@ -182,12 +213,14 @@
     color: #1c1c1e;
     margin-bottom: 10px;
 }
+
 .audio-track-line {
     display: flex;
     align-items: center;
     gap: 10px;
     margin-bottom: 8px;
 }
+
 .track-info {
     display: flex;
     align-items: center;
@@ -195,6 +228,7 @@
     width: 320px;
     flex-shrink: 0;
 }
+
 .channel-badge {
     font-weight: 800;
     font-size: 12px;
@@ -204,16 +238,19 @@
     color: #333;
     transition: all 0.2s ease;
 }
+
 .channel-badge.blue-badge {
     background: rgba(0, 122, 255, 0.15);
     color: #007aff;
     border: 1px solid rgba(0, 122, 255, 0.3);
 }
+
 .channel-badge.red-badge {
     background: rgba(255, 59, 48, 0.15);
     color: #ff3b30;
     border: 1px solid rgba(255, 59, 48, 0.3);
 }
+
 .track-source-select {
     font-size: 11px;
     font-weight: 600;
@@ -224,26 +261,31 @@
     cursor: pointer;
     transition: all 0.2s ease;
 }
+
 .track-source-select.blue-source {
     border-color: #007aff;
     color: #007aff;
     background: rgba(0, 122, 255, 0.06);
 }
+
 .track-source-select.red-source {
     border-color: #ff3b30;
     color: #ff3b30;
     background: rgba(255, 59, 48, 0.06);
 }
+
 .track-source-select.custom-source {
     border-color: #9b59b6;
     color: #8e44ad;
     background: rgba(155, 89, 182, 0.08);
 }
+
 .channel-badge.custom-badge {
     background: rgba(155, 89, 182, 0.15);
     color: #8e44ad;
     border: 1px solid rgba(155, 89, 182, 0.3);
 }
+
 .track-method-badge {
     font-size: 9px;
     font-weight: 700;
@@ -252,6 +294,7 @@
     background: #e0e0e0;
     color: #444;
 }
+
 .track-enc-checkbox {
     font-size: 11px;
     font-weight: 600;
@@ -261,6 +304,7 @@
     gap: 3px;
     white-space: nowrap;
 }
+
 .track-timeline-bar-container {
     flex: 1;
     height: 26px;
@@ -271,6 +315,7 @@
     display: flex;
     align-items: center;
 }
+
 .track-active-segment {
     height: 100%;
     position: relative;
@@ -285,17 +330,21 @@
     overflow: hidden;
     white-space: nowrap;
 }
+
 .track-active-segment.full-width {
     border-radius: 6px;
 }
+
 .track-active-segment.blue-segment {
     background: linear-gradient(90deg, #007aff 0%, #0056b3 100%) !important;
     color: #ffffff !important;
 }
+
 .track-active-segment.red-segment {
     background: linear-gradient(90deg, #ff3b30 0%, #d70015 100%) !important;
     color: #ffffff !important;
 }
+
 .track-end-segment {
     height: 100%;
     position: relative;
@@ -311,27 +360,33 @@
     white-space: nowrap;
     border-left: 2px solid rgba(255,255,255,0.6);
 }
+
 .track-end-segment.pale-red-end {
     background: rgba(255, 59, 48, 0.35) !important;
     color: #990000 !important;
 }
+
 .track-end-segment.pale-blue-end {
     background: rgba(0, 122, 255, 0.35) !important;
     color: #004085 !important;
 }
+
 .track-end-segment.black-end {
     background: #2c2c2e !important;
     color: #8e8e93 !important;
 }
+
 .track-end-segment.loop-end {
     background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.3), rgba(255,255,255,0.3) 8px, transparent 8px, transparent 16px) !important;
     color: #ffffff !important;
 }
+
 .track-end-segment.stop-end {
     background: rgba(0,0,0,0.05) !important;
     border: 1px dashed #aaa;
     color: #777 !important;
 }
+
 .segment-label {
     font-size: 10px;
     font-weight: 700;
@@ -341,6 +396,7 @@
     text-overflow: ellipsis;
     overflow: hidden;
 }
+
 .timeline-ticks {
     position: absolute;
     left: 0;
@@ -351,11 +407,13 @@
     justify-content: space-between;
     pointer-events: none;
 }
+
 .timeline-tick-mark {
     width: 1px;
     height: 100%;
     background: rgba(255,255,255,0.3);
 }
+
 .timeline-legend {
     display: flex;
     gap: 14px;
@@ -364,20 +422,25 @@
     font-size: 10px;
     color: #666;
 }
+
 .legend-item {
     display: flex;
     align-items: center;
     gap: 4px;
 }
+
 .legend-box {
     width: 12px;
     height: 10px;
     border-radius: 2px;
 }
+
 .legend-box.solid-box { background: #007aff; }
 .legend-box.loop-box { background: repeating-linear-gradient(45deg, #ff3b30, #ff3b30 3px, #fff 3px, #fff 6px); }
 .legend-box.freeze-box { background: rgba(255, 59, 48, 0.4); border: 1px dashed #ff3b30; }
 .legend-box.black-box { background: #2c2c2e; }
+
+/* Media Inspector — pre-processing media data preview */
 .media-inspector {
     margin-top: 10px;
     background: #f8fafc;
@@ -443,6 +506,9 @@
 }
 .mi-note { padding: 6px 12px 10px 12px; font-size: 11px; color: #666; }
 .mi-meta-loading { padding: 10px; font-size: 12px; color: #888; text-align: center; }
+
+/* ── Dark theme (body.ios-dark-theme): preview.css had zero dark rules, so
+   every block below stayed white while the rest of the app went dark. ── */
 body.ios-dark-theme .visual-canvas-container,
 body.ios-dark-theme .visual-preview-container,
 body.ios-dark-theme .settings-card {
@@ -450,147 +516,193 @@ body.ios-dark-theme .settings-card {
     border-color: #2d3139;
     box-shadow: 0 2px 8px rgba(0,0,0,0.35);
 }
+
 body.ios-dark-theme .settings-card.blue-card { background: rgba(0, 122, 255, 0.08); }
 body.ios-dark-theme .settings-card.red-card { background: rgba(255, 59, 48, 0.08); }
+
 body.ios-dark-theme .blue-card .card-header { color: #58a6ff; }
 body.ios-dark-theme .red-card .card-header { color: #ff7b72; }
+
 body.ios-dark-theme .preview-canvas-wrapper {
     background: #14161b;
 }
+
 body.ios-dark-theme .preview-bg-label { color: #79b8ff; }
 body.ios-dark-theme .preview-center-label { color: #ffa198; }
+
 body.ios-dark-theme .preview-selection-hint { color: #9aa3b2; }
+
 body.ios-dark-theme .audio-timeline-wrapper {
     background: #1c1f26;
     border-color: #2d3139;
 }
+
 body.ios-dark-theme .audio-timeline-header { color: #e6e9ef; }
+
 body.ios-dark-theme .channel-badge {
     background: #2d3139;
     color: #c9d1d9;
 }
+
 body.ios-dark-theme .track-source-select {
     background: #24272e;
     border-color: #3e4451;
     color: #e6e9ef;
 }
+
 body.ios-dark-theme .track-method-badge {
     background: #2d3139;
     color: #9aa3b2;
 }
+
 body.ios-dark-theme .track-timeline-bar-container { background: #101216; }
 body.ios-dark-theme .timeline-tick-mark { background: rgba(255,255,255,0.25); }
 body.ios-dark-theme .timeline-legend { color: #9aa3b2; }
+
 body.ios-dark-theme .media-inspector {
     background: #1c1f26;
     border-color: #2d3139;
 }
+
 body.ios-dark-theme .mi-header {
     color: #e6e9ef;
     background: #24272e;
     border-bottom-color: #2d3139;
 }
+
 body.ios-dark-theme .mi-row {
     background: #24272e;
     border-color: #2d3139;
 }
+
 body.ios-dark-theme .mi-label { color: #9aa3b2; }
 body.ios-dark-theme .mi-value { color: #e6e9ef; }
 body.ios-dark-theme .mi-note { color: #9aa3b2; }
 body.ios-dark-theme .mi-meta-loading { color: #8b949e; }
+
+/* ── Zone editor panels (colors moved here from inline styles so the dark
+   theme below can override them — inline backgrounds beat stylesheets). ── */
 .patch-coords-bar {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
 }
+
 .zone-options-box {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
 }
+
 #bitrateWaveModal .wave-modal-card {
     background: #fff;
 }
+
 #bitrateWaveCanvas {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
 }
+
 body.ios-dark-theme .patch-coords-bar,
 body.ios-dark-theme .zone-options-box {
     background: #1c1f26;
     border-color: #2d3139;
     color: #c9d1d9;
 }
+
 body.ios-dark-theme #bitrateWaveModal .wave-modal-card {
     background: #1c1f26;
     color: #e6e9ef;
     box-shadow: 0 12px 40px rgba(0,0,0,0.6);
 }
+
 body.ios-dark-theme #bitrateWaveModal div[style*="#666"],
 body.ios-dark-theme #bitrateWaveModal div[style*="#888"],
 body.ios-dark-theme #bitrateWaveModal span[style*="#888"],
 body.ios-dark-theme #bitrateWaveModal label[style*="#888"] {
     color: #9aa3b2 !important;
 }
+
 body.ios-dark-theme #bitrateWaveReadout {
     color: #c9d1d9 !important;
 }
+
 body.ios-dark-theme #bitrateWaveCanvas {
     background: #14161b !important;
     border-color: #2d3139 !important;
 }
+
+/* ── Crash debugger modal (mostly inline styles — scoped overrides) ───── */
 body.ios-dark-theme #debugModal .modal-content {
     background: #1c1f26 !important;
     border-color: #7a2e2e;
 }
+
 body.ios-dark-theme #debugModal div[style*="color: #333"] {
     color: #e6e9ef !important;
 }
+
 body.ios-dark-theme #debugModal div[style*="color: #555"],
 body.ios-dark-theme #debugModal td[style*="color: #888"] {
     color: #9aa3b2 !important;
 }
+
 body.ios-dark-theme #debugModal div[style*="#fff8e6"] {
     background: #2a230f !important;
     border-color: #8a6d1b !important;
 }
+
 body.ios-dark-theme #debugModal div[style*="#ffe5e5"] {
     background: #2a1518 !important;
 }
+
 body.ios-dark-theme #debugModal table[style*="#fafafa"] {
     background: #24272e !important;
 }
+
 body.ios-dark-theme #debugModal tr[style*="#eee"] {
     background: #2d3139 !important;
 }
+
 body.ios-dark-theme #debugModal div[style*="#dcdcdc"] {
     border-color: #2d3139 !important;
 }
+
 body.ios-dark-theme #debugModal div[style*="#eaeaea"] {
     background: #24272e !important;
     border-color: #2d3139 !important;
 }
+
+/* ── Layout containment: nothing may push the page sideways ───────────── */
 html, body {
-    overflow-x: hidden; 
-    overflow-x: clip; 
+    overflow-x: hidden; /* fallback */
+    overflow-x: clip; /* keeps position:fixed modals working */
 }
+
 .ios-device-container {
     max-width: 100%;
 }
+
 img, video, canvas, svg {
     max-width: 100%;
 }
+
 .mi-value, .mi-label, .vault-item-name, .file-list,
 .mini-terminal-log, .ve-clip-body {
     overflow-wrap: anywhere;
 }
+
 .mi-table, .mi-row, .vault-item {
     min-width: 0;
 }
+
+/* Grid/flex children must be allowed to shrink: the default min-width:auto
+   lets long keys, filenames or bitrates push the whole page sideways. */
 .ios-group-row-grid > *,
 .symmetrical-settings-grid > *,
 .ve-timeline-header > *,
 .ve-active-zone-bar > * {
     min-width: 0;
 }
+
 .ios-input, .ios-select, .ios-file-input {
     min-width: 0;
 }

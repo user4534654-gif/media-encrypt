@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ metadata.name }} v{{ metadata.version }}</title>
+    <!-- Import Outfit and Helvetica-like fonts for the iOS feel -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/preview.css') }}">
@@ -21,7 +22,10 @@
         } catch(e) {}
     </script>
     <div class="ios-device-container">
+        <!-- Navigation Bar with theme toggle & fullscreen -->
         {% include 'components/header.html' %}
+
+        <!-- Main Studio Navigation Tabs -->
         <div class="ios-group" style="margin: 12px; padding: 5px; background: rgba(0,0,0,0.05); border-color: #a5abb0;">
             <div class="segmented-control">
                 <button type="button" id="tabBtnEncrypt" class="segment-btn active" onclick="switchMainTab('encrypt')">🔒 Encrypt</button>
@@ -29,6 +33,8 @@
                 <button type="button" id="tabBtnVault" class="segment-btn" onclick="switchMainTab('vault')">📁 Vault</button>
             </div>
         </div>
+
+        <!-- Settings Presets: export / import the whole studio configuration (dev mode only) -->
         <div class="ios-group dev-only" id="settingsPresetBlock" style="margin: 0 12px 12px 12px; padding: 8px 10px;">
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <span style="font-size: 12px; font-weight: 700; color: #4c566c;">⚙️ Settings preset:</span>
@@ -37,8 +43,12 @@
                 <input type="file" id="settingsPresetInput" accept=".json,application/json" class="hidden" onchange="importSettingsFromJsonFile(this.files[0]); this.value='';">
             </div>
         </div>
+        
         <div class="ios-content-scroll">
+            
+            <!-- ENCRYPT TAB CONTENT -->
             <div id="tabContentEncrypt">
+                <!-- Media Type Tabs -->
                 <div class="ios-group" style="padding: 5px; margin-bottom: 12px; border-color: #b0b5ba;">
                     <div class="segmented-control">
                         <button type="button" id="mediaTabVideo" class="segment-btn active" onclick="setMediaTypeTab('video')">🎬 Video</button>
@@ -46,26 +56,43 @@
                         <button type="button" id="mediaTabAudio" class="segment-btn" onclick="setMediaTypeTab('audio')">🎵 Audio</button>
                     </div>
                 </div>
+
+                <!-- VIDEO STUDIO -->
                 {% include 'components/video_studio.html' %}
+
+                <!-- IMAGE STUDIO -->
                 {% include 'components/image_studio.html' %}
+
+                <!-- AUDIO STUDIO -->
                 {% include 'components/audio_studio.html' %}
             </div>
+            
+            <!-- DECRYPT TAB CONTENT -->
             {% include 'components/decrypt_studio.html' %}
+            
+            <!-- VAULT TAB CONTENT -->
             <div id="tabContentVault" class="hidden">
                 {% include 'components/vault.html' %}
             </div>
+
+            <!-- PROGRESS REPORT PANEL -->
             {% include 'components/progress.html' %}
+            
             <div class="project-version-footer">
                 {{ metadata.name }} v{{ metadata.version }}
             </div>
         </div>
     </div>
+
+    <!-- INPUT VAULT FILE PICKER MODAL -->
     <div id="vaultPickerModal" class="modal-overlay hidden">
         <div class="modal-content vault-picker-modal-box">
             <button type="button" class="modal-close" onclick="closeVaultPicker()">✕</button>
             <div class="modal-header-flex">
                 <span id="vaultPickerTitle" style="font-weight: 700; font-size: 16px;">📂 Select from Vault</span>
             </div>
+            
+            <!-- Segmented folder selector for the 3 folders -->
             <div style="padding: 10px 15px 8px 15px; border-bottom: 1px solid #c8c7cc; background: #fafafa;">
                 <div class="segmented-control" style="margin: 0 0 8px 0; width: 100%;">
                     <button type="button" id="pickerTabInput" class="segment-btn active" onclick="switchPickerFolder('input')">📥 Inputs</button>
@@ -77,14 +104,20 @@
                     <button type="button" class="ios-btn-small" style="padding: 2px 8px; font-size: 11px;" onclick="refreshVaultPicker()">🔄 Refresh</button>
                 </div>
             </div>
+
             <div id="vaultPickerList" class="vault-picker-list">
+                <!-- Dynamically populated files -->
             </div>
             <div class="vault-picker-footer" style="padding: 10px 15px; text-align: right; border-top: 1px solid #e0e0e0; border-radius: 0 0 12px 12px;">
                 <button type="button" class="ios-btn-small" onclick="closeVaultPicker()">Close</button>
             </div>
         </div>
     </div>
+
+    <!-- EXCEPTION TRACEBACK DEBUGGER OVERLAY -->
     {% include 'components/debugger.html' %}
+
+    <!-- Sequential load of modular JS files -->
     <script src="{{ url_for('static', filename='js/preview.js') }}"></script>
     <script src="{{ url_for('static', filename='js/media_inspector.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>

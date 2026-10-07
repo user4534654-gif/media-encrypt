@@ -1,25 +1,61 @@
-                      
+#!/usr/bin/env python3
+"""
+strict_test.py — Media-Encrypt Studio: ADVERSARIAL tester.
+----------------------------------------------------------
+Why this exists: quick_test.py mostly checks "file exists / size > 0" and uses
+tolerances so wide (video MSE < 30, audio corr > 0.70, solid-black images) that
+real math bugs pass as green. This tester instead:
+
+  1. Uses HIGH-CONTRAST CHECKERBOARDS (not black frames, not smooth gradients).
+     Permuting a smooth gradient is nearly invisible; permuting a checkerboard
+     is unmistakable. Every encrypt step must PROVE it scrambled (enc-vs-orig
+     diff above a floor), every decrypt step must PROVE it restored (diff below
+     a ceiling). A decrypt that is secretly the identity function FAILS here.
+  2. Prints NUMBERS (meanabs / maxdiff / corr / MSE per frame), not just PASS.
+     An agent may only claim "all good" if the numbers are attached.
+  3. Asserts GOLDEN VECTORS shared with the JS side (see test_parity.mjs in
+     Webpage-media-decrypto). If Python and the web studio ever disagree on
+     hash/shuffle/grid math, one of the two testers goes red.
+  4. Includes NEGATIVE CONTROLS: decrypt-with-wrong-seed must NOT restore.
+  5. Writes strict_report.json + keeps FAIL artifacts (diff stats) on disk.
+
+Usage:
+    python strict_test.py            # full suite incl. video (~1-2 min)
+    python strict_test.py --fast     # skip video (image/audio/grid only)
+
+Exit code: 0 = all PASS, 1 = any FAIL.
+"""
+
 import os
 import sys
 import json
 import time
 import argparse
 import tempfile
+
 import numpy as np
 import cv2
 import soundfile as sf
+
 from core.crypto import hash_str, seeded_shuffle
 from core.grid_utils import get_blocks, get_outer_blocks, find_best_grid
 from core.image_processor import process_image_file
 from core.audio import process_audio_file
+
+# --------------------------------------------------------------------------
+# Shared golden vectors (MUST match test_parity.mjs expectations, byte for byte)
+# --------------------------------------------------------------------------
 GOLD_HASH_TEST_KEY = 4243324813
 GOLD_SHUFFLE16 = [9, 5, 3, 12, 1, 0, 13, 15, 7, 11, 6, 10, 8, 4, 14, 2]
 GOLD_SHUFFLE10 = [6, 3, 2, 0, 5, 8, 1, 9, 7, 4]
-GOLD_BLOCKS_10x10_4x4_FIRST = (0, 0, 2, 2)                             
+GOLD_BLOCKS_10x10_4x4_FIRST = (0, 0, 2, 2)   # banker's round(2.5) == 2
 GOLD_BLOCKS_10x10_4x4_LAST = (8, 8, 10, 10)
 GOLD_BLOCKS_PRIME_FIRST3 = [(0, 0, 25, 19), (25, 0, 51, 19), (51, 0, 76, 19)]
 GOLD_BLOCKS_PRIME_LAST = (102, 112, 127, 131)
+
 REPORT = {"checks": [], "passed": 0, "failed": 0}
+
+
 def check(name, fn):
     t0 = time.time()
     entry = {"name": name, "status": "PASS", "metrics": {}}
@@ -30,15 +66,19 @@ def check(name, fn):
         metric_str = ", ".join(f"{k}={v}" for k, v in metrics.items())
         print(f"  [PASS] {name} ({time.time()-t0:.2f}s)  {metric_str}")
     except AssertionError as e:
-        entry["status = "] = None                                            
+        entry["status = "] = None  # placeholder to avoid silent schema drift
         del entry["status = "]
         entry["status"] = "FAIL"
         entry["error"] = str(e)
         REPORT["failed"] += 1
         print(f"  [FAIL] {name}  :: {e}")
     REPORT["checks"].append(entry)
+
+
 def meanabs(a, b):
     return float(np.mean(np.abs(a.astype(np.int32) - b.astype(np.int32))))
+
+
 def checkerboard(w, h, cell=16, base=(40, 40, 40), phase=0):
     yy, xx = np.mgrid[0:h, 0:w]
     on = (((xx + phase) // cell) + ((yy + phase) // cell)) % 2 == 0
@@ -47,22 +87,33 @@ def checkerboard(w, h, cell=16, base=(40, 40, 40), phase=0):
     img[on] = base
     img[~on] = inv
     return img
+
+
+# --------------------------------------------------------------------------
+# T1: golden vectors (cross-platform contract with the web studio)
+# --------------------------------------------------------------------------
 def t1_goldens():
-    assert hash_str("test_key") == GOLD_HASH_TEST_KEY,\
+    assert hash_str("test_key") == GOLD_HASH_TEST_KEY, \
         f"hash drift: {hash_str('test_key')} != {GOLD_HASH_TEST_KEY}"
-    assert seeded_shuffle(list(range(16)), GOLD_HASH_TEST_KEY) == GOLD_SHUFFLE16,\
+    assert seeded_shuffle(list(range(16)), GOLD_HASH_TEST_KEY) == GOLD_SHUFFLE16, \
         "LCG shuffle drift on 16 elements"
-    assert seeded_shuffle(list(range(10)), 12345) == GOLD_SHUFFLE10,\
+    assert seeded_shuffle(list(range(10)), 12345) == GOLD_SHUFFLE10, \
         "LCG shuffle drift on 10 elements"
-    assert get_blocks(10, 10, 4, 4)[0] == GOLD_BLOCKS_10x10_4x4_FIRST,\
+    assert get_blocks(10, 10, 4, 4)[0] == GOLD_BLOCKS_10x10_4x4_FIRST, \
         f"grid drift: {get_blocks(10,10,4,4)[0]}"
     assert get_blocks(10, 10, 4, 4)[-1] == GOLD_BLOCKS_10x10_4x4_LAST
     assert get_blocks(127, 131, 5, 7)[:3] == GOLD_BLOCKS_PRIME_FIRST3
     assert get_blocks(127, 131, 5, 7)[-1] == GOLD_BLOCKS_PRIME_LAST
+    # bijectivity sweep: many seeds/sizes, permutation must be exact
     for n, seed in [(1, 7), (2, 7), (17, 999), (64, 1), (100, 424242)]:
         p = seeded_shuffle(list(range(n)), seed)
         assert sorted(p) == list(range(n)), f"non-bijective shuffle n={n} seed={seed}"
     return {"goldens": "7/7 exact"}
+
+
+# --------------------------------------------------------------------------
+# T2: grid area conservation sweep (incl. primes, non-divisible, tiny frames)
+# --------------------------------------------------------------------------
 def t2_grid_sweep():
     worst_gap = 0
     tested = 0
@@ -78,14 +129,20 @@ def t2_grid_sweep():
         uncovered = int(np.sum(mask == 0))
         overlap = int(np.sum(mask > 1))
         worst_gap = max(worst_gap, uncovered + overlap)
-        assert uncovered == 0 and overlap == 0,\
+        assert uncovered == 0 and overlap == 0, \
             f"{w}x{h} {c}x{r}: uncovered={uncovered} overlap={overlap}"
         tested += 1
     outer, inner, _ = get_outer_blocks(4, 4, 128, 96, center_size="1/4")
     assert len(outer) + len(inner) == 16 and set(outer).isdisjoint(inner)
     return {"cases": tested, "uncovered_or_overlap_max": worst_gap}
+
+
+# --------------------------------------------------------------------------
+# T3: image roundtrip on checkerboards — scramble PROOF + restore PROOF
+# --------------------------------------------------------------------------
 def t3_image(tmp):
     prog = {}
+    # A. divisible dims: must be BIT-EXACT (PNG, same partition, no resize loss)
     orig = checkerboard(120, 120)
     pin, penc, pdec = (os.path.join(tmp, f"cb_{s}.png") for s in ("orig", "enc", "dec"))
     cv2.imwrite(pin, orig)
@@ -101,12 +158,15 @@ def t3_image(tmp):
     maxdiff = int(np.max(np.abs(orig.astype(int) - dec.astype(int))))
     assert enc_diff > 25.0, f"encrypt did not scramble? enc-vs-orig meanabs={enc_diff:.2f}"
     assert maxdiff == 0, f"divisible roundtrip NOT bit-exact, maxdiff={maxdiff}"
+    # B. wrong-seed decrypt must NOT restore (negative control vs identity-decrypt bug)
     pdec_wrong = os.path.join(tmp, "cb_dec_wrong.png")
     process_image_file(penc, pdec_wrong,
                        {"process_video": True, "reverse": True, "cols": 4, "rows": 4,
                         "seed": 9999, "export_svg": False}, prog, "s_dec_wrong")
     wrong_diff = meanabs(cv2.imread(pdec_wrong), orig)
     assert wrong_diff > 25.0, f"wrong-seed decrypt restored?! diff={wrong_diff:.2f}"
+    # C. prime dims: tiles differ by 1px so cv2.resize makes it near- (not bit-) exact.
+    #    Honest bound: restoration must be close AND encryption must be proven.
     orig2 = checkerboard(127, 131)
     qin, qenc, qdec = (os.path.join(tmp, f"odd_{s}.png") for s in ("orig", "enc", "dec"))
     cv2.imwrite(qin, orig2)
@@ -123,6 +183,11 @@ def t3_image(tmp):
     return {"div_exact_maxdiff": maxdiff, "div_enc_meanabs": round(enc_diff, 2),
             "wrongseed_meanabs": round(wrong_diff, 2),
             "odd_enc_meanabs": round(enc2_diff, 2), "odd_dec_meanabs": round(dec2_diff, 2)}
+
+
+# --------------------------------------------------------------------------
+# T4: audio — scramble proof + fidelity numbers + wrong-key control
+# --------------------------------------------------------------------------
 def t4_audio(tmp):
     sr = 48000
     t = np.linspace(0, 0.5, int(sr * 0.5), endpoint=False)
@@ -139,6 +204,9 @@ def t4_audio(tmp):
         d, _ = sf.read(pdec)
         corr_enc = float(np.corrcoef(o[:, 0], e[:, 0])[0, 1])
         corr_dec = float(np.corrcoef(o[:, 0], d[:, 0])[0, 1])
+        # Negative control. NOTE: "inversion" is KEYLESS by design
+        # (process_inversion uses only carrier_freq), so its control is a
+        # wrong CARRIER, not a wrong key. band_scramble/combined are keyed.
         if method == "inversion":
             process_audio_file(penc, pdec, is_decrypt=True, method=method,
                                key=777, carrier_freq=12000)
@@ -155,6 +223,11 @@ def t4_audio(tmp):
         out[f"{method}_dec"] = round(corr_dec, 3)
         out[f"{method}_wrong"] = round(corr_wrong, 3)
     return out
+
+
+# --------------------------------------------------------------------------
+# T5: video — per-frame scramble proof + restore + frame count (needs ffmpeg)
+# --------------------------------------------------------------------------
 def t5_video(tmp):
     from core.video_processor import process_video_file
     from core.crypto import hash_str as _hs
@@ -172,6 +245,7 @@ def t5_video(tmp):
                  "vid_bitrate": "2000k", "vid_preset": "ultrafast"}
     process_video_file(bgr, enc, dict(base_opts, reverse=False), {}, "sv_enc")
     process_video_file(enc, dec, dict(base_opts, reverse=True), {}, "sv_dec")
+
     def frames(p):
         cap = cv2.VideoCapture(p)
         fs = []
@@ -183,7 +257,7 @@ def t5_video(tmp):
         cap.release()
         return fs
     fo, fe, fd = frames(bgr), frames(enc), frames(dec)
-    assert len(fe) == len(fo) == len(fd) == N,\
+    assert len(fe) == len(fo) == len(fd) == N, \
         f"frame count {len(fo)}/{len(fe)}/{len(fd)} != {N}"
     enc_diffs = [meanabs(a, b) for a, b in zip(fe, fo)]
     dec_diffs = [meanabs(a, b) for a, b in zip(fd, fo)]
@@ -192,10 +266,16 @@ def t5_video(tmp):
     return {"frames": N, "enc_meanabs_min": round(min(enc_diffs), 2),
             "enc_meanabs_max": round(max(enc_diffs), 2),
             "dec_meanabs_max": round(max(dec_diffs), 2)}
+
+
+# --------------------------------------------------------------------------
+# T6: gridmap sidecar — exact machine-readable proof (replaces SVG-as-proof)
+# --------------------------------------------------------------------------
 def t6_gridmap(tmp):
     import hashlib
     from core.gridmap import load_gridmap_json
     prog = {}
+    # A. full-frame: JSON must equal independently recomputed primitives
     orig = checkerboard(120, 120)
     pin = os.path.join(tmp, "gm_orig.png")
     penc = os.path.join(tmp, "gm_enc.png")
@@ -209,13 +289,14 @@ def t6_gridmap(tmp):
     assert gm["format"] == "media-encrypt-gridmap/1", "format tag drift"
     assert (gm["w"], gm["h"], gm["cols"], gm["rows"], gm["seed"]) == (120, 120, 4, 4, 8888)
     assert gm["has_center"] is False and gm["perm"]["mode"] == "full"
-    assert gm["blocks"] == [list(b) for b in get_blocks(120, 120, 4, 4)],\
+    assert gm["blocks"] == [list(b) for b in get_blocks(120, 120, 4, 4)], \
         "gridmap blocks != pipeline grid"
-    assert gm["perm"]["shuffled"] == seeded_shuffle(list(range(16)), 8888),\
+    assert gm["perm"]["shuffled"] == seeded_shuffle(list(range(16)), 8888), \
         "gridmap perm != pipeline shuffle (SVG could never catch this)"
     assert sorted(gm["perm"]["shuffled"]) == list(range(16)), "perm not bijective"
     assert all(isinstance(v, int) for b in gm["blocks"]
                for v in b + gm["perm"]["shuffled"]), "non-integer in JSON map"
+    # B. PNG preview: readable, right size, non-blank, byte-deterministic
     png1 = f"{base}_gridmap.png"
     img1 = cv2.imread(png1)
     assert img1 is not None and img1.shape == (120, 120, 3), "preview unreadable/wrong size"
@@ -228,6 +309,7 @@ def t6_gridmap(tmp):
     with open(png2, "rb") as f:
         digest2 = hashlib.sha256(f.read()).hexdigest()
     assert digest1 == digest2, "PNG preview not byte-deterministic"
+    # C. center mode: partition exact, both shuffles bijective
     bg = np.full((120, 160, 3), 40, dtype=np.uint8)
     ct = np.full((60, 80, 3), 200, dtype=np.uint8)
     pbg, pct = os.path.join(tmp, "gm_bg.png"), os.path.join(tmp, "gm_ct.png")
@@ -247,16 +329,23 @@ def t6_gridmap(tmp):
     assert len(c["outer"]) + len(c["inner"]) == 16
     assert set(c["outer"]).isdisjoint(c["inner"]), "outer/inner overlap"
     assert sorted(c["shuffled_outer"]) == sorted(c["outer"]), "outer shuffle corrupt"
-    assert sorted(c["shuffled_center"]) == list(range(len(c["shuffled_center"]))),\
+    assert sorted(c["shuffled_center"]) == list(range(len(c["shuffled_center"]))), \
         "center shuffle not bijective"
     return {"json_checks": "exact", "png_sha256": digest1[:12],
             "center_outer": len(c["outer"]), "center_inner": len(c["inner"])}
+
+
+# T7: optical markers — inside/outside stamp->detect contract, Zone+Center
+# key/video agreement, and the decrypt auto-detect probe path (regression:
+# a refactor once crashed the probe with TypeError before any frame).
+# --------------------------------------------------------------------------
 def t7_optical_markers(tmp):
     from core.crypto import (stamp_optical_markers, detect_all_optical_markers,
                              check_marker_presence, _calculate_marker_boxes,
                              effective_marker_placement, hash_str as _hs)
     from core.video_processor import process_video_file
     W, H = 160, 120
+    # A. stamp->detect contract, both placements, pixel-exact ROI
     for plc, want in (("outside", (0.25, 0.25, 0.75, 0.75)),
                       ("inside", (0.25, 0.25, 0.75, 0.75))):
         img = np.full((H, W, 3), 128, dtype=np.uint8)
@@ -265,13 +354,16 @@ def t7_optical_markers(tmp):
         assert check_marker_presence(stamped, boxes), f"{plc}: stamped markers not detectable"
         rois = detect_all_optical_markers(stamped, placement=plc)
         assert rois, f"{plc}: no ROI detected"
-        assert all(abs(a - b) <= 0.01 for a, b in zip(rois[0], want)),\
+        assert all(abs(a - b) <= 0.01 for a, b in zip(rois[0], want)), \
             f"{plc}: ROI {rois[0]} != {want}"
+    # B. marker policy: 'inside' is honored everywhere, including Zone+Center
+    # (nested center sits mid-zone; corners survive + decrypt inpaints first)
     assert effective_marker_placement(True, "c.mp4", None, [0.2, 0.2, 0.8, 0.8], True, "inside") == "inside"
     assert effective_marker_placement(False, None, None, [0.2, 0.2, 0.8, 0.8], True, "inside") == "inside"
     assert effective_marker_placement(True, "c.mp4", None, None, False, "inside") == "inside"
     assert effective_marker_placement(True, "c.mp4", None, [0.2, 0.2, 0.8, 0.8], True, "outside") == "outside"
     assert effective_marker_placement(False, None, None, None, False, None) == "outside"
+    # C. full video roundtrip through the decrypt auto-detect probe
     src = os.path.join(tmp, "m_src.mp4")
     wr = cv2.VideoWriter(src, cv2.VideoWriter_fourcc(*"mp4v"), 10.0, (W, H))
     for i in range(6):
@@ -290,6 +382,7 @@ def t7_optical_markers(tmp):
     dopts.pop("patch_roi", None)
     dopts.pop("patch_segments", None)
     process_video_file(enc, dec, dopts, {}, "sm_dec")
+
     def frames(p):
         cap = cv2.VideoCapture(p)
         fs = []
@@ -304,6 +397,8 @@ def t7_optical_markers(tmp):
     assert len(fo) == len(fd) == 6, f"frame count {len(fo)}/{len(fd)} != 6"
     dec_diffs = [meanabs(a, b) for a, b in zip(fo, fd)]
     assert max(dec_diffs) < 30.0, f"optical decrypt did not restore: {dec_diffs}"
+    # D. new full layout (|mif|, matches images): markers stamped INSIDE the
+    # scrambled chaos (no unscrambled margin); decrypt inpaints first.
     enc2, dec2 = os.path.join(tmp, "m_enc2.mp4"), os.path.join(tmp, "m_dec2.mp4")
     eopts2 = dict(eopts, marker_inside_full=True)
     process_video_file(src, enc2, dict(eopts2, reverse=False), {}, "sm_enc2")
@@ -313,6 +408,8 @@ def t7_optical_markers(tmp):
     assert len(fo2) == len(fd2) == 6
     dec_diffs2 = [meanabs(a, b) for a, b in zip(fo2, fd2)]
     assert max(dec_diffs2) < 30.0, f"mif decrypt did not restore: {dec_diffs2}"
+    # E. Zone+Center with INSIDE markers (no coercion): nested center sits
+    # mid-zone so corners survive; decrypt auto-detects + inpaints first.
     csrc = os.path.join(tmp, "zc_ct.mp4")
     wr = cv2.VideoWriter(csrc, cv2.VideoWriter_fourcc(*"mp4v"), 10.0, (W, H))
     for i in range(6):
@@ -343,6 +440,12 @@ def t7_optical_markers(tmp):
             "dec_meanabs_max": round(max(dec_diffs), 2),
             "mif_meanabs_max": round(max(dec_diffs2), 2),
             "zc_inside_meanabs_max": round(max(dec_diffs3), 2)}
+
+
+# T8: forensic ±1s window — exact loss/recovery indices on a synthetic
+# marker on/off/on timeline, move=NULL contract, and the glitch flag
+# (all-present window => transient miss, zone kept).
+# --------------------------------------------------------------------------
 def t8_forensic_window(tmp):
     from core.crypto import (stamp_optical_markers, forensic_marker_window,
                              _calculate_marker_boxes)
@@ -366,6 +469,8 @@ def t8_forensic_window(tmp):
     assert res2["glitch"] is True and res2["lost_idx"] is None, res2
     return {"lost_idx": res["lost_idx"], "recovered_idx": res["recovered_idx"],
             "glitch_ok": True}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fast", action="store_true", help="skip video test")
@@ -392,6 +497,9 @@ def main():
         json.dump(REPORT, f, indent=2, ensure_ascii=False)
     print("  report -> strict_report.json")
     print("=" * 70)
+    # Rule for agents: green only if failed == 0 AND every check printed metrics.
     return 1 if REPORT["failed"] else 0
+
+
 if __name__ == "__main__":
     sys.exit(main())

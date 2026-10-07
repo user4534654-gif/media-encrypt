@@ -1,4 +1,5 @@
 <div id="videoStudio">
+    <!-- Video Upload -->
     <div class="ios-group">
         <div class="ios-group-header">1. Select Mode & Upload Video</div>
         <div class="ios-group-row" style="padding: 10px 15px;">
@@ -15,8 +16,11 @@
                 <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('video', false)">📂 Pick from Vault</button>
             </div>
             <div class="file-list" id="fileList"></div>
+            <!-- Pre-processing video data preview: size, resolution, player -->
             <div id="videoInspector" class="media-inspector hidden"></div>
             <div class="ios-group-info" id="uploadVideoBitrateInfo" style="display: none; margin-top: 6px;"></div>
+
+            <!-- Video URL / Command Downloader -->
             <div class="url-download-container" style="margin-top: 10px;">
                 <label class="ios-label" style="font-size: 12px; color: #555;">Or Download via URL / CLI (yt-dlp)<span class="help-tip">❔<span class="tooltip-text">Enter URL or custom arguments (without 'yt-dlp'). Press Enter to download directly to input vault.</span></span></label>
                 <div style="display: flex; gap: 6px; align-items: center;">
@@ -35,4 +39,546 @@
         <div class="ios-group-row hidden" id="centerVideoSection">
             <label class="ios-label" style="color: #007aff;">Upload Central Video (untouched)</label>
             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
-                <input type="file" id="centerVideoUpload" class="ios-file-input" accept="video
+                <input type="file" id="centerVideoUpload" class="ios-file-input" accept="video/*" style="flex: 1;">
+                <button type="button" class="ios-btn-small" style="white-space: nowrap;" onclick="openInputVaultPicker('video', true)">📂 Pick from Vault</button>
+            </div>
+            <div class="file-list" id="centerFileList"></div>
+            <div id="centerVideoInspector" class="media-inspector hidden"></div>
+
+            <!-- Center Video URL / Command Downloader -->
+            <div class="url-download-container" style="margin-top: 10px;">
+                <label class="ios-label" style="font-size: 12px; color: #007aff;">Or Download Center Video via URL (yt-dlp)</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" id="centerVideoUrlInput" class="ios-input url-cmd-input" placeholder="e.g. https://youtu.be/... (Center video)" onkeydown="if(event.key==='Enter') triggerUrlDownload('video', true)">
+                    <button type="button" class="ios-btn-small" onclick="triggerUrlDownload('video', true)">⬇️ Download</button>
+                </div>
+                <div id="centerVideoTerminal" class="mini-terminal hidden">
+                    <div class="mini-terminal-header">
+                        <span>📺 yt-dlp terminal (Center)</span>
+                        <button type="button" class="mini-terminal-close" onclick="closeTerminal('centerVideoTerminal')">✕</button>
+                    </div>
+                    <pre id="centerVideoTerminalLog" class="mini-terminal-log"></pre>
+                </div>
+            </div>
+            
+            <!-- Interactive Visual Layout Canvas -->
+            {% include 'components/visual_canvas.html' %}
+
+            <!-- Interactive Audio Channels Timeline -->
+            {% include 'components/audio_timeline.html' %}
+
+            <!-- Symmetrical Settings Cards Container -->
+            <div class="symmetrical-settings-grid">
+                <!-- Card 1: Background Settings (Blue) -->
+                <div class="settings-card blue-card">
+                    <div class="card-header">
+                        <span class="color-dot blue-dot"></span> Background Video Settings
+                    </div>
+                    
+                    <label class="ios-label" style="margin-top: 8px;">Outer Video End Action<span class="help-tip">❔<span class="tooltip-text">Action if outer background video ends before central video. Stop: end video. Freeze: freeze last frame. Black: black screen. Loop: restart background video.</span></span></label>
+                    <select id="outer_end_action" class="ios-select">
+                        <option value="stop" selected>Stop (Default)</option>
+                        <option value="freeze">Freeze Last Frame</option>
+                        <option value="black">Black Screen</option>
+                        <option value="loop">Loop Video</option>
+                    </select>
+                </div>
+
+                <!-- Card 2: Center Overlay Settings (Red) -->
+                <div class="settings-card red-card">
+                    <div class="card-header">
+                        <span class="color-dot red-dot"></span> Center Overlay Video Settings
+                    </div>
+                    
+                    <label class="ios-label" style="margin-top: 8px;">Central Overlay Size <span id="centerSizeVal" style="font-weight: 700; color: #007aff;">1.00</span><span class="help-tip">❔<span class="tooltip-text">Size proportion of central video overlay (1/4 default area, up to 3/4). Drag for any value between 1 and 3, e.g. 1.44 or 2.73.</span></span></label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 11px; color: #888;">1</span>
+                        <input type="range" id="center_size" min="1" max="3" step="0.01" value="1" style="flex: 1; accent-color: #007aff;" oninput="onCenterSizeSlider(this.value, false)">
+                        <span style="font-size: 11px; color: #888;">3</span>
+                    </div>
+
+                    <label class="ios-label" style="margin-top: 10px;">Video Encryption Target<span class="help-tip">❔<span class="tooltip-text">Choose which video layer is scrambled: Background Only, Central Video Only, or Both.</span></span></label>
+                    <select id="video_encrypt_mode" class="ios-select">
+                        <option value="external" selected>External Video (Background) Only</option>
+                        <option value="center">Central Video Only</option>
+                        <option value="both">Both (External & Center)</option>
+                    </select>
+
+                    <label class="ios-label" style="margin-top: 10px;">Center Video End Action<span class="help-tip">❔<span class="tooltip-text">Action if central video ends before background video. Loop: restart. Freeze: freeze last frame. Black: black screen.</span></span></label>
+                    <select id="center_end_action" class="ios-select">
+                        <option value="loop" selected>Loop Video (Default)</option>
+                        <option value="freeze">Freeze Last Frame</option>
+                        <option value="black">Black Screen</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="ios-group-row toggles" id="encToggles">
+            <label class="ios-switch-label"><input type="checkbox" id="encVideo" checked> Scramble Video</label>
+        </div>
+    </div>
+
+    <!-- 2. Selective Spatial Zones & Timeline Patches (Optional) -->
+    <div class="ios-group" id="spatialZonesGroup">
+        <div class="collapse-trigger disabled" id="spatialZonesCollapseHeader" onclick="toggleSection('spatialZonesCollapseHeader', 'spatialZonesCollapseContent')">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span>🩹 Selective Spatial Zones & Timeline Patches</span>
+                <span class="badge-optional" style="font-size: 11px; background: rgba(0,122,255,0.15); color: #007aff; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Optional</span>
+                <span class="collapse-arrow">▶️</span>
+            </div>
+            <label class="ios-switch-label" style="margin: 0; padding-left: 10px; display: inline-flex; align-items: center; gap: 4px;" onclick="event.stopPropagation()">
+                <input type="checkbox" id="enableSpatialZones" onchange="onEnableSpatialZonesToggle(this.checked)">
+                <span style="font-size: 11px; font-weight: normal; text-shadow: none;">Enable</span>
+            </label>
+        </div>
+
+        <div class="collapse-content hidden" id="spatialZonesCollapseContent">
+            <div class="ios-group-container" style="padding: 12px;">
+                <div id="spatialZonesEditorContainer" class="hidden" style="margin-top: 4px;">
+                    <!-- Tool Mode Bar -->
+                    <div style="margin-bottom: 8px;">
+                        <div class="segmented-control">
+                            <button type="button" id="patchToolMove" class="segment-btn active" onclick="setPatchInteractionMode('move')">✋ Move / Drag</button>
+                            <button type="button" id="patchToolResize" class="segment-btn" onclick="setPatchInteractionMode('resize')">📐 Resize Handles</button>
+                            <button type="button" class="segment-btn" onclick="setPatchFullscreen()">🔲 Full Frame</button>
+                            <button type="button" class="segment-btn" onclick="resetPatchBoxToCenter()">↺ Center Box</button>
+                        </div>
+                    </div>
+
+                    <!-- Media Stage with Interactive Box -->
+                    <div id="patchPreviewContainer" class="patch-preview-container" style="width: fit-content; max-width: 100%; margin: 0 auto; position: relative; background: #000; border-radius: 8px; overflow: hidden;">
+                        <video id="patchVideoPlayer" playsinline style="display: block; max-height: 380px; max-width: 100%; width: auto; height: auto; margin: 0 auto;"></video>
+                        <img id="patchImagePreview" style="display: none; max-height: 380px; max-width: 100%; width: auto; height: auto; margin: 0 auto;">
+
+                        <!-- Interactive 8-Handle Region Box -->
+                        <div id="patchRegionBox" class="patch-region-box" style="left: 20%; top: 20%; width: 60%; height: 60%;">
+                            <div class="patch-region-box-badge">🔒 ENCRYPT ZONE</div>
+                            <div class="patch-resize-handle nw" data-handle="nw"></div>
+                            <div class="patch-resize-handle n" data-handle="n"></div>
+                            <div class="patch-resize-handle ne" data-handle="ne"></div>
+                            <div class="patch-resize-handle w" data-handle="w"></div>
+                            <div class="patch-resize-handle e" data-handle="e"></div>
+                            <div class="patch-resize-handle sw" data-handle="sw"></div>
+                            <div class="patch-resize-handle s" data-handle="s"></div>
+                            <div class="patch-resize-handle se" data-handle="se"></div>
+                        </div>
+
+                        <!-- Time Overlay -->
+                        <div id="patchPlayerOverlay" style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.7); color: #fff; padding: 2px 7px; border-radius: 4px; font-family: monospace; font-size: 11px; z-index: 30; pointer-events: none;">
+                            00:00.000 / 00:00.000
+                        </div>
+                    </div>
+
+                    <!-- Live Coordinate Readout / Inputs -->
+                    <div class="patch-coords-bar" style="display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 8px; font-size: 12px; flex-wrap: wrap; margin-top: 10px; margin-bottom: 12px;">
+                        <span style="font-weight: 600; color: #2d3748;">🎯 Bounding Box [x1, y1, x2, y2]:</span>
+                        <div style="display: flex; gap: 4px; align-items: center; font-family: monospace;">
+                            <span>X1</span><input type="number" id="patchCoordX1" step="0.01" min="0" max="1" class="ios-input" style="width: 58px; padding: 2px 4px; font-size: 11px; text-align: center;" onchange="onManualCoordInput()">
+                            <span>Y1</span><input type="number" id="patchCoordY1" step="0.01" min="0" max="1" class="ios-input" style="width: 58px; padding: 2px 4px; font-size: 11px; text-align: center;" onchange="onManualCoordInput()">
+                            <span>X2</span><input type="number" id="patchCoordX2" step="0.01" min="0" max="1" class="ios-input" style="width: 58px; padding: 2px 4px; font-size: 11px; text-align: center;" onchange="onManualCoordInput()">
+                            <span>Y2</span><input type="number" id="patchCoordY2" step="0.01" min="0" max="1" class="ios-input" style="width: 58px; padding: 2px 4px; font-size: 11px; text-align: center;" onchange="onManualCoordInput()">
+                        </div>
+                    </div>
+
+                    <!-- Modern Video Editor Timeline -->
+                    <div class="ve-timeline-wrapper" id="veTimelineSection">
+                        <!-- Top Timeline Controls Bar -->
+                        <div class="ve-timeline-header">
+                            <div class="ve-controls-left">
+                                <button type="button" class="ve-btn" id="vePlayPauseBtn" onclick="veTogglePlay()">▶ Play</button>
+                                <button type="button" class="ve-btn" onclick="veSeekTo(0)" title="Jump to Start">⏮</button>
+                                <span class="ve-time-display" id="veDurationLabel">00:00.000 / 00:00.000</span>
+                            </div>
+                            <div class="ve-controls-right">
+                                <button type="button" class="ve-btn ve-btn-green" onclick="veAddZoneAtPlayhead()">➕ Add Zone at Playhead</button>
+                                <button type="button" class="ve-btn ve-btn-red" id="veDeleteZoneBtn" onclick="veDeleteActiveZone()">🗑️ Delete Zone</button>
+                            </div>
+                        </div>
+
+                        <!-- Interactive Timeline Scrubber & Tracks Area -->
+                        <div class="ve-timeline-body" id="veTimelineBody">
+                            <!-- Ruler -->
+                            <div class="ve-ruler" id="veRuler">
+                                <div class="ve-ruler-ticks" id="veRulerTicks"></div>
+                            </div>
+
+                            <!-- Track Stage -->
+                            <div class="ve-tracks" id="veTimelineTrack">
+                                <!-- Filmstrip: video frame thumbnails behind the clips -->
+                                <div class="ve-filmstrip" id="veFilmstrip"></div>
+
+                                <!-- Background grid marks -->
+                                <div class="ve-grid-lines" id="veGridLines"></div>
+
+                                <!-- Playhead Needle -->
+                                <div class="ve-playhead" id="vePlayhead">
+                                    <div class="ve-playhead-head"></div>
+                                    <div class="ve-playhead-line"></div>
+                                </div>
+
+                                <!-- Clips Container -->
+                                <div class="ve-clips-container" id="veClipsContainer"></div>
+                            </div>
+                        </div>
+
+                        <!-- Active Zone Info Panel -->
+                        <div class="ve-active-zone-bar" id="veActiveZoneBar">
+                            <span class="ve-zone-label" id="veActiveZoneTitle">Zone 1</span>
+                            <div class="ve-zone-times">
+                                <span>Start:</span>
+                                <input type="text" id="veActiveStart" class="ve-time-input" onchange="veOnActiveTimeInput('start', this.value)">
+                                <span>End:</span>
+                                <input type="text" id="veActiveEnd" class="ve-time-input" onchange="veOnActiveTimeInput('end', this.value)">
+                                <span class="ve-dur-tag" id="veActiveDurTag">(2.00s)</span>
+                            </div>
+                            <span class="ve-zone-roi-tag" id="veActiveRoiBadge">ROI: [0.20, 0.20, 0.80, 0.80]</span>
+                        </div>
+                    </div>
+
+                    <!-- Zone Options (Invert & Optical Markers) -->
+                    <div class="zone-options-box" style="border-radius: 8px; padding: 10px 14px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Invert Zone -->
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <label class="ios-label" style="margin-bottom: 2px;">Invert Encryption Zone</label>
+                                <div style="font-size: 11px; color: #666;">Scramble outside the box; keep region inside untouched</div>
+                            </div>
+                            <label class="ios-switch-label">
+                                <input type="checkbox" id="patchRoiInvert">
+                            </label>
+                        </div>
+
+                        <!-- Optical Markers -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #edf2f7; padding-top: 8px;">
+                            <div>
+                                <label class="ios-label" style="margin-bottom: 2px;">Embed Optical B&W Corner Markers<span class="help-tip">❔<span class="tooltip-text">Stamps high-contrast concentric square markers at box corners. Key remains 100% timestamp & coordinate-free; Decryptor discovers and unscrambles all zones automatically.</span></span></label>
+                                <div style="font-size: 11px; color: #666;">100% coordinate-free and timestamp-free keys</div>
+                            </div>
+                            <label class="ios-switch-label">
+                                <input type="checkbox" id="patchOpticalMarkers" onchange="toggleOpticalPlacement(this.checked)">
+                            </label>
+                        </div>
+
+                        <!-- Marker Placement -->
+                        <div id="patchMarkerPlacementRow" class="hidden" style="border-top: 1px solid #edf2f7; padding-top: 8px;">
+                            <label class="ios-label">Marker Placement</label>
+                            <select id="patchMarkerPlacement" class="ios-select">
+                                <option value="outside" selected>Outside Zone Border</option>
+                                <option value="inside">Inside Zone Border</option>
+                            </select>
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">Note: with Center video, Inside is stamped as Outside (inside markers would be destroyed by the pasted center) — the key records the effective placement.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Export Configuration -->
+    <div class="ios-group" id="exportSettings">
+        <!-- Video Quality Collapsible Trigger -->
+        <div class="collapse-trigger" id="vidCollapseHeader" onclick="toggleSection('vidCollapseHeader', 'vidCollapseContent')">
+            <span>🎬 Video Quality & Format Settings</span>
+            <span class="collapse-arrow">▶️</span>
+        </div>
+        
+        <div class="collapse-content hidden" id="vidCollapseContent">
+            <div class="ios-group-container" id="vidSettings" style="border-bottom: 1px solid #c8c7cc;">
+                <div class="ios-group-row-grid">
+                    <div>
+                        <label class="ios-label">Format<span class="help-tip">❔<span class="tooltip-text">The file container type for the exported video or image.</span></span></label>
+                        <select id="v_fmt" class="ios-select">
+                            <option value="auto" selected>Auto (Match Input)</option>
+                            <optgroup label="Video Formats" id="v_fmt_video_group">
+                                <option value=".mp4">.mp4</option>
+                                <option value=".mkv">.mkv</option>
+                                <option value=".avi">.avi</option>
+                                <option value=".webm">.webm</option>
+                                <option value=".mov">.mov</option>
+                            </optgroup>
+                            <optgroup label="Image Formats" id="v_fmt_image_group">
+                                <option value=".png">.png (Lossless)</option>
+                                <option value=".jpg">.jpg (JPEG)</option>
+                                <option value=".webp">.webp</option>
+                                <option value=".avif">.avif</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="ios-label">Codec<span class="help-tip">❔<span class="tooltip-text">The compression library. H.264 is widely supported; H.265 (HEVC) offers better compression but takes longer.</span></span></label>
+                        <select id="v_codec" class="ios-select">
+                            <option value="auto" selected>Auto (Match Input)</option>
+                            <option value="libx264">H.264</option>
+                            <option value="libx265">H.265 (HEVC)</option>
+                            <option value="libvpx-vp9">VP9</option>
+                            <option value="libaom-av1">AV1</option>
+                            <option value="mpeg4">MPEG-4</option>
+                            <option value="prores">ProRes</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="ios-label">Preset<span class="help-tip">❔<span class="tooltip-text">Controls the compression speed vs tradeoff. Faster presets compile quickly but result in larger files.</span></span></label>
+                        <select id="v_preset" class="ios-select">
+                            <option value="auto" selected>Auto</option>
+                            <option value="ultrafast">ultrafast</option>
+                            <option value="fast">fast</option>
+                            <option value="medium">medium</option>
+                            <option value="slow">slow</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Bitrate Slider -->
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <div class="flex-row" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 5px;">
+                        <label class="ios-label" id="v_bit_label" style="margin-bottom: 0;">Max Dynamic Bitrate: 3000k<span class="help-tip">❔<span class="tooltip-text">Upper ceiling for dynamic video bitrate (Constrained VBR). Bitrate scales down on simple scenes and up to this limit on complex scenes.</span></span></label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" class="ios-btn-small" id="bitrateWaveBtn" onclick="openBitrateWave()" title="Shape the dynamic bitrate as a wave: drag timeline points, shift everything with the master slider">🌊 Wave</button>
+                            <label class="ios-switch-label" style="font-size: 11px; margin-bottom: 0;"><input type="checkbox" id="autoVidBitrate" checked onchange="toggleVidBitrateAuto(this.checked)"> Auto</label>
+                        </div>
+                    </div>
+                    <div id="vidBitrateSliderContainer" style="display: none; align-items: center; gap: 12px;">
+                        <input type="range" id="v_bit_slider" min="500" max="25000" step="500" value="3000" style="flex: 1; accent-color: #007aff;">
+                        <span id="v_bit_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">3000k</span>
+                    </div>
+                    <div id="vidBitrateWaveInfo" style="display: none; margin-top: 6px; font-size: 12px; color: #2e7d32; font-weight: 600;"></div>
+                    <input type="hidden" id="vid_bitrate_envelope" value="">
+                </div>
+                <!-- Dynamic Bitrate Wave Editor Modal -->
+                <div id="bitrateWaveModal" style="position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 16px;">
+                    <div class="wave-modal-card" style="border-radius: 14px; max-width: 600px; width: 100%; padding: 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.35);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <div style="font-weight: 700; font-size: 15px;">🌊 Dynamic Bitrate Wave</div>
+                            <button type="button" class="ios-btn-small" onclick="closeBitrateWave()">✕</button>
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Drag the timeline points up / down to shape bitrate over time (start → middle → end). The master slider shifts the whole wave. Encoded as constrained VBR: average = target, peak = ceiling.</div>
+                        <canvas id="bitrateWaveCanvas" width="560" height="220" style="width: 100%; height: auto; border-radius: 10px; touch-action: none; cursor: grab;"></canvas>
+                        <div id="bitrateWaveReadout" style="font-size: 12px; color: #333; margin-top: 8px; font-family: monospace;">start — · mid — · end —</div>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
+                            <div class="segmented-control" style="display: flex; gap: 0;">
+                                <button type="button" id="waveCurveRest" class="segment-btn active" onclick="switchWaveCurve('rest')" style="border-color: #007aff; color: #007aff;">🌊 Rest (blue)</button>
+                                <button type="button" id="waveCurveZone" class="segment-btn" onclick="switchWaveCurve('zone')" style="border-color: #22c55e; color: #22c55e;">🟩 Zone (green)</button>
+                            </div>
+                            <div>
+                                <label class="ios-label" style="margin-bottom: 2px;">Points (2–100)<span class="help-tip">❔<span class="tooltip-text">How many timeline points each wave has. More points = finer shape for long videos.</span></span></label>
+                                <input type="number" id="bitrateWaveCount" min="2" max="100" step="1" value="3" class="ios-input" style="width: 70px;" onchange="onBitrateWaveCount(this.value)">
+                            </div>
+                        </div>
+                        <div style="font-size: 11px; color: #666; margin-top: 4px;">Blue drives the encode (target/ceiling). Green = encrypt zones over time: the per-frame green/blue ratio steers Zone Priority strength along the timeline (needs video duration; falls back to the Strength slider). First switch to green copies blue as a starting point.</div>
+                        <div style="margin-top: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label class="ios-label" id="bitrateWaveGainLabel" style="margin-bottom: 0;">Master shift: +0 kbps (whole wave up / down)</label>
+                                <span id="bitrateWaveGainVal" style="font-size: 13px; font-weight: bold;">+0</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 11px; color: #888;">−2000</span>
+                                <input type="range" id="bitrateWaveGain" min="-2000" max="4000" step="100" value="0" style="flex: 1; accent-color: #007aff;" oninput="onBitrateWaveGain(this.value)">
+                                <span style="font-size: 11px; color: #888;">+4000</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end;">
+                            <button type="button" class="ios-btn-small" onclick="resetBitrateWave()">↺ Reset</button>
+                            <button type="button" class="ios-btn-small" onclick="clearBitrateWave()">🧹 Clear</button>
+                            <button type="button" class="ios-btn-small" onclick="closeBitrateWave()" style="background: #007aff; color: #fff; border-color: #007aff; font-weight: 700;">✅ Apply Wave</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Spatial Compression Mode -->
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-label">Spatial Compression Mode<span class="help-tip">❔<span class="tooltip-text">Off: capped ABR — target = ceiling = slider, enforced via maxrate.<br><br>Zone Priority: the background OUTSIDE your encrypt zones is gently softened before encoding, so the encoder's rate control feeds the saved bits into the sharp scrambled zones (measured: cleaner zone restore at the same file size). Works on any codec/GPU. Price: background gets slightly softer — tune with Strength.</span></span></label>
+                    <select id="v_spatial_mode" class="ios-select" onchange="toggleZonePriority(this.value)">
+                        <option value="off" selected>Off (Standard capped ABR)</option>
+                        <option value="priority">Zone Priority (bitrate into encrypt zones)</option>
+                    </select>
+                    <div id="zonePriorityRow" style="display: none; margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label class="ios-label" style="margin-bottom: 0;">Zone Priority Strength<span class="help-tip">❔<span class="tooltip-text">How strongly the background outside encrypt zones is softened (0 = no steering, 100 = max). Higher = more bits pushed into zones, softer background. Applies to patch_roi / timeline segments on encrypt only.</span></span></label>
+                            <span id="zone_priority_val" style="font-size: 13px; font-weight: bold;">40</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 11px; color: #888;">0</span>
+                            <input type="range" id="zone_priority_strength" min="0" max="100" step="5" value="40" style="flex: 1; accent-color: #007aff;" oninput="document.getElementById('zone_priority_val').innerText = this.value">
+                            <span style="font-size: 11px; color: #888;">100</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Hardware / GPU Acceleration -->
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <div>
+                        <label class="ios-label" style="margin-bottom: 2px;">Hardware / GPU Acceleration<span class="help-tip">❔<span class="tooltip-text">Use GPU hardware encoder (NVIDIA NVENC, Apple VideoToolbox, Intel QuickSync, AMD AMF) for significantly faster encoding. Auto-falls back to CPU if unavailable.</span></span></label>
+                        <span style="font-size: 11px; color: #888;">Auto-detect: NVIDIA / Apple / Intel / AMD / Colab</span>
+                    </div>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="useGpu">
+                    </label>
+                </div>
+                <!-- Scramble-tuned encode (measured +3-5 dB on scrambled content) -->
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <div>
+                        <label class="ios-label" style="margin-bottom: 2px;">Scramble-Tuned Encode<span class="help-tip">❔<span class="tooltip-text">Encoder flags tuned for block-shuffled video (no-deblock, psy-off, SSIM tune, extra chroma bits on x264/x265). Measured +3-5 dB restore quality at the same bitrate. No effect on VP9/AV1/HW encoders.</span></span></label>
+                        <span style="font-size: 11px; color: #888;">x264/x265 software encoders only</span>
+                    </div>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="scrambleTune" checked>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audio Quality & Scrambling Collapsible Trigger -->
+        <div class="collapse-trigger" id="audCollapseHeader" onclick="toggleSection('audCollapseHeader', 'audCollapseContent')">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span>🎵 Audio Quality & Scrambling Settings</span>
+                <span class="collapse-arrow">▶️</span>
+            </div>
+            <label class="ios-switch-label" style="margin: 0; padding-left: 10px; display: inline-flex; align-items: center; gap: 4px;" onclick="event.stopPropagation()">
+                <input type="checkbox" id="encAudio" checked onchange="onEncAudioToggle(this.checked)">
+                <span style="font-size: 11px; font-weight: normal; text-shadow: none;">Modulate Audio</span>
+            </label>
+        </div>
+        
+        <div class="collapse-content hidden" id="audCollapseContent">
+            <div class="ios-group-container" id="audSettings">
+                <div class="ios-group-row-grid">
+                    <div>
+                        <label class="ios-label">Audio Sample Rate<span class="help-tip">❔<span class="tooltip-text">Audio sample rate of the exported video. Use the slider to select a different sample rate (e.g. for standard inversion).</span></span></label>
+                        <div id="aSrSliderContainer" style="display: none; align-items: center; gap: 12px;">
+                            <input type="range" id="a_sr_slider" min="8000" max="96000" step="1000" value="48000" style="flex: 1; accent-color: #007aff;">
+                            <span id="a_sr_val" style="font-size: 13px; font-weight: bold; width: 70px; text-align: right;">48000 Hz</span>
+                        </div>
+                        <label class="ios-switch-label" style="font-size: 11px; margin-top: 4px; display: block;"><input type="checkbox" id="a_sr_auto" checked onchange="toggleAudioSrAuto(this.checked, 'video')"> Auto (Match Input)</label>
+                    </div>
+                    <div>
+                        <label class="ios-label">Audio Codec<span class="help-tip">❔<span class="tooltip-text">AAC is the standard for video audio; MP3 is legacy; FLAC is lossless.</span></span></label>
+                        <select id="a_codec" class="ios-select" onchange="onAudioCodecChanged('video')">
+                            <option value="auto" selected>Auto (Match Input)</option>
+                            <option value="aac">AAC</option>
+                            <option value="libmp3lame">MP3</option>
+                            <option value="libopus">Opus</option>
+                            <option value="flac">FLAC</option>
+                            <option value="pcm_s16le">PCM 16-bit</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div class="flex-row" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 2px;">
+                            <label class="ios-label" id="a_bit_label" style="margin-bottom: 0;">Audio Bitrate: 320k (Max)<span class="help-tip">❔<span class="tooltip-text">Higher audio bitrate improves sound quality. Defaults to codec maximum.</span></span></label>
+                            <label class="ios-switch-label" style="font-size: 11px; margin-bottom: 0;"><input type="checkbox" id="a_bit_auto" onchange="toggleAudioBitAuto(this.checked, 'video')"> Auto</label>
+                        </div>
+                        <div id="aBitSliderContainer" style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
+                            <input type="range" id="a_bit_slider" min="32" max="320" step="32" value="320" style="flex: 1; accent-color: #007aff;">
+                            <span id="a_bit_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">320k</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Audio Encryption Method for Video -->
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-label">Audio Encryption Method<span class="help-tip">❔<span class="tooltip-text">Standard Inversion: Traditional time-domain frequency modulation.</span></span></label>
+                    <select id="v_aud_method" class="ios-select" onchange="toggleVideoAudioMethodFields()">
+                        <option value="inversion" selected>Standard Inversion</option>
+                    </select>
+                </div>
+                <div class="ios-group-row" id="v_aud_splits_row" style="display: none;">
+                    <label class="ios-label">Audio Splits (2-100)<span class="help-tip">❔<span class="tooltip-text">Number of frequency bands to split and scramble. Max 100.</span></span></label>
+                    <input type="number" id="v_aud_splits" value="10" min="2" max="100" class="ios-input">
+                </div>
+                <!-- Audio Track to Encrypt -->
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-label">Audio Track to Encrypt<span class="help-tip">❔<span class="tooltip-text">Choose whether to encrypt both left/right channels, or selectively encrypt only one channel, leaving the other completely untouched.</span></span></label>
+                    <select id="aud_track" class="ios-select">
+                        <option value="both" selected>Both Channels (L + R)</option>
+                        <option value="left">Left Channel Only (L)</option>
+                        <option value="right">Right Channel Only (R)</option>
+                    </select>
+                </div>
+                <!-- Volume reduction factor slider -->
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-label" id="vol_factor_label">Encrypted Audio Volume: 100%<span class="help-tip">❔<span class="tooltip-text">Scale the encrypted audio volume (e.g. to 5% or 0% so it seems silent). It will be restored to 100% on decryption.</span></span></label>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <input type="range" id="vol_factor_slider" min="0" max="100" step="5" value="100" style="flex: 1; accent-color: #007aff;">
+                        <span id="vol_factor_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">100%</span>
+                    </div>
+                </div>
+                <!-- Dual track L/R checkbox (only visible in center video mode) -->
+                <div class="ios-group-row hidden" id="dualTrackRow" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="dual_track"> Dual-Track L/R Audio
+                        <span class="help-tip">❔<span class="tooltip-text">Left track has encrypted main audio; Right track has normal center video audio. Merged and normalized back to stereo on decryption.</span></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Scrambling Parameters -->
+    <div class="ios-group" id="encryptionParams">
+        <!-- Video Grid Collapsible Trigger -->
+        <div class="collapse-trigger" id="paramsCollapseHeader" onclick="toggleSection('paramsCollapseHeader', 'paramsCollapseContent')">
+            <span>🧩 Video Grid & Resize Settings</span>
+            <span class="collapse-arrow">▶️</span>
+        </div>
+        
+        <div class="collapse-content hidden" id="paramsCollapseContent">
+            <div class="ios-group-container">
+                <div class="ios-group-row-grid">
+                    <div>
+                        <label class="ios-label">Columns<span class="help-tip">❔<span class="tooltip-text">The number of horizontal slices in the scrambling grid.</span></span></label>
+                        <input type="number" id="cols" value="10" min="2" class="ios-input">
+                    </div>
+                    <div>
+                        <label class="ios-label">Rows<span class="help-tip">❔<span class="tooltip-text">The number of vertical slices in the scrambling grid.</span></span></label>
+                        <input type="number" id="rows" value="10" min="2" class="ios-input">
+                    </div>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0;">
+                    <label class="ios-label">SID Seed (Blank = Random)<span class="help-tip">❔<span class="tooltip-text">A custom key, password, or string to lock/unlock your scrambled visual blocks.</span></span></label>
+                    <input type="text" id="sid" placeholder="e.g. apple123" class="ios-input">
+                </div>
+                <div class="ios-group-row dev-only" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <label class="ios-label" style="margin-bottom: 0;">Export SVG Visual Grid<span class="help-tip">❔<span class="tooltip-text">Generates SVG files showing the original and permuted block grids for visualization/debugging.</span></span></label>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="exportSvg" checked>
+                    </label>
+                </div>
+                <div class="ios-group-row dev-only" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <label class="ios-label" style="margin-bottom: 0;">Export Encrypt Timeline (.txt)<span class="help-tip">❔<span class="tooltip-text">Saves a companion _timeline.txt with millisecond encrypt/passthrough intervals for the video.</span></span></label>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="exportTimeline" checked>
+                    </label>
+                </div>
+                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <label class="ios-label" style="margin-bottom: 0;">Save Key File (.key.txt)<span class="help-tip">❔<span class="tooltip-text">Saves the encryption key to a companion .key.txt file in the vault.</span></span></label>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="saveKeyFile" checked>
+                    </label>
+                </div>
+                <div class="ios-group-row dev-only" style="border-top: 1px solid #e0e0e0; display: flex; flex-direction: row; align-items: center; justify-content: space-between;">
+                    <label class="ios-label" style="margin-bottom: 0;">Generate QR Code (Optional)<span class="help-tip">❔<span class="tooltip-text">Creates a companion QR code PNG for mobile key scanning. Disabled by default to keep output vault clean.</span></span></label>
+                    <label class="ios-switch-label">
+                        <input type="checkbox" id="generateQr">
+                    </label>
+                </div>
+                
+                <div class="ios-group-header" style="margin-top: 10px; text-transform: uppercase; font-size: 11px; margin-left: 14px;">Resolution & Aspect Ratio</div>
+                <div class="ios-group-row-grid" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                    <div>
+                        <div class="flex-row">
+                            <label class="ios-label">Target Width (px)<span class="help-tip">❔<span class="tooltip-text">The desired width of the output video.</span></span></label>
+                            <label class="ios-switch-label" style="font-size: 11px;"><input type="checkbox" id="aspectLock" checked> Lock<span class="help-tip">❔<span class="tooltip-text">Automatically adjusts target height to match the original aspect ratio when changing the width.</span></span></label>
+                        </div>
+                        <input type="number" id="resW" placeholder="Orig Width" class="ios-input">
+                    </div>
+                    <div>
+                        <div class="flex-row">
+                            <label class="ios-label">Target Height (px)<span class="help-tip">❔<span class="tooltip-text">The desired height of the output video.</span></span></label>
+                            <label class="ios-switch-label" style="font-size: 11px;"><input type="checkbox" id="noScale"> Pad Black<span class="help-tip">❔<span class="tooltip-text">Pads the video with black borders instead of stretching/scaling it to fit the target resolution.</span></span></label>
+                        </div>
+                        <input type="number" id="resH" placeholder="Orig Height" class="ios-input">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ios-group">
+        <button onclick="startBatch('scramble')" class="ios-btn ios-btn-blue">🔒 ENCRYPT VIDEO</button>
+    </div>
+</div>

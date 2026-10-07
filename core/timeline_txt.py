@@ -1,3 +1,17 @@
+"""Encrypt-timeline export for video jobs: where (in milliseconds) the output
+video is actually scrambled vs passed through untouched.
+
+Mirrors the per-frame logic in core/video_processor.process_video_file:
+  ON(t)  = gate(t) AND cover(t)
+  gate   = patch_intervals when set, else the whole timeline
+  cover  = union of patch_segments WITH a roi when segments exist,
+           else the whole timeline (global roi or full-frame scramble)
+
+Segments without a roi, frames outside every active segment, and frames
+outside patch_intervals are passthrough. Decrypt jobs don't write this
+(they restore whatever the encrypt timeline scrambled).
+"""
+
 
 def _as_float_pair(item):
     try:
@@ -7,6 +21,8 @@ def _as_float_pair(item):
     if not (e > s):
         return None
     return (s, e)
+
+
 def _merge(intervals):
     ivs = sorted(intervals)
     out = []
@@ -17,13 +33,17 @@ def _merge(intervals):
         else:
             out.append([s, e])
     return [(s, e) for s, e in out]
+
+
 def compute_encrypt_intervals(options, duration_sec):
+    """(on_intervals_sec, duration_sec): merged encrypt-ON coverage."""
     try:
         dur = max(0.0, float(duration_sec or 0.0))
     except Exception:
         dur = 0.0
     if dur <= 0:
         return [], 0.0
+
     segs = options.get('patch_segments')
     cover = []
     if isinstance(segs, list) and segs:
@@ -38,7 +58,9 @@ def compute_encrypt_intervals(options, duration_sec):
                 cover.append((max(0.0, st), en))
         cover = _merge([(s, min(e, dur)) for s, e in cover if s < dur])
     else:
+        # Global roi or full-frame scramble: spatially covered everywhere.
         cover = [(0.0, dur)]
+
     gates = options.get('patch_intervals')
     if gates:
         gate_list = []
@@ -49,6 +71,7 @@ def compute_encrypt_intervals(options, duration_sec):
         gate_list = _merge(gate_list)
     else:
         gate_list = [(0.0, dur)]
+
     on = []
     for cs, ce in cover:
         for gs, ge in gate_list:
@@ -56,18 +79,24 @@ def compute_encrypt_intervals(options, duration_sec):
             if e > s:
                 on.append((s, e))
     return _merge(on), dur
+
+
 def render_timeline_txt(options, duration_sec, fps=None, source_name=""):
+    """Full-coverage ms timeline text: every millisecond of the output is
+    labeled either encrypt or passthrough (no gaps, sorted, merged)."""
     on, dur = compute_encrypt_intervals(options, duration_sec)
     dur_ms = int(round(dur * 1000))
     try:
         fps_f = float(fps) if fps else 0.0
     except Exception:
         fps_f = 0.0
+
     segs = options.get('patch_segments')
     n_seg = len(segs) if isinstance(segs, list) else 0
     gates = options.get('patch_intervals')
     n_gate = len(gates) if gates else 0
     has_roi = bool(options.get('patch_roi'))
+
     lines = [
         f"# encrypt timeline for {source_name or 'video'} (video encrypt on/off, milliseconds)",
         f"# duration_ms={dur_ms} fps={fps_f:.2f}",
@@ -89,6 +118,8 @@ def render_timeline_txt(options, duration_sec, fps=None, source_name=""):
     if dur_ms <= 0:
         lines.append("0-0 passthrough")
     return "\n".join(lines) + "\n"
+
+
 def export_timeline_txt(output_txt_path, options, duration_sec, fps=None, source_name=""):
     text = render_timeline_txt(options, duration_sec, fps=fps, source_name=source_name)
     with open(output_txt_path, 'w', encoding='utf-8') as f:

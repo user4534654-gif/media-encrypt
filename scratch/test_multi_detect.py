@@ -1,18 +1,24 @@
 import cv2
 import numpy as np
 from core.crypto import stamp_optical_markers, create_marker_pattern
+
 def group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside'):
     if len(clustered_pts) < 4:
         return []
+    
+    # Sort points by y then x
     pts = sorted(clustered_pts, key=lambda p: (p[1], p[0]))
     tol = max(4, m_size // 3)
+    
     detected_rois = []
     used_pts = set()
+    
     n = len(pts)
     for i in range(n):
         if i in used_pts:
             continue
         tl = pts[i]
+        
         for j in range(i + 1, n):
             if j in used_pts:
                 continue
@@ -21,6 +27,7 @@ def group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside'):
                 continue
             if abs(tr[1] - tl[1]) > tol:
                 continue
+            
             for k in range(i + 1, n):
                 if k in used_pts or k == j:
                     continue
@@ -29,6 +36,7 @@ def group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside'):
                     continue
                 if abs(bl[0] - tl[0]) > tol:
                     continue
+                
                 for l in range(i + 1, n):
                     if l in used_pts or l == j or l == k:
                         continue
@@ -44,6 +52,7 @@ def group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside'):
                             ry1 = max(0, tl[1] + m_size)
                             rx2 = min(w, tr[0])
                             ry2 = min(h, bl[1])
+                        
                         if rx2 > rx1 and ry2 > ry1:
                             norm_roi = (
                                 round(rx1 / w, 4),
@@ -65,6 +74,8 @@ def group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside'):
                     break
             if i in used_pts:
                 break
+
+    # Fallback for single ROI if 4 points exist and loop missed
     if not detected_rois and len(clustered_pts) == 4:
         xs = [c[0] for c in clustered_pts]
         ys = [c[1] for c in clustered_pts]
@@ -86,11 +97,13 @@ def group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside'):
                 round(ry2 / h, 4)
             ))
     return detected_rois
+
 def detect_all_optical_markers(img, placement='outside'):
     if img is None:
         return []
     h, w = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
     all_rois = []
     for m_size in [18, 24, 16, 32]:
         pattern = create_marker_pattern(m_size)
@@ -98,11 +111,13 @@ def detect_all_optical_markers(img, placement='outside'):
         res = cv2.matchTemplate(gray, pat_gray, cv2.TM_CCOEFF_NORMED)
         loc = np.where(res >= 0.80)
         pts = list(zip(*loc[::-1]))
+
         if len(pts) >= 4:
             clustered = []
             for (px, py) in pts:
                 if not any(abs(px - cx) < m_size // 2 and abs(py - cy) < m_size // 2 for (cx, cy) in clustered):
                     clustered.append((int(px), int(py)))
+            
             rois = group_markers_into_rois(clustered, m_size, w, h, placement=placement)
             for r in rois:
                 if not any(
@@ -115,11 +130,15 @@ def detect_all_optical_markers(img, placement='outside'):
                     all_rois.append(r)
         if all_rois:
             return all_rois
+
     return all_rois
+
+# Test on 2 simultaneous zones
 w, h = 640, 480
 img = np.zeros((h, w, 3), dtype=np.uint8)
 img, _ = stamp_optical_markers(img, 50, 50, 200, 200, placement='outside')
 img, _ = stamp_optical_markers(img, 300, 250, 550, 400, placement='outside')
+
 rois = detect_all_optical_markers(img, placement='outside')
 print("Detected ROIs:", rois)
 expected1 = (round(50/w, 4), round(50/h, 4), round(200/w, 4), round(200/h, 4))

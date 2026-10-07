@@ -8,17 +8,27 @@ from core.grid_utils import format_center_key
 from core.pipeline import process_media
 from core.metadata_prober import probe_media_file, is_image_filename, IMAGE_EXTENSIONS, writable_image_ext
 from core.logger import LiveDebugger
+
+
 def parse_wave_envelope(raw_env):
+    """Validate a wave editor payload (v1/v2) -> envelope dict or None.
+
+    v2: up to 100 blue (rest) points, optional green (zone) curve
+    (zone_points, same length preferred) and duration seconds for
+    time-varying Zone Priority steering. Returns None for malformed.
+    """
     if not raw_env:
         return None
     try:
         import json as _json
         _env = _json.loads(raw_env) if isinstance(raw_env, str) else raw_env
         _env = _env or {}
+
         def _clean_pts(v):
             pts = [int(round(float(x))) for x in (v or [])]
             pts = [max(100, min(25000, x)) for x in pts]
             return pts if 2 <= len(pts) <= 100 else None
+
         _pts = _clean_pts(_env.get('points'))
         if _pts is None:
             return None
@@ -29,6 +39,8 @@ def parse_wave_envelope(raw_env):
         }
         _zp = _clean_pts(_env.get('zone_points'))
         if _zp is not None:
+            # Resample green to blue length (linear) so per-frame ratio math
+            # always aligns, even if the payload lengths drifted.
             if len(_zp) != len(_pts):
                 _rs = []
                 for _i in range(len(_pts)):
@@ -46,6 +58,7 @@ def parse_wave_envelope(raw_env):
             _dur = None
         if _dur and 0 < _dur < 86400:
             _parsed['duration'] = _dur
+        # Legacy v1 number fields (kept for compat, unused by steering v2).
         for _k in ('zone_target', 'bg_target'):
             try:
                 _v = int(round(float(_env.get(_k)))) if _env.get(_k) is not None else None
@@ -56,7 +69,12 @@ def parse_wave_envelope(raw_env):
         return _parsed
     except Exception:
         return None
+
 class JobManager:
+    """Manages background batch/single media encryption & decryption jobs.
+    Survives browser tab / tunnel disconnects, supports cancellation, and allows
+    re-attaching to ongoing or completed progress.
+    """
     def __init__(self, input_folder, encrypted_folder, decrypted_folder, save_key_fn, resolve_quality_fn, sanitize_sr_fn):
         self.input_folder = input_folder
         self.encrypted_folder = encrypted_folder
@@ -64,9 +82,10 @@ class JobManager:
         self.save_key_fn = save_key_fn
         self.resolve_quality_fn = resolve_quality_fn
         self.sanitize_sr_fn = sanitize_sr_fn
+
         self.lock = threading.Lock()
         self.job_id = None
-        self.status = "idle"                                                        
+        self.status = "idle"  # 'idle', 'running', 'completed', 'cancelled', 'error'
         self.action = None
         self.total_files = 0
         self.current_index = 0
@@ -79,10 +98,12 @@ class JobManager:
         self.cancel_event = threading.Event()
         self.worker_thread = None
         self.task_progress = {}
+
     def start_job(self, action, files_info, form_data):
         with self.lock:
             if self.status == "running" and self.worker_thread and self.worker_thread.is_alive():
                 return False, "A processing job is already in progress.", self.job_id
+
             self.cancel_event.clear()
             self.job_id = f"job_{int(time.time() * 1000)}"
             self.status = "running"
@@ -96,6 +117,7 @@ class JobManager:
             self.keys = []
             self.errors = []
             self.task_progress = {}
+
             self.worker_thread = threading.Thread(
                 target=self._run_job,
                 args=(self.job_id, action, files_info, dict(form_data)),
@@ -103,6 +125,7 @@ class JobManager:
             )
             self.worker_thread.start()
             return True, "Job started", self.job_id
+
     def cancel_job(self):
         with self.lock:
             if self.status == "running":
@@ -112,6 +135,7 @@ class JobManager:
                 LiveDebugger.log("Job Manager", f"Job '{self.job_id}' cancellation requested by user", level="WARNING", module="JOB")
                 return True, "Job cancelled"
             return False, f"Cannot cancel job in state: {self.status}"
+
     def get_status(self):
         with self.lock:
             return {
@@ -127,8 +151,10 @@ class JobManager:
                 "start_time": self.start_time,
                 "end_time": self.end_time
             }
+
     def _run_job(self, job_id, action, files_info, form_data):
         LiveDebugger.log("Job Manager", f"Starting batch job '{job_id}' ({action}) with {len(files_info)} file(s)", level="INFO", module="JOB")
+
         for idx, file_item in enumerate(files_info):
             if self.cancel_event.is_set():
                 LiveDebugger.log("Job Manager", f"Job '{job_id}' stopped due to cancellation before file #{idx+1}", level="WARNING", module="JOB")
@@ -136,16 +162,20 @@ class JobManager:
                     self.status = "cancelled"
                     self.end_time = time.time()
                 return
+
             filename = file_item['filename']
             file_path = file_item['path']
             display_name = file_item.get('display_name', filename)
             base_name, _ = os.path.splitext(filename)
             task_id = f"task_{job_id}_{idx}"
+
             with self.lock:
                 self.current_index = idx + 1
                 self.current_file = display_name
                 self.progress = 0
                 self.task_progress[task_id] = 0
+
+            # Progress sync helper
             def make_progress_dict():
                 class ProgressDict(dict):
                     def __init__(outer_self, job_mgr, tid):
@@ -158,15 +188,20 @@ class JobManager:
                             outer_self.job_mgr.progress = int(v)
                             outer_self.job_mgr.task_progress[outer_self.tid] = int(v)
                 return ProgressDict(self, task_id)
+
             p_dict = make_progress_dict()
+
             try:
+                # Probe file metadata
                 info = probe_media_file(file_path)
                 meta_str = f"Format: {info.get('format', 'unknown')} | Size: {info.get('file_size_mb', 'unknown')} MB"
                 if info.get('resolution'): meta_str += f" | Res: {info.get('resolution')}"
                 if info.get('duration'): meta_str += f" | Dur: {info.get('duration')}"
                 if info.get('video_codec'): meta_str += f" | Video Codec: {info.get('video_codec')}"
                 if info.get('audio_codec'): meta_str += f" | Audio Codec: {info.get('audio_codec')} ({info.get('audio_sr', 'unknown')} Hz)"
+                
                 LiveDebugger.log("Load File", f"Loaded user file '{display_name}' for action '{action}' | Location: {file_path} | Metadata: {meta_str}", level="INFO", module="HTTP")
+
                 raw_aud_sr = form_data.get('aud_sr', '48000')
                 raw_aud_codec = form_data.get('aud_codec', 'aac')
                 options = {
@@ -195,6 +230,11 @@ class JobManager:
                     'use_gpu': form_data.get('use_gpu') in [True, 'true', 'True', '1'],
                     'is_cancelled': lambda: self.cancel_event.is_set()
                 }
+
+                # Spatial mode: 'off' | 'priority' ('zone' = legacy alias of
+                # priority, 'tiles'/unknown = off). NOTE: the job flow never
+                # read this field before, so modes chosen in the UI were
+                # silently dropped — fixed by reading it here.
                 _sm = str(form_data.get('spatial_compression_mode', 'off') or 'off').lower()
                 if _sm == 'zone':
                     _sm = 'priority'
@@ -206,14 +246,25 @@ class JobManager:
                         0, min(100, int(form_data.get('zone_priority_strength', 40))))
                 except Exception:
                     options['zone_priority_strength'] = 40
+
+                # Attach the center source BEFORE auto-quality resolution so
+                # the auto bitrate can probe BOTH videos and pick max().
+                # (The scramble block below re-asserts the same flags; this
+                # early attach is intentionally idempotent.)
                 _center_pre = file_item.get('center_path') or form_data.get('center_path')
                 if form_data.get('center_mode') in [True, 'true', 'True', '1'] and _center_pre and os.path.exists(_center_pre):
                     options['center'] = True
                     options['center_path'] = _center_pre
+
+                # Shaped dynamic wave (editor JSON, v1/v2) -> validated envelope.
+                # Encoded downstream as constrained VBR (target=avg,
+                # ceiling=max). Malformed payloads are ignored (plain bitrate).
                 _parsed_env = parse_wave_envelope(form_data.get('vid_bitrate_envelope'))
                 if _parsed_env:
                     options['vid_bitrate_envelope'] = _parsed_env
+
                 options = self.resolve_quality_fn(file_path, options)
+
                 fn_lower = filename.lower()
                 is_image = is_image_filename(fn_lower) or (info.get('format') == 'image') or (file_item.get('type') == 'image')
                 if is_image:
@@ -228,9 +279,11 @@ class JobManager:
                         out_ext = os.path.splitext(filename)[1].lower()
                 else:
                     out_ext = options['vid_format']
+
                 req_w, req_h = form_data.get('resize_w'), form_data.get('resize_h')
                 if req_w and str(req_w).isdigit(): options['target_w'] = int(req_w)
                 if req_h and str(req_h).isdigit(): options['target_h'] = int(req_h)
+
                 if action == "scramble":
                     options.update({
                         'process_video': form_data.get('enc_video') in [True, 'true', 'True', '1'],
@@ -241,6 +294,8 @@ class JobManager:
                         'export_svg': form_data.get('export_svg') in [True, 'true', 'True', '1', None],
                         'export_timeline': form_data.get('export_timeline') in [True, 'true', 'True', '1', None]
                     })
+
+                    # Parse patch intervals if provided
                     raw_patch = form_data.get('patch_intervals')
                     parsed_patch = []
                     if raw_patch:
@@ -259,6 +314,7 @@ class JobManager:
                                             pass
                         elif isinstance(raw_patch, (list, tuple)):
                             parsed_patch = list(raw_patch)
+
                     if parsed_patch:
                         valid_intervals = []
                         for item in parsed_patch:
@@ -270,6 +326,8 @@ class JobManager:
                                 pass
                         if valid_intervals:
                             options['patch_intervals'] = valid_intervals
+
+                    # Parse spatial patch options (for images and videos)
                     raw_roi = form_data.get('patch_roi')
                     if raw_roi:
                         if isinstance(raw_roi, str):
@@ -282,10 +340,13 @@ class JobManager:
                                     options['patch_roi'] = parts[:4]
                         elif isinstance(raw_roi, (list, tuple)) and len(raw_roi) >= 4:
                             options['patch_roi'] = list(raw_roi)[:4]
+
                     options['roi_invert'] = form_data.get('roi_invert') in [True, 'true', 'True', '1']
                     options['optical_markers'] = (form_data.get('optical_markers') in [True, 'true', 'True', '1'] or
                                                   form_data.get('patch_optical_markers') in [True, 'true', 'True', '1'])
                     options['marker_placement'] = form_data.get('marker_placement') or form_data.get('patch_marker_placement') or 'outside'
+
+                    # Parse multi-segment spatial patch configurations
                     raw_segments = form_data.get('patch_segments')
                     if raw_segments:
                         if isinstance(raw_segments, str):
@@ -296,6 +357,8 @@ class JobManager:
                                 pass
                         elif isinstance(raw_segments, list):
                             options['patch_segments'] = raw_segments
+
+                    # Parse custom audio channels (L/R track replacement uploads)
                     if form_data.get('custom_audio_l'):
                         options['custom_audio_l'] = form_data.get('custom_audio_l')
                     if form_data.get('custom_audio_r'):
@@ -309,24 +372,40 @@ class JobManager:
                         _src_val = form_data.get(f'track_{_ch}_source')
                         if _src_val in ('background', 'center', 'custom'):
                             options[f'track_{_ch}_source'] = _src_val
+
                     sid = str(form_data.get('sid', '')).strip() or secrets.token_hex(4)
                     options['seed'] = hash_str(sid)
                     options['aud_key'] = hash_str(sid)
+
                     center_path = file_item.get('center_path') or form_data.get('center_path')
                     if form_data.get('center_mode') in [True, 'true', 'True', '1'] and center_path and os.path.exists(center_path):
                         options['center'] = True
                         options['center_path'] = center_path
+
                     method_tag = 'ainv'
                     if options['aud_method'] == 'band_scramble':
                         method_tag = 'abs'
                     elif options['aud_method'] == 'combined':
                         method_tag = 'acb'
+
                     patch_tag = ""
                     if options.get('patch_intervals') and not options.get('patch_segments'):
+                        # If optical markers are enabled, video uses visual markers.
+                        # Retain patch timestamps only if audio encryption is also applied.
                         if not options.get('optical_markers') or options.get('process_audio'):
                             patch_str = ",".join(f"{s:.3f}-{e:.3f}" for s, e in options['patch_intervals'])
                             patch_tag = f"|patch:{patch_str}"
+
                     spatial_tag = ""
+                    # Marker/key agreement BEFORE the key is built: the encoder
+                    # stamps the effective placement (inside honored even for
+                    # Zone+Center), so the key must say the same.
+                    # (Old bug: key said opt_ins while the video got outside
+                    # markers — decrypt then searched the wrong placement.)
+                    # Full-layout inside markers (matches images): scramble the
+                    # FULL roi with markers inside the chaos (no unscrambled
+                    # margin). Recorded as |mif| so decrypt uses full blocks +
+                    # inpaint-first; pre-|mif| files keep the legacy shrunk path.
                     if (options.get('optical_markers')
                             and options.get('marker_placement') == 'inside'
                             and (options.get('patch_segments') or options.get('patch_roi'))):
@@ -347,14 +426,18 @@ class JobManager:
                     elif options.get('patch_roi'):
                         rx1, ry1, rx2, ry2 = options['patch_roi']
                         inv_bit = 1 if options.get('roi_invert') else 0
+                        # If optical markers are enabled, do not encode redundant ROI coordinates in the key.
+                        # The marker command |opt_<placement>[_inv] instructs the decryptor to auto-detect the zone.
                         if not options.get('optical_markers'):
                             spatial_tag += f"|roi:{rx1:.3f}_{ry1:.3f}_{rx2:.3f}_{ry2:.3f}_{inv_bit}"
+
                     if options.get('optical_markers'):
                         plc = options.get('marker_placement', 'outside')[:3]
                         inv_sfx = "_inv" if options.get('roi_invert') else ""
                         spatial_tag += f"|opt_{plc}{inv_sfx}"
                         if options.get('marker_inside_full'):
                             spatial_tag += "|mif"
+
                     if options.get('custom_audio_l') or options.get('custom_audio_r'):
                         spatial_tag += "|ca"
                         if not options.get('track_l_enc', True):
@@ -363,6 +446,8 @@ class JobManager:
                             spatial_tag += "|car0"
                     elif (options.get('track_l_source') in ('background', 'center', 'custom')
                             or options.get('track_r_source') in ('background', 'center', 'custom')):
+                        # Explicit non-default channel routing without custom files
+                        # (e.g. swapped L/R): decrypt must split channels per flag.
                         _eff_l = options.get('track_l_source', 'background')
                         _eff_r = options.get('track_r_source', 'background')
                         if _eff_l != 'background' or _eff_r != 'center':
@@ -371,6 +456,7 @@ class JobManager:
                                 spatial_tag += "|cal0"
                             if not options.get('track_r_enc', True):
                                 spatial_tag += "|car0"
+
                     if options['process_video'] and options['process_audio']:
                         key = f"{options['cols']}x{options['rows']}|{sid}{patch_tag}{spatial_tag}"
                         if options.get('center'):
@@ -410,9 +496,11 @@ class JobManager:
                             key += "|em_cnt"
                         elif options['video_encrypt_mode'] == 'both':
                             key += "|em_both"
+
                     out_path = os.path.join(self.encrypted_folder, f"locked_{base_name}{out_ext}")
                     LiveDebugger.log("Start Process", f"Encrypting '{display_name}' -> '{out_path}' | Key: '{key}'", level="INFO", module="JOB")
                     process_media(file_path, out_path, options, p_dict, task_id)
+
                     if self.cancel_event.is_set():
                         if os.path.exists(out_path):
                             try: os.remove(out_path)
@@ -421,7 +509,10 @@ class JobManager:
                             self.status = "cancelled"
                             self.end_time = time.time()
                         return
+
+                    # Always return normal key (key compression completely removed)
                     active_key = key
+
                     generate_qr_enabled = form_data.get('generate_qr') in [True, 'true', 'True', '1']
                     qr_filename = None
                     qr_path = None
@@ -432,10 +523,12 @@ class JobManager:
                             generate_qr_code(active_key, qr_path)
                         except Exception as e:
                             print(f"Warning: QR generation skipped or failed: {e}")
+
                     save_key_enabled = form_data.get('save_key_file') in [True, 'true', 'True', '1', None]
                     key_path = None
                     if save_key_enabled:
                         key_path = self.save_key_fn(os.path.basename(out_path), active_key)
+
                     with self.lock:
                         self.keys.append({
                             "name": display_name,
@@ -446,6 +539,8 @@ class JobManager:
                             "qr_file": qr_filename if (qr_path and os.path.exists(qr_path)) else None,
                             "path": out_path
                         })
+
+
                 elif action == "unscramble":
                     raw_input_key = form_data.get('key', '')
                     raw_key, opt_payload = decompress_key(raw_input_key)
@@ -466,6 +561,7 @@ class JobManager:
                         'track_l_enc': True,
                         'track_r_enc': True
                     })
+
                     def _parse_patch_tag(part_str):
                         content = part_str.split(':', 1)[1] if ':' in part_str else ""
                         parsed = []
@@ -480,6 +576,7 @@ class JobManager:
                                 except ValueError:
                                     pass
                         return parsed
+
                     if raw_key.startswith("|a"):
                         options['process_audio'] = True
                         parts = raw_key.split('|')
@@ -515,10 +612,12 @@ class JobManager:
                         parts = raw_key.split('|')
                         dim = parts[0]
                         seed_str = parts[1] if len(parts) > 1 else "0"
+
                         options['process_video'] = True
                         options['cols'], options['rows'] = map(int, dim.split('x'))
                         options['seed'] = hash_str(seed_str)
                         options['aud_key'] = hash_str(seed_str)
+
                         for part in parts[2:]:
                             if part == 'a':
                                 options['process_audio'] = True
@@ -598,6 +697,8 @@ class JobManager:
                                 if 'inv' in part:
                                     options['roi_invert'] = True
                             elif part == 'mif':
+                                # Full-layout inside markers (matches images):
+                                # descramble the FULL roi, inpaint markers first.
                                 options['marker_inside_full'] = True
                             elif part == 'ca':
                                 options['has_custom_audio'] = True
@@ -613,9 +714,11 @@ class JobManager:
                                 options['has_custom_audio'] = True
                                 options['custom_audio_r_enc'] = False
                                 options['track_r_enc'] = False
+
                     out_path = os.path.join(self.decrypted_folder, f"restored_{base_name}{out_ext}")
                     LiveDebugger.log("Start Process", f"Decrypting '{display_name}' -> '{out_path}' | Key: '{raw_key}'", level="INFO", module="JOB")
                     process_media(file_path, out_path, options, p_dict, task_id)
+
                     if self.cancel_event.is_set():
                         if os.path.exists(out_path):
                             try: os.remove(out_path)
@@ -624,6 +727,7 @@ class JobManager:
                             self.status = "cancelled"
                             self.end_time = time.time()
                         return
+
                     with self.lock:
                         self.keys.append({
                             "name": display_name,
@@ -643,8 +747,10 @@ class JobManager:
                                 "key": raw_key,
                                 "path": c_path
                             })
+
                 with self.lock:
                     self.progress = 100
+
             except Exception as e:
                 if self.cancel_event.is_set():
                     LiveDebugger.log("Job Manager", f"Task #{idx+1} '{display_name}' cancelled by user", level="WARNING", module="JOB")
@@ -652,6 +758,7 @@ class JobManager:
                         self.status = "cancelled"
                         self.end_time = time.time()
                     return
+
                 tb = traceback.format_exc()
                 diag = LiveDebugger.analyze_exception(e, module_name="JOB", func_name="_run_job")
                 LiveDebugger.log("Process Error", f"Error on '{display_name}': {str(e)}", level="ERROR", module="JOB")
@@ -662,6 +769,7 @@ class JobManager:
                         "traceback": tb,
                         "diagnostic": diag
                     })
+
         with self.lock:
             if self.cancel_event.is_set():
                 self.status = "cancelled"
@@ -671,4 +779,5 @@ class JobManager:
                 self.status = "completed"
             self.end_time = time.time()
             self.progress = 100
+
         LiveDebugger.log("Job Manager", f"Job '{job_id}' finished with status '{self.status}'", level="INFO", module="JOB")

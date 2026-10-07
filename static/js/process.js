@@ -1,8 +1,10 @@
 let activeJobPollingInterval = null;
 let currentJobStartTime = null;
+
 async function startBatch(action) {
     let rawFiles = [];
     let isVaultSelection = false;
+    
     if (action === 'scramble') {
         if (activeMediaType === 'video') {
             if (upload.files && upload.files.length > 0) {
@@ -46,6 +48,7 @@ async function startBatch(action) {
         if (!rawFiles.length) return alert("Select encrypted files to decrypt first!");
         if (!document.getElementById('decKey').value.trim()) return alert("Please enter the decryption key!");
     }
+    
     const progBox = document.getElementById('progBox');
     const spinner = document.getElementById('progSpinner');
     const cancelCont = document.getElementById('progCancelContainer');
@@ -55,6 +58,7 @@ async function startBatch(action) {
     const progTitle = document.getElementById('progTitle');
     const progFill = document.getElementById('progFill');
     const progText = document.getElementById('progText');
+
     if (progBox) progBox.style.display = 'block';
     if (spinner) {
         spinner.style.display = 'inline-block';
@@ -81,10 +85,17 @@ async function startBatch(action) {
     }
     if (progText) progText.innerText = '0%';
     if (progTitle) progTitle.innerText = `Starting batch job (${rawFiles.length} file(s))...`;
+
     currentJobStartTime = Date.now();
+
     const fd = new FormData();
     fd.append('action', action);
+
+    // Developer mode gates dev outputs (SVG grids, QR codes, timeline
+    // exports): with dev mode off they are forced off regardless of the
+    // (hidden) checkboxes. Falls back to legacy behavior if ui.js is absent.
     const devMode = (typeof isDevMode === 'function') ? isDevMode() : true;
+
     if (isVaultSelection) {
         fd.append('vault_filenames', JSON.stringify(rawFiles));
         let chosenFolder = 'input';
@@ -101,15 +112,18 @@ async function startBatch(action) {
             fd.append('files', f);
         });
     }
+
             if (action === 'scramble') {
         if (activeMediaType === 'video') {
             const fmtVal = document.getElementById('v_fmt').value;
+            // Keep in sync with IMAGE_EXTENSIONS in core/metadata_prober.py.
             const IMG_RE = /\.(jpe?g|jpe|jfif|jif|jfi|png|webp|avif|bmp|tiff?|gif|ico)$/i;
             const isInputImage = rawFiles.length > 0 && (
                 typeof rawFiles[0] === 'string'
                     ? IMG_RE.test(rawFiles[0])
                     : (rawFiles[0].type ? rawFiles[0].type.startsWith('image/') : IMG_RE.test(rawFiles[0].name))
             );
+
             if (isInputImage) {
                 let imgFmt = fmtVal;
                 if (imgFmt === 'auto' || ['.mp4', '.mkv', '.avi', '.webm', '.mov'].includes(imgFmt)) {
@@ -127,16 +141,22 @@ async function startBatch(action) {
             fd.append('rows', document.getElementById('rows').value);
             fd.append('sid', document.getElementById('sid').value); 
             fd.append('vid_codec', document.getElementById('v_codec').value);
+            
             const isAutoBitrate = document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : true;
             fd.append('vid_bitrate', isAutoBitrate ? 'auto' : document.getElementById('v_bit_slider').value + 'k');
+            // Shaped dynamic wave (🌊 editor): {points:[start,mid,end],avg,max}.
+            // Sent alongside vid_bitrate; the backend encodes constrained VBR
+            // (target=avg, ceiling=max). Cleared with 🧹 in the wave modal.
             const waveEnv = document.getElementById('vid_bitrate_envelope');
             if (waveEnv && waveEnv.value) {
                 fd.append('vid_bitrate_envelope', waveEnv.value);
             }
+            
             const spatialMode = document.getElementById('v_spatial_mode') ? document.getElementById('v_spatial_mode').value : 'off';
             fd.append('spatial_compression_mode', spatialMode);
             const zoneStrength = document.getElementById('zone_priority_strength');
             fd.append('zone_priority_strength', zoneStrength ? zoneStrength.value : '40');
+            
             fd.append('vid_preset', document.getElementById('v_preset').value);
             const scrambleTuneEl = document.getElementById('scrambleTune');
             fd.append('scramble_tune', scrambleTuneEl && scrambleTuneEl.checked ? 'on' : 'off');
@@ -165,6 +185,7 @@ async function startBatch(action) {
             const volCenterElem = document.getElementById('vol_factor_center_slider');
             const volBgVal = volBgElem ? (parseFloat(volBgElem.value) / 100.0) : 1.0;
             const volCenterVal = volCenterElem ? (parseFloat(volCenterElem.value) / 100.0) : 1.0;
+
             fd.append('vol_factor', volBgVal);
             fd.append('vol_factor_bg', volBgVal);
             fd.append('vol_factor_center', volCenterVal);
@@ -181,6 +202,12 @@ async function startBatch(action) {
             fd.append('use_gpu', document.getElementById('useGpu') ? document.getElementById('useGpu').checked : false);
             fd.append('save_key_file', document.getElementById('saveKeyFile') ? document.getElementById('saveKeyFile').checked : true);
             fd.append('generate_qr', devMode && (document.getElementById('generateQr') ? document.getElementById('generateQr').checked : false));
+
+            // Per-channel audio routing matrix (L/R tracks in center mode):
+            // each channel resolves from background / center / custom audio.
+            // Sources are only sent when custom files are involved or the
+            // routing differs from the legacy dual-track default
+            // (L=background, R=center), keeping legacy jobs byte-identical.
             if (typeof getCustomAudioFiles === 'function') {
                 const customAud = getCustomAudioFiles();
                 const useRouted = !!(customAud.fileL || customAud.fileR || customAud.vaultL || customAud.vaultR ||
@@ -199,11 +226,15 @@ async function startBatch(action) {
                 if (useRouted) {
                     if (customAud.srcL) fd.append('track_l_source', customAud.srcL);
                     if (customAud.srcR) fd.append('track_r_source', customAud.srcR);
+                    // Per-channel encrypt toggles rule in routed mode; the
+                    // legacy aud_track selector would double-filter channels.
                     fd.set('aud_track', 'both');
                 }
                 fd.append('custom_audio_l_enc', customAud.encL ? 'true' : 'false');
                 fd.append('custom_audio_r_enc', customAud.encR ? 'true' : 'false');
             }
+
+            // Optional Selective Spatial Zones & Timeline Patches
             const enableSpatial = document.getElementById('enableSpatialZones') ? document.getElementById('enableSpatialZones').checked : false;
             if (enableSpatial && typeof getSpatialPatchConfig === 'function') {
                 const patchCfg = getSpatialPatchConfig();
@@ -249,6 +280,7 @@ async function startBatch(action) {
                 const y1 = parseFloat(document.getElementById('imgCoordY1').value) || 0.20;
                 const x2 = parseFloat(document.getElementById('imgCoordX2').value) || 0.80;
                 const y2 = parseFloat(document.getElementById('imgCoordY2').value) || 0.80;
+
                 fd.append('patch_roi', JSON.stringify([x1, y1, x2, y2]));
                 fd.append('roi_invert', document.getElementById('imgRoiInvert').checked ? 'true' : 'false');
                 fd.append('optical_markers', document.getElementById('imgOpticalMarkers').checked ? 'true' : 'false');
@@ -285,6 +317,7 @@ async function startBatch(action) {
         fd.append('aud_bitrate', 'auto');
         fd.append('use_gpu', document.getElementById('useGpu') ? document.getElementById('useGpu').checked : false);
     }
+
     try {
         const res = await fetch('/api/job/start', { method: 'POST', body: fd });
         const data = await res.json();
@@ -301,6 +334,7 @@ async function startBatch(action) {
         openDebugger("Network error submitting batch job", err.stack || err.toString());
     }
 }
+
 function startJobPolling() {
     if (activeJobPollingInterval) {
         clearInterval(activeJobPollingInterval);
@@ -308,6 +342,7 @@ function startJobPolling() {
     activeJobPollingInterval = setInterval(pollJobStatus, 500);
     pollJobStatus();
 }
+
 async function pollJobStatus() {
     try {
         const res = await fetch('/api/job/status');
@@ -317,8 +352,10 @@ async function pollJobStatus() {
         console.warn("Polling status error:", err);
     }
 }
+
 function renderJobState(data) {
     if (!data || data.status === 'idle') return;
+
     const progBox = document.getElementById('progBox');
     const spinner = document.getElementById('progSpinner');
     const cancelCont = document.getElementById('progCancelContainer');
@@ -327,7 +364,9 @@ function renderJobState(data) {
     const progTitle = document.getElementById('progTitle');
     const progFill = document.getElementById('progFill');
     const progText = document.getElementById('progText');
+
     if (progBox) progBox.style.display = 'block';
+
     if (data.status === 'running') {
         if (spinner) {
             spinner.style.display = 'inline-block';
@@ -339,12 +378,14 @@ function renderJobState(data) {
             cancelBtn.innerText = '✕ Cancel Processing';
         }
         if (statusMsg) statusMsg.style.display = 'none';
+
         if (progTitle) {
             const curIdx = data.current_index || 1;
             const tot = data.total_files || 1;
             const curFile = data.current_file || '';
             progTitle.innerText = `Processing ${curIdx}/${tot}: ${curFile}`;
         }
+
         const pct = parseInt(data.progress) || 0;
         if (progFill) {
             progFill.style.width = `${pct}%`;
@@ -363,9 +404,11 @@ function renderJobState(data) {
             }
             progText.innerText = display;
         }
+
         if (data.keys && data.keys.length > 0) {
             renderKeysOutput(data.keys);
         }
+
     } else if (data.status === 'completed') {
         if (activeJobPollingInterval) {
             clearInterval(activeJobPollingInterval);
@@ -376,6 +419,7 @@ function renderJobState(data) {
             spinner.style.animationPlayState = 'paused';
         }
         if (cancelCont) cancelCont.style.display = 'none';
+
         if (progTitle) progTitle.innerText = `All Files Processed! (${data.total_files} file(s))`;
         if (progFill) {
             progFill.style.width = '100%';
@@ -383,6 +427,7 @@ function renderJobState(data) {
             progFill.classList.add('complete');
         }
         if (progText) progText.innerText = '100%';
+
         if (statusMsg) {
             statusMsg.style.display = 'block';
             statusMsg.style.background = '#e8f5e9';
@@ -390,12 +435,16 @@ function renderJobState(data) {
             statusMsg.style.border = '1px solid #c8e6c9';
             statusMsg.innerText = '✅ Processing complete!';
         }
+
         if (data.keys && data.keys.length > 0) {
             renderKeysOutput(data.keys);
         }
+
+        // Auto refresh vault folders if vault tab is active or switch
         if (typeof loadVaultFiles === 'function') {
             loadVaultFiles(data.action === 'scramble' ? 'encrypted' : 'decrypted');
         }
+
     } else if (data.status === 'cancelled') {
         if (activeJobPollingInterval) {
             clearInterval(activeJobPollingInterval);
@@ -406,12 +455,14 @@ function renderJobState(data) {
             spinner.style.animationPlayState = 'paused';
         }
         if (cancelCont) cancelCont.style.display = 'none';
+
         if (progTitle) progTitle.innerText = `Processing Cancelled`;
         if (progFill) {
             progFill.classList.remove('indeterminate');
             progFill.classList.remove('complete');
         }
         if (progText) progText.innerText = 'Cancelled';
+
         if (statusMsg) {
             statusMsg.style.display = 'block';
             statusMsg.style.background = '#ffebee';
@@ -419,12 +470,15 @@ function renderJobState(data) {
             statusMsg.style.border = '1px solid #ffcdd2';
             statusMsg.innerText = '⚠️ Processing has been cancelled.';
         }
+
         if (data.keys && data.keys.length > 0) {
             renderKeysOutput(data.keys);
         }
+
         if (typeof loadVaultFiles === 'function') {
             loadVaultFiles(data.action === 'scramble' ? 'encrypted' : 'decrypted');
         }
+
     } else if (data.status === 'error') {
         if (activeJobPollingInterval) {
             clearInterval(activeJobPollingInterval);
@@ -435,6 +489,7 @@ function renderJobState(data) {
             spinner.style.animationPlayState = 'paused';
         }
         if (cancelCont) cancelCont.style.display = 'none';
+
         if (progTitle) progTitle.innerText = `Processing Error`;
         if (statusMsg) {
             statusMsg.style.display = 'block';
@@ -443,12 +498,14 @@ function renderJobState(data) {
             statusMsg.style.border = '1px solid #ffcdd2';
             statusMsg.innerText = '❌ An error occurred during processing.';
         }
+
         if (data.errors && data.errors.length > 0) {
             const err = data.errors[0];
             openDebugger(`Error processing ${err.file}: ${err.error}`, err.traceback, err.diagnostic);
         }
     }
 }
+
 async function cancelProcessing() {
     const cancelBtn = document.getElementById('progCancelBtn');
     if (cancelBtn) {
@@ -456,6 +513,7 @@ async function cancelProcessing() {
         cancelBtn.innerText = '⏳ Cancelling...';
         cancelBtn.style.opacity = '0.7';
     }
+
     try {
         const res = await fetch('/api/job/cancel', { method: 'POST' });
         const data = await res.json();
@@ -472,23 +530,29 @@ async function cancelProcessing() {
         console.error("Cancel request failed:", err);
     }
 }
+
 function renderKeysOutput(keys) {
     const keysOut = document.getElementById('keysOutput');
     if (!keysOut || !keys || !keys.length) return;
+
     keysOut.style.display = 'block';
     keysOut.innerHTML = '';
+
     keys.forEach(item => {
         const itemName = item.file || item.name || '';
         const keyVal = item.key || '';
         const outFile = item.out_file || '';
         const qrFile = item.qr_file || '';
         const isK85 = keyVal.startsWith('K85:');
+
         const k85Badge = isK85 
             ? `<span style="font-size: 10px; background: #ede9fe; color: #6d28d9; padding: 1px 5px; border-radius: 3px; font-weight: 700; border: 1px solid #ddd6fe;" title="Algorithmic Base85 Compressed Key">K85</span>` 
             : '';
+
         const qrBtn = qrFile ? `
             <a href="/api/vault/download?folder=output&filename=${encodeURIComponent(qrFile)}" download="${qrFile}" class="ios-btn-small" style="text-decoration: none; padding: 2px 6px; font-size: 11px; margin: 0; background: #e8f5e9; color: #2e7d32; border: 1px solid #81c784; cursor: pointer; border-radius: 4px; font-weight: bold; display: inline-flex; align-items: center; gap: 2px;" title="Download Key QR Code">📱 QR</a>
         ` : '';
+
         keysOut.innerHTML += `
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; background: rgba(0,0,0,0.03); padding: 5px 8px; border-radius: 6px; border: 1px solid #e1e4e8; min-width: 0; overflow: hidden; box-sizing: border-box;">
                 <span style="font-weight: 500; color: #333; font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; word-break: break-all; overflow-wrap: anywhere;" title="${itemName}">${itemName}</span>
@@ -503,22 +567,27 @@ function renderKeysOutput(keys) {
         `;
     });
 }
+
 function onDecKeyChanged(val) {
     val = (val || '').trim();
     const k85Badge = document.getElementById('decKeyK85Badge');
     const modeBadge = document.getElementById('decKeyModeBadge');
     const patchBadge = document.getElementById('decKeyPatchBadge');
     const spatialBadge = document.getElementById('decKeySpatialBadge');
+
     if (k85Badge) k85Badge.classList.toggle('hidden', !val.startsWith('K85:'));
     if (modeBadge) modeBadge.classList.toggle('hidden', !val.includes('|c') && !val.includes('|ext'));
     if (patchBadge) patchBadge.classList.toggle('hidden', !val.includes('|p:') && !val.includes('|psegs:'));
     if (spatialBadge) spatialBadge.classList.toggle('hidden', !val.includes('|roi:') && !val.includes('|psegs:'));
 }
+
 async function handleQrFileUpload(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
+
     const fd = new FormData();
     fd.append('qr_image', file);
+
     try {
         const res = await fetch('/api/scan_qr', { method: 'POST', body: fd });
         const data = await res.json();
@@ -538,12 +607,14 @@ async function handleQrFileUpload(event) {
         event.target.value = '';
     }
 }
+
 async function triggerAutoDetectMarkers() {
     const decryptUpload = document.getElementById('decryptUpload');
     let file = null;
     if (decryptUpload && decryptUpload.files && decryptUpload.files.length > 0) {
         file = decryptUpload.files[0];
     }
+
     if (!file && typeof selectedVaultMedia !== 'undefined' && selectedVaultMedia.decrypt && selectedVaultMedia.decrypt.length > 0) {
         const filename = selectedVaultMedia.decrypt[0];
         const folder = selectedVaultMedia.decryptFolder || 'encrypted';
@@ -552,14 +623,17 @@ async function triggerAutoDetectMarkers() {
         fd.append('vault_folder', folder);
         return doDetectOpticalMarkers(fd);
     }
+
     if (!file) {
         alert("Please select or upload an encrypted media file in Step 1 first.");
         return;
     }
+
     const fd = new FormData();
     fd.append('file', file);
     return doDetectOpticalMarkers(fd);
 }
+
 async function doDetectOpticalMarkers(fd) {
     try {
         const res = await fetch('/api/detect_optical_markers', { method: 'POST', body: fd });
@@ -583,6 +657,8 @@ async function doDetectOpticalMarkers(fd) {
         alert("Error detecting optical markers: " + err.message);
     }
 }
+
+// Auto-check for running or recently completed jobs when page loads / reconnects
 document.addEventListener('DOMContentLoaded', () => {
     fetch('/api/job/status').then(r => r.json()).then(data => {
         if (data && data.status && data.status !== 'idle') {
@@ -593,6 +669,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }).catch(() => {});
 });
+
 function openDebugger(errorMessage, tracebackText, diagnostic) {
     const errorEl = document.getElementById('debugErrorMessage');
     const locationEl = document.getElementById('debugLocation');
@@ -603,19 +680,25 @@ function openDebugger(errorMessage, tracebackText, diagnostic) {
     const localsBody = document.getElementById('debugLocalsBody');
     const tbEl = document.getElementById('debugTraceback');
     const modal = document.getElementById('debugModal');
+
     const diag = diagnostic || {};
+
     if (errorEl) {
         errorEl.innerText = diag.error_type ? `${diag.error_type}: ${diag.error_message || errorMessage}` : (errorMessage || 'Unknown Error');
     }
+    
     if (locationEl) {
         locationEl.innerText = diag.file ? `Location: ${diag.file}:${diag.line || 0} in ${diag.function || 'unknown'}()` : 'Location: Unknown';
     }
+
     if (rootCauseEl) {
         rootCauseEl.innerText = diag.root_cause || 'Process execution interrupted by runtime exception.';
     }
+
     if (helpEl) {
         helpEl.innerText = diag.suggestion || 'Inspect the stack traceback and local variables below for details.';
     }
+
     if (snippetEl && snippetContainer) {
         if (diag.code_line && diag.code_line !== 'N/A') {
             snippetEl.innerText = `Line ${diag.line}: ${diag.code_line}`;
@@ -624,6 +707,7 @@ function openDebugger(errorMessage, tracebackText, diagnostic) {
             snippetContainer.style.display = 'none';
         }
     }
+
     if (localsBody) {
         localsBody.innerHTML = '';
         const vars = diag.local_vars || {};
@@ -639,22 +723,29 @@ function openDebugger(errorMessage, tracebackText, diagnostic) {
             localsBody.innerHTML = '<tr><td colspan="2" style="padding: 8px 10px; color: #888;">No local variables captured at failure.</td></tr>';
         }
     }
+
     if (tbEl) {
         tbEl.innerText = diag.traceback || tracebackText || "No Python traceback was generated.";
     }
+
     if (modal) modal.classList.remove('hidden');
 }
+
+
 function closeDebugger() {
     const modal = document.getElementById('debugModal');
     if (modal) modal.classList.add('hidden');
 }
+
 function copyTracebackToClipboard() {
     const errorEl = document.getElementById('debugErrorMessage');
     const tbEl = document.getElementById('debugTraceback');
     const copyBtn = document.getElementById('copyDebugLogBtn');
+    
     const errorText = errorEl ? errorEl.innerText : '';
     const tracebackText = tbEl ? tbEl.innerText : '';
     const log = `Error: ${errorText}\n\nTraceback:\n${tracebackText}`;
+    
     navigator.clipboard.writeText(log).then(() => {
         if (copyBtn) {
             const originalText = copyBtn.innerHTML;
@@ -668,6 +759,7 @@ function copyTracebackToClipboard() {
         alert('Failed to copy traceback to clipboard.');
     });
 }
+
 async function saveKeyToFile(key, filename, btn) {
     if (!filename) {
         alert("Key saved automatically next to the encrypted file.");
@@ -697,6 +789,7 @@ async function saveKeyToFile(key, filename, btn) {
         alert("Failed to save key file.");
     }
 }
+
 function copyKeyToClipboard(text, btn) {
     navigator.clipboard.writeText(text).then(() => {
         const originalText = btn.innerHTML;
@@ -713,6 +806,7 @@ function copyKeyToClipboard(text, btn) {
         alert('Failed to copy key to clipboard.');
     });
 }
+
 async function startBatchWithFormData(fd, action) {
     const progBox = document.getElementById('progBox');
     const spinner = document.getElementById('progSpinner');
@@ -723,6 +817,7 @@ async function startBatchWithFormData(fd, action) {
     const progTitle = document.getElementById('progTitle');
     const progFill = document.getElementById('progFill');
     const progText = document.getElementById('progText');
+
     if (progBox) progBox.style.display = 'block';
     if (spinner) {
         spinner.style.display = 'inline-block';
@@ -749,7 +844,9 @@ async function startBatchWithFormData(fd, action) {
     }
     if (progText) progText.innerText = '0%';
     if (progTitle) progTitle.innerText = `Starting batch job...`;
+
     currentJobStartTime = Date.now();
+
     try {
         const res = await fetch('/api/job/start', { method: 'POST', body: fd });
         const data = await res.json();

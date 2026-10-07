@@ -1,8 +1,11 @@
+/* Visual Layout & Audio Track Timeline Preview Manager */
 
-let activePreviewTarget = 'external'; 
-let durBg = 10;      
-let durCenter = 3;   
+let activePreviewTarget = 'external'; // 'external' (blue background) or 'center' (red overlay)
+let durBg = 10;      // Background video duration in seconds (default demo)
+let durCenter = 3;   // Center video duration in seconds (default demo)
+
 function initVisualPreview() {
+    // Bind change listeners to settings dropdowns & inputs
     ['center_size', 'img_center_size'].forEach(id => {
         const slider = document.getElementById(id);
         if (slider) {
@@ -15,30 +18,36 @@ function initVisualPreview() {
         }
     });
     syncCenterSizeControls();
+
     const videoEncModeSelect = document.getElementById('video_encrypt_mode') || document.getElementById('img_video_encrypt_mode');
     if (videoEncModeSelect) {
         videoEncModeSelect.addEventListener('change', function() {
             syncEncBadgesFromMode(this.value);
         });
     }
+
     const outerEndSelect = document.getElementById('outer_end_action');
     if (outerEndSelect) {
         outerEndSelect.addEventListener('change', function() {
             updateTimelineVisualization();
         });
     }
+
     const centerEndSelect = document.getElementById('center_end_action');
     if (centerEndSelect) {
         centerEndSelect.addEventListener('change', function() {
             updateTimelineVisualization();
         });
     }
+
     const audMethodSelect = document.getElementById('v_aud_method') || document.getElementById('aud_method');
     if (audMethodSelect) {
         audMethodSelect.addEventListener('change', function() {
             updateTimelineVisualization();
         });
     }
+
+    // Media file upload duration probers
     const mediaUpload = document.getElementById('mediaUpload');
     if (mediaUpload) {
         mediaUpload.addEventListener('change', function(e) {
@@ -50,6 +59,7 @@ function initVisualPreview() {
             }
         });
     }
+
     const centerVideoUpload = document.getElementById('centerVideoUpload');
     if (centerVideoUpload) {
         centerVideoUpload.addEventListener('change', function(e) {
@@ -61,15 +71,20 @@ function initVisualPreview() {
             }
         });
     }
+
+    // Initial render
     updateTimelineVisualization();
 }
+
 function selectPreviewTarget(target, event) {
     if (event) event.stopPropagation();
+
     activePreviewTarget = target;
     const bgBox = document.getElementById('previewBgBox');
     const centerBox = document.getElementById('previewCenterBox');
     const badge = document.getElementById('previewTargetBadge');
     const modeSelect = document.getElementById('video_encrypt_mode') || document.getElementById('img_video_encrypt_mode');
+
     if (target === 'center') {
         if (centerBox) centerBox.classList.add('active-selection');
         if (bgBox) bgBox.classList.remove('active-selection');
@@ -98,6 +113,9 @@ function selectPreviewTarget(target, event) {
         }
     }
 }
+
+// Normalize any center-size representation to slider units N in [1, 3].
+// Accepts legacy labels ('1/4', '2/4', '3/4'), plain numbers, and 'N/4'.
 function normalizeCenterValueJS(val) {
     let n = 1.0;
     if (typeof val === 'number' && isFinite(val)) {
@@ -117,10 +135,12 @@ function normalizeCenterValueJS(val) {
     if (!isFinite(n)) n = 1.0;
     return Math.max(1, Math.min(3, n));
 }
+
 function centerValueToLinearPct(val) {
     const n = normalizeCenterValueJS(val);
     return Math.sqrt(n / 4.0) * 100.0;
 }
+
 function updateCenterOverlaySize(val) {
     const centerBox = document.getElementById('previewCenterBox');
     if (centerBox) {
@@ -135,11 +155,15 @@ function updateCenterOverlaySize(val) {
     const imgBadge = document.getElementById('imgCenterSizeVal');
     if (imgBadge) imgBadge.innerText = n.toFixed(2);
 }
+
+// Slider handler shared by the video and image center-size sliders.
 function onCenterSizeSlider(val, isImage) {
     const slider = document.getElementById(isImage ? 'img_center_size' : 'center_size');
     if (slider && slider.value !== String(val)) slider.value = val;
     updateCenterOverlaySize(val);
 }
+
+// Normalize legacy stored values ('1/4' etc.) into the sliders on load.
 function syncCenterSizeControls() {
     ['center_size', 'img_center_size'].forEach(id => {
         const el = document.getElementById(id);
@@ -148,10 +172,13 @@ function syncCenterSizeControls() {
     const active = document.getElementById('center_size') || document.getElementById('img_center_size');
     if (active) updateCenterOverlaySize(active.value);
 }
+
 function syncEncBadgesFromMode(mode) {
     const bgBadge = document.getElementById('bgEncStatusBadge');
     const centerBadge = document.getElementById('centerEncStatusBadge');
+
     if (!bgBadge || !centerBadge) return;
+
     if (mode === 'center') {
         bgBadge.innerText = '🔓 Untouched';
         bgBadge.style.color = '#333';
@@ -169,10 +196,12 @@ function syncEncBadgesFromMode(mode) {
         centerBadge.style.color = '#333';
     }
 }
+
 let customTrackLFile = null;
 let customTrackRFile = null;
-let customTrackLVault = null; 
+let customTrackLVault = null; // {name, folder} when picked from vault
 let customTrackRVault = null;
+
 function onCustomTrackFileSelected(channel, file) {
     if (!file) return;
     if (channel === 'L') {
@@ -192,6 +221,7 @@ function onCustomTrackFileSelected(channel, file) {
         }
     });
 }
+
 function setCustomTrackVault(channel, filename, folder) {
     const nameElem = document.getElementById(channel === 'L' ? 'trackLCustomName' : 'trackRCustomName');
     if (channel === 'L') {
@@ -208,6 +238,7 @@ function setCustomTrackVault(channel, filename, folder) {
     if (nameElem) nameElem.innerText = `📁 Vault [${folder || 'input'}]: ${filename}`;
     updateTimelineVisualization();
 }
+
 function getCustomAudioFiles() {
     const srcL = document.getElementById('trackLSourceSelect') ? document.getElementById('trackLSourceSelect').value : '';
     const srcR = document.getElementById('trackRSourceSelect') ? document.getElementById('trackRSourceSelect').value : '';
@@ -224,10 +255,12 @@ function getCustomAudioFiles() {
         encR: encR
     };
 }
+
 function updateTrackRouting(channel, source) {
     const selectElem = document.getElementById(`track${channel}SourceSelect`);
     const badgeElem = document.getElementById(`badge${channel}`);
     const customRow = document.getElementById(`track${channel}CustomRow`);
+
     if (selectElem && badgeElem) {
         if (source === 'center') {
             selectElem.className = 'track-source-select red-source';
@@ -240,20 +273,27 @@ function updateTrackRouting(channel, source) {
             badgeElem.className = 'channel-badge blue-badge';
         }
     }
+
     if (customRow) {
         customRow.style.display = (source === 'custom') ? 'flex' : 'none';
     }
+
+    // Auto sync dual_track backend setting if L and R sources differ
     const sourceL = document.getElementById('trackLSourceSelect') ? document.getElementById('trackLSourceSelect').value : 'background';
     const sourceR = document.getElementById('trackRSourceSelect') ? document.getElementById('trackRSourceSelect').value : 'center';
+
     const dualTrackElem = document.getElementById('dual_track');
     if (dualTrackElem) {
         dualTrackElem.checked = (sourceL !== sourceR);
     }
+
     updateTimelineVisualization();
 }
+
 function updateTrackEncState(channel, isEncrypted) {
     updateTimelineVisualization();
 }
+
 function probeFileDuration(file, callback) {
     const url = URL.createObjectURL(file);
     const media = document.createElement(file.type.startsWith('audio') ? 'audio' : 'video');
@@ -268,6 +308,7 @@ function probeFileDuration(file, callback) {
     };
     media.src = url;
 }
+
 function updateTimelineVisualization() {
     const audioWrapper = document.getElementById('audioTimelineWrapper');
     if (typeof activeMediaType !== 'undefined' && activeMediaType === 'image') {
@@ -276,33 +317,45 @@ function updateTimelineVisualization() {
     } else {
         if (audioWrapper) audioWrapper.style.display = 'block';
     }
+
     const centerEndSelect = document.getElementById('center_end_action');
-    const centerEndAction = centerEndSelect ? centerEndSelect.value : 'loop'; 
+    const centerEndAction = centerEndSelect ? centerEndSelect.value : 'loop'; // 'loop', 'freeze', 'black', 'stop'
+
     const outerEndSelect = document.getElementById('outer_end_action');
-    const outerEndAction = outerEndSelect ? outerEndSelect.value : 'stop'; 
+    const outerEndAction = outerEndSelect ? outerEndSelect.value : 'stop'; // 'stop', 'freeze', 'black', 'loop'
+
     const maxDuration = Math.max(durBg, durCenter, 1);
+
     renderTrackBar('L', 'background', durBg, durCenter, maxDuration, outerEndAction, centerEndAction);
     renderTrackBar('R', 'center', durBg, durCenter, maxDuration, outerEndAction, centerEndAction);
 }
+
 function renderTrackBar(chName, source, durBgVal, durCenterVal, totalMaxDur, outerEndAction, centerEndAction) {
     const activeSeg = document.getElementById(`track${chName}ActiveSeg`);
     const activeLabel = document.getElementById(`track${chName}ActiveLabel`);
     const endSeg = document.getElementById(`track${chName}EndSeg`);
     const endLabel = document.getElementById(`track${chName}EndLabel`);
     const ticks = document.getElementById(`track${chName}Ticks`);
+
     if (!activeSeg || !activeLabel || !endSeg || !endLabel || !ticks) return;
+
     ticks.innerHTML = '';
+
     const trackDur = (source === 'center') ? durCenterVal : durBgVal;
     const trackEndAction = (source === 'center') ? centerEndAction : outerEndAction;
     const remDur = totalMaxDur - trackDur;
     const isCenter = (source === 'center');
+
+    // Active Video Segment (solid Blue or solid Red)
     activeSeg.className = 'track-active-segment';
     if (isCenter) {
         activeSeg.classList.add('red-segment');
     } else {
         activeSeg.classList.add('blue-segment');
     }
+
     const titleText = isCenter ? 'Center Overlay Video' : 'Background Video';
+
     if (remDur <= 0) {
         activeSeg.classList.add('full-width');
         activeSeg.style.width = '100%';
@@ -312,11 +365,14 @@ function renderTrackBar(chName, source, durBgVal, durCenterVal, totalMaxDur, out
     } else {
         const activePct = Math.max(10, Math.min(90, Math.round((trackDur / totalMaxDur) * 100)));
         const endPct = 100 - activePct;
+
         activeSeg.style.width = activePct + '%';
         activeLabel.innerText = `${titleText} (${trackDur}s)`;
+
         endSeg.classList.remove('hidden');
         endSeg.style.width = endPct + '%';
         endSeg.className = 'track-end-segment';
+
         if (trackEndAction === 'loop') {
             endSeg.classList.add('loop-end');
             endLabel.innerText = `Looped (+${remDur}s)`;
@@ -330,11 +386,13 @@ function renderTrackBar(chName, source, durBgVal, durCenterVal, totalMaxDur, out
         } else if (trackEndAction === 'black') {
             endSeg.classList.add('black-end');
             endLabel.innerText = `Black Screen (+${remDur}s)`;
-        } else { 
+        } else { // 'stop'
             endSeg.classList.add('stop-end');
             endLabel.innerText = `Ended (+${remDur}s)`;
         }
     }
+
+    // Render second tick marks
     const stepCount = Math.min(totalMaxDur, 10);
     for (let i = 1; i <= stepCount; i++) {
         const tick = document.createElement('div');
@@ -342,18 +400,25 @@ function renderTrackBar(chName, source, durBgVal, durCenterVal, totalMaxDur, out
         ticks.appendChild(tick);
     }
 }
+
+// Volume Label Update Helpers
 function updateVolBgLabel(val) {
     const valElem = document.getElementById('vol_factor_bg_val');
     if (valElem) valElem.innerText = val + '%';
+
+    // Sync with main single volume slider if present
     const mainVolSlider = document.getElementById('vol_factor_slider');
     const mainVolVal = document.getElementById('vol_factor_val');
     if (mainVolSlider) mainVolSlider.value = val;
     if (mainVolVal) mainVolVal.innerText = val + '%';
 }
+
 function updateVolCenterLabel(val) {
     const valElem = document.getElementById('vol_factor_center_val');
     if (valElem) valElem.innerText = val + '%';
 }
+
+// Auto-initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     initVisualPreview();
 });

@@ -5,13 +5,16 @@ import os
 import cv2
 import numpy as np
 import qrcode
+
 def clean_key(raw_key):
     if not raw_key: return ""
     return raw_key.replace("KEY:", "").strip()
+
 def hash_str(s):
     h = 5381
     for c in s: h = (h * 33 + ord(c)) & 0xFFFFFFFF
     return h
+
 def seeded_shuffle(arr, seed):
     rng_state = seed & 0xFFFFFFFF
     for i in range(len(arr) - 1, 0, -1):
@@ -19,9 +22,22 @@ def seeded_shuffle(arr, seed):
         r = rng_state % (i + 1)
         arr[i], arr[r] = arr[r], arr[i]
     return arr
+
+# ── Key Compression & QR Code Utilities ─────────────────────────────────────
+
 def compress_key(key_str, extra_payload=None):
+    """
+    Key compression has been completely removed as requested.
+    Always returns the clean, standard canonical key string.
+    """
     return str(key_str)
+
 def decompress_key(key_input):
+    """
+    If key_input is compressed with 'K85:', decompresses it and returns
+    (canonical_key_str, extra_payload_dict).
+    Otherwise returns (clean_key(key_input), None).
+    """
     cleaned = clean_key(key_input)
     if cleaned.startswith("K85:"):
         b85_part = cleaned[4:].strip()
@@ -33,7 +49,9 @@ def decompress_key(key_input):
         except Exception:
             return cleaned, None
     return cleaned, None
+
 def generate_qr_code(data_str, output_path):
+    """Generates a high-quality QR code PNG file for the given key string."""
     try:
         qr = qrcode.QRCode(
             version=None,
@@ -49,14 +67,29 @@ def generate_qr_code(data_str, output_path):
     except Exception as e:
         print(f"Warning: Failed to generate QR code: {e}")
         return None
+
+# ── Optical Marker Stamping, Restoration & Detection ────────────────────────
+
 def create_marker_pattern(size=24):
+    """
+    Creates a concentric square fiducial marker pattern:
+    Black outer border, white middle ring, black center dot.
+    """
     pattern = np.zeros((size, size, 3), dtype=np.uint8)
     w1 = max(2, size // 6)
     pattern[w1 : size - w1, w1 : size - w1] = 255
     w2 = max(w1 + 2, size // 3)
     pattern[w2 : size - w2, w2 : size - w2] = 0
     return pattern
+
 def _calculate_marker_boxes(w, h, rx1, ry1, rx2, ry2, placement='outside', size=18):
+    """
+    Calculate the 4 bounding boxes [x1, y1, x2, y2] for corner markers.
+    Strict geometry:
+      - 'outside': marker inner edges align exactly to zone borders (rx1, ry1, rx2, ry2).
+      - 'inside': marker outer edges align exactly to zone borders (rx1, ry1, rx2, ry2).
+    Integer boundary expansion (floor for min, ceil for max) ensures no 0.5px cutoffs.
+    """
     import math
     rx1, rx2 = min(rx1, rx2), max(rx1, rx2)
     ry1, ry2 = min(ry1, ry2), max(ry1, ry2)
@@ -64,7 +97,14 @@ def _calculate_marker_boxes(w, h, rx1, ry1, rx2, ry2, placement='outside', size=
     ry1_i = int(math.floor(ry1))
     rx2_i = int(math.ceil(rx2))
     ry2_i = int(math.ceil(ry2))
+
     if placement == 'outside':
+        # Shift (never clip): when the zone touches a frame edge there is no
+        # background outside it, so the size×size box slides along the edge
+        # INTO the frame. Clipping (the old max(0,…)/min(w,…) on one side
+        # only) collapsed edge markers to zero height — stamp skipped them
+        # and the file lost all markers (undecodable by key). Fully in-frame
+        # boxes are bit-identical to the old geometry.
         def _shift(x1, y1):
             if w > size:
                 x1 = min(max(x1, 0), w - size)
@@ -79,23 +119,47 @@ def _calculate_marker_boxes(w, h, rx1, ry1, rx2, ry2, placement='outside', size=
         tr = _shift(rx2_i, ry1_i - size)
         bl = _shift(rx1_i - size, ry2_i)
         br = _shift(rx2_i, ry2_i)
-    else:         
+    else: # inside
         tl = (rx1_i, ry1_i, min(rx2_i, rx1_i + size), min(ry2_i, ry1_i + size))
         tr = (max(rx1_i, rx2_i - size), ry1_i, rx2_i, min(ry2_i, ry1_i + size))
         bl = (rx1_i, max(ry1_i, ry2_i - size), min(rx2_i, rx1_i + size), ry2_i)
         br = (max(rx1_i, rx2_i - size), max(ry1_i, ry2_i - size), rx2_i, ry2_i)
+
     return [tl, tr, bl, br]
+
+
 def effective_marker_placement(center=False, center_path=None,
                                patch_segments=None, patch_roi=None,
                                optical_markers=False, placement='outside'):
+    """Marker placement policy — SINGLE source of truth.
+
+    'inside' is honored everywhere, including Zone+Center jobs: the nested
+    center overlay is pasted into the CENTER of the zone, so the zone-corner
+    markers survive on the scrambled ring; decrypt erases them with
+    inpaint-first (|mif| full-layout rule) before the nested descramble.
+    'outside' markers live on untouched background.
+
+    Kept (and still called) so the key and the encoder always agree: a key
+    saying opt_ins over outside markers (or vice versa) makes decrypt
+    search the wrong placement and the media unrestorable. Used by
+    job_manager (pre-key), video_processor and image_processor (encode).
+    """
     return placement or 'outside'
+
 _CACHED_PATTERNS = {}
+
 def get_cached_marker_pattern_gray(size=18):
     if size not in _CACHED_PATTERNS:
         pat = create_marker_pattern(size)
         _CACHED_PATTERNS[size] = cv2.cvtColor(pat, cv2.COLOR_BGR2GRAY)
     return _CACHED_PATTERNS[size]
+
 def _marker_match_scores(img, boxes, marker_size=18):
+    """
+    Template-match peak (TM_CCOEFF_NORMED, 0..1) of the fiducial pattern
+    inside each marker box. Degenerate boxes score 0.0. Used by both the
+    boolean presence check and best-size ROI selection below.
+    """
     if img is None or not boxes:
         return []
     h, w = img.shape[:2]
@@ -122,7 +186,14 @@ def _marker_match_scores(img, boxes, marker_size=18):
         _min_val, max_val, _min_loc, _max_loc = cv2.minMaxLoc(res)
         scores.append(float(max_val))
     return scores
+
 def check_marker_presence(img, coords, marker_size=18, threshold=0.65, search_padding=3):
+    """
+    Fast sub-millisecond check whether optical markers are present on img at coords.
+    Searches a small neighborhood (+/- search_padding) around each expected marker location
+    to withstand video compression / macroblock shifts.
+    Returns True if at least 3 of 4 markers correlate strongly with the fiducial pattern.
+    """
     if img is None or not coords or len(coords) < 4:
         return False
     h, w = img.shape[:2]
@@ -150,9 +221,27 @@ def check_marker_presence(img, coords, marker_size=18, threshold=0.65, search_pa
             if matches >= 3:
                 return True
     return matches >= 3
+
 def forensic_marker_window(get_frame, fps, center_idx, marker_coords, roi,
                            placement='outside', marker_size=18,
                            window_sec=1.0, step_frames=None):
+    """
+    Frame-by-frame ±window probe around a zone-loss moment: pinpoints the
+    exact transition instead of just going dark (mirrors the web studio's
+    MarkerDetector.forensicWindowScan).
+
+    get_frame(i) -> BGR frame (output dims, like the decode loop checks) or
+    None when index i is unreadable. fps maps indices to seconds.
+    Returns dict {lost_idx, recovered_idx, moved_roi, samples, glitch}:
+      lost_idx      first idx with absent markers after a present one
+                    (None when nothing in the window is present)
+      recovered_idx first present idx after lost_idx (None if never recovers)
+      moved_roi     full redetect at the loss frame differing from roi
+                    (>0.02), else None  → markers MOVED, not vanished
+      samples       [(idx, present), ...] in time order
+      glitch        True when every sampled frame HAS markers (the loss was
+                    a transient miss — caller may keep the zone)
+    """
     try:
         fps = float(fps or 0) or 25.0
     except Exception:
@@ -167,6 +256,7 @@ def forensic_marker_window(get_frame, fps, center_idx, marker_coords, roi,
         step_frames = max(1, int(step_frames))
     except Exception:
         step_frames = 1
+
     idxs = list(range(int(center_idx) - span, int(center_idx) + span + 1, step_frames))
     samples = []
     frames = {}
@@ -186,6 +276,7 @@ def forensic_marker_window(get_frame, fps, center_idx, marker_coords, roi,
         except Exception:
             present = False
         samples.append((i, present))
+
     lost_idx, recovered_idx = None, None
     seen_present = False
     for (i, present) in samples:
@@ -196,6 +287,7 @@ def forensic_marker_window(get_frame, fps, center_idx, marker_coords, roi,
         elif seen_present and lost_idx is None:
             lost_idx = i
     glitch = bool(seen_present and lost_idx is None)
+
     moved_roi = None
     if lost_idx is not None and lost_idx in frames:
         try:
@@ -207,8 +299,10 @@ def forensic_marker_window(get_frame, fps, center_idx, marker_coords, roi,
                     break
         except Exception:
             moved_roi = None
+
     def _sec(i):
         return round(i / fps, 2) if i is not None else None
+
     return {
         "lost_idx": lost_idx,
         "recovered_idx": recovered_idx,
@@ -219,12 +313,21 @@ def forensic_marker_window(get_frame, fps, center_idx, marker_coords, roi,
         "recovered_sec": _sec(recovered_idx),
         "fps": fps,
     }
+
+
 def stamp_optical_markers(img, rx1, ry1, rx2, ry2, placement='outside', marker_size=18):
+    """
+    Stamps 4 B&W optical corner markers on img.
+    Returns: (modified_img, preserved_payload)
+    The preserved payload contains the original pixel patches for 100% lossless restoration on decryption.
+    """
     h, w = img.shape[:2]
     coords = _calculate_marker_boxes(w, h, rx1, ry1, rx2, ry2, placement, marker_size)
     pattern = create_marker_pattern(marker_size)
+
     patches_b64 = []
     out_img = img.copy()
+
     for (x1, y1, x2, y2) in coords:
         bw, bh = x2 - x1, y2 - y1
         if bw <= 0 or bh <= 0:
@@ -236,8 +339,10 @@ def stamp_optical_markers(img, rx1, ry1, rx2, ry2, placement='outside', marker_s
             patches_b64.append(base64.b64encode(buf).decode('ascii'))
         else:
             patches_b64.append("")
+
         pat_resized = cv2.resize(pattern, (bw, bh), interpolation=cv2.INTER_NEAREST)
         out_img[y1:y2, x1:x2] = pat_resized
+
     payload = {
         "coords": coords,
         "placement": placement,
@@ -245,12 +350,21 @@ def stamp_optical_markers(img, rx1, ry1, rx2, ry2, placement='outside', marker_s
         "patches": patches_b64
     }
     return out_img, payload
+
 def inpaint_optical_markers(img, rx1, ry1, rx2, ry2, placement='outside', marker_size=18):
+    """
+    Erases 4 corner optical markers using cv2.inpaint, seamlessly restoring the area
+    without leaving the high-contrast B&W fiducial squares on decrypted media.
+    """
     if img is None:
         return img
     h, w = img.shape[:2]
     if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
+        # int(round()): must match the descramble grid (get_roi_blocks) and
+        # stamp pixel-for-pixel — plain int() truncates (21.6 -> 21 while the
+        # grid uses 22) and every zone decrypt streaks by that pixel.
         rx1, ry1, rx2, ry2 = int(round(rx1 * w)), int(round(ry1 * h)), int(round(rx2 * w)), int(round(ry2 * h))
+
     coords = _calculate_marker_boxes(w, h, rx1, ry1, rx2, ry2, placement, marker_size)
     mask = np.zeros((h, w), dtype=np.uint8)
     for (x1, y1, x2, y2) in coords:
@@ -258,15 +372,22 @@ def inpaint_optical_markers(img, rx1, ry1, rx2, ry2, placement='outside', marker
         mx2, my2 = min(w, x2 + 1), min(h, y2 + 1)
         if mx2 > mx1 and my2 > my1:
             mask[my1:my2, mx1:mx2] = 255
+
     try:
         inpainted = cv2.inpaint(img, mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA)
         return inpainted
     except Exception as e:
         print(f"Warning: inpaint_optical_markers failed: {e}")
         return img
+
 def restore_optical_markers(img, optical_payload=None, rx1=None, ry1=None, rx2=None, ry2=None, placement='outside', marker_size=18):
+    """
+    Restores original pixels under optical markers from optical_payload (lossless),
+    or falls back to inpaint_optical_markers to cleanly remove markers on decryption.
+    """
     if img is None:
         return img
+
     if optical_payload and isinstance(optical_payload, dict):
         coords = optical_payload.get("coords", [])
         patches = optical_payload.get("patches", [])
@@ -288,8 +409,11 @@ def restore_optical_markers(img, optical_payload=None, rx1=None, ry1=None, rx2=N
                     print(f"Warning: Failed to restore optical marker patch: {e}")
             if restored_any:
                 return out_img
+
+    # Fallback to OpenCV inpainting if coordinates or payload coords exist
     if rx1 is not None and ry1 is not None and rx2 is not None and ry2 is not None:
         return inpaint_optical_markers(img, rx1, ry1, rx2, ry2, placement=placement, marker_size=marker_size)
+
     if optical_payload and isinstance(optical_payload, dict):
         coords = optical_payload.get("coords", [])
         if len(coords) == 4:
@@ -304,15 +428,24 @@ def restore_optical_markers(img, optical_payload=None, rx1=None, ry1=None, rx2=N
                 return cv2.inpaint(img, mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA)
             except Exception:
                 pass
+
     return img
+
 def _group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside', img_for_verification=None):
+    """
+    Groups corner fiducial markers into distinct rectangular ROIs.
+    Enforces strict rectangularity, orthogonality, and pattern verification.
+    Prevents crooked zones and eliminates false positives.
+    """
     if len(clustered_pts) < 4:
         return []
+
     pts = sorted(clustered_pts, key=lambda p: (p[1], p[0]))
     tol = max(4, min(10, m_size // 3))
     detected_rois = []
     used_pts = set()
     n = len(pts)
+
     for i in range(n):
         if i in used_pts:
             continue
@@ -321,38 +454,50 @@ def _group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside', i
             if j in used_pts:
                 continue
             tr = pts[j]
+            # TR must be to the right of TL by at least 2*m_size
             if tr[0] <= tl[0] + (2 * m_size):
                 continue
+            # TR and TL must have nearly identical Y (horizontal line)
             if abs(tr[1] - tl[1]) > tol:
                 continue
+
             for k in range(i + 1, n):
                 if k in used_pts or k == j:
                     continue
                 bl = pts[k]
+                # BL must be below TL by at least 2*m_size
                 if bl[1] <= tl[1] + (2 * m_size):
                     continue
+                # BL and TL must have nearly identical X (vertical line)
                 if abs(bl[0] - tl[0]) > tol:
                     continue
+
                 for l in range(i + 1, n):
                     if l in used_pts or l == j or l == k:
                         continue
                     br = pts[l]
+                    # BR must align with TR vertically and BL horizontally
                     if abs(br[0] - tr[0]) <= tol and abs(br[1] - bl[1]) <= tol:
                         if placement == 'inside':
+                            # Inside: outermost marker pixels define zone boundary
                             rx1 = max(0, min(tl[0], bl[0]))
                             ry1 = max(0, min(tl[1], tr[1]))
                             rx2 = min(w, max(tr[0] + m_size, br[0] + m_size))
                             ry2 = min(h, max(bl[1] + m_size, br[1] + m_size))
-                        else:             
+                        else:  # 'outside'
+                            # Outside: innermost marker pixels define zone boundary
                             rx1 = max(0, max(tl[0] + m_size, bl[0] + m_size))
                             ry1 = max(0, max(tl[1] + m_size, tr[1] + m_size))
                             rx2 = min(w, min(tr[0], br[0]))
                             ry2 = min(h, min(bl[1], br[1]))
+
                         if (rx2 - rx1) >= (2 * m_size) and (ry2 - ry1) >= (2 * m_size):
+                            # Verify fiducial markers at candidate corners if image provided
                             if img_for_verification is not None:
                                 test_boxes = _calculate_marker_boxes(w, h, rx1, ry1, rx2, ry2, placement, m_size)
                                 if not check_marker_presence(img_for_verification, test_boxes, marker_size=m_size, threshold=0.65):
                                     continue
+
                             norm_roi = (
                                 round(rx1 / w, 4),
                                 round(ry1 / h, 4),
@@ -373,8 +518,15 @@ def _group_markers_into_rois(clustered_pts, m_size, w, h, placement='outside', i
                     break
             if i in used_pts:
                 break
+
     return detected_rois
+
 def _refine_marker_box(img, approx_box, radius=8):
+    """Joint (size, position) argmax of the 18px fiducial resized to fit,
+    mirroring stamp_optical_markers (which resizes the pattern into clipped /
+    edge boxes). Handles square, resampled AND edge-clipped markers uniformly:
+    the zone is rebuilt from box EDGES, never centers ± assumed size.
+    Returns (x1, y1, x2, y2, score) or None below threshold."""
     h, w = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
     base = get_cached_marker_pattern_gray(18)
@@ -396,7 +548,19 @@ def _refine_marker_box(img, approx_box, radius=8):
         return None
     _v, bx, by, sw, sh = best
     return (bx, by, bx + sw, by + sh, _v)
+
 def refine_roi_from_centers(img, roi, placement='outside', m_size=18):
+    """
+    Pixel-exact ROI refinement for decrypt-time zones. Zone descramble grids
+    shift with every ROI pixel (1px error already streaks at 100 cols), while
+    template top-lefts quantize to ~±2px — especially when the stamped size
+    differs from the searched size (rescaled media), and edge-clipped markers
+    are not square at all. Jointly argmaxes each marker's (size, position)
+    the same way stamp_optical_markers sizes its pattern, then rebuilds the
+    zone from box EDGES (never centers ± assumed size). Keeps the original
+    ROI unless at least 3 corners refine.
+    Returns a normalized (rx1, ry1, rx2, ry2) tuple.
+    """
     if img is None or not roi or len(roi) < 4:
         return roi
     h, w = img.shape[:2]
@@ -435,7 +599,13 @@ def refine_roi_from_centers(img, roi, placement='outside', m_size=18):
     if nx2 <= nx1 or ny2 <= ny1:
         return roi
     return (round(nx1 / w, 4), round(ny1 / h, 4), round(nx2 / w, 4), round(ny2 / h, 4))
+
 def _find_marker_core_centers(gray, min_area=20, max_area=400, max_candidates=60):
+    """Template-free marker-center proposals: dark cores of concentric
+    fiducials are small solid blobs regardless of the marker's outer size or
+    aspect (square-resampled AND non-uniformly squashed markers alike).
+    Strictly prefiltered (solid cores only) and capped: scrambled content is
+    full of dark specks, and every survivor costs a size measurement."""
     mask = np.where(gray < 80, 255, 0).astype(np.uint8)
     n, _labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
     scored = []
@@ -456,7 +626,11 @@ def _find_marker_core_centers(gray, min_area=20, max_area=400, max_candidates=60
         if not any(abs(cx - qx) < 6 and abs(cy - qy) < 6 for (qx, qy) in out):
             out.append((cx, cy))
     return out
+
+
 def _anamorphic_pattern(sw, sh):
+    """Concentric fiducial with independent width/height (square case is
+    bit-identical to create_marker_pattern)."""
     w1x = max(2, sw // 6)
     w2x = max(w1x + 2, sw // 3)
     w1y = max(2, sh // 6)
@@ -465,7 +639,10 @@ def _anamorphic_pattern(sw, sh):
     pat[w1y:sh - w1y, w1x:sw - w1x] = 255
     pat[w2y:sh - w2y, w2x:sw - w2x] = 0
     return pat
+
+
 def _anamorphic_score(gray, cx, cy, sw, sh):
+    """NCC of the sw×sh pattern centered at (cx, cy). -1 when out of frame."""
     h, w = gray.shape[:2]
     x1, y1 = int(round(cx - sw / 2)), int(round(cy - sh / 2))
     if x1 < 0 or y1 < 0 or x1 + sw > w or y1 + sh > h:
@@ -478,7 +655,10 @@ def _anamorphic_score(gray, cx, cy, sw, sh):
     if denom <= 1e-9:
         return -1.0
     return float((win * pat).sum() / denom)
+
+
 def _measure_anamorphic_size(gray, cx, cy, sizes=range(10, 37, 2)):
+    """Argmax (sw, sh, score) over pattern sizes at a fixed center."""
     best = (18, 18, -1.0)
     for sw in sizes:
         for sh in sizes:
@@ -486,7 +666,15 @@ def _measure_anamorphic_size(gray, cx, cy, sizes=range(10, 37, 2)):
             if v > best[2]:
                 best = (sw, sh, v)
     return best
+
+
 def _measure_corner_marker(gray, corner, win=56):
+    """Measure the dark marker box touching one frame corner.
+    Near-full-frame zones stamp markers at the extreme corners; their outer
+    black borders touch the frame edges, so the dark bounding box IS the
+    marker box (per-axis sizes included — no squareness assumed). Anchored
+    argmax over ±3px picks the exact size; returns (x1, y1, x2, y2, score)
+    or None."""
     h, w = gray.shape[:2]
     win = max(24, min(win, w // 2, h // 2))
     if corner == 'tl':
@@ -522,6 +710,8 @@ def _measure_corner_marker(gray, corner, win=56):
     if best is None:
         return None
     _x, _y, bw0, bh0 = best
+    # Anchor-constrained argmax: sizes near the dark extent, boxes pinned
+    # to the corner, so scrambled content elsewhere cannot win.
     top = None
     for sw in range(max(8, bw0 - 3), min(win, bw0 + 3) + 1):
         for sh in range(max(8, bh0 - 3), min(win, bh0 + 3) + 1):
@@ -533,7 +723,11 @@ def _measure_corner_marker(gray, corner, win=56):
     if top is None or top[0] < 0.50:
         return None
     return (top[1], top[2], top[3], top[4], top[0])
+
+
 def _detect_corner_anchored_roi(img, placement='outside'):
+    """Zone recovery for near-full-frame zones whose (possibly non-square)
+    markers sit at the extreme frame corners. Returns [roi] or []."""
     if img is None:
         return []
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
@@ -561,7 +755,14 @@ def _detect_corner_anchored_roi(img, placement='outside'):
     if nx2 <= nx1 + 10 or ny2 <= ny1 + 10:
         return []
     return [(round(nx1 / w, 4), round(ny1 / h, 4), round(nx2 / w, 4), round(ny2 / h, 4))]
+
+
 def _detect_anamorphic_roi(img, placement='outside', min_score=0.50):
+    """Fallback zone recovery for markers no square template matches
+    (non-uniformly rescaled / heavily JPEG-degraded): corner-anchored
+    measurement first (cheap, exact — the near-full-frame case), then blob
+    centers + per-axis size measurement + quad assembly. Returns [roi] or [].
+    """
     corner = _detect_corner_anchored_roi(img, placement)
     if corner:
         return corner
@@ -581,6 +782,8 @@ def _detect_anamorphic_roi(img, placement='outside', min_score=0.50):
             measured.append((cx, cy, sw, sh, v))
     if len(measured) < 4:
         return []
+    # Single-zone quad among VERIFIED markers only: two topmost (TL, TR by
+    # x), two bottommost (BL, BR). Unverified specks must not steer geometry.
     by_y = sorted(measured, key=lambda t: t[1])
     top = sorted(by_y[:2], key=lambda t: t[0])
     bot = sorted(by_y[-2:], key=lambda t: t[0])
@@ -588,6 +791,7 @@ def _detect_anamorphic_roi(img, placement='outside', min_score=0.50):
     (trx, try_, trsw, trsh) = (top[1][0], top[1][1], top[1][2], top[1][3])
     (blx, bly, blsw, blsh) = (bot[0][0], bot[0][1], bot[0][2], bot[0][3])
     (brx, bry, brsw, brsh) = (bot[1][0], bot[1][1], bot[1][2], bot[1][3])
+    # Rectangularity gate (shared marker transform => aligned rows/cols).
     tol = 12
     if abs(tly - try_) > tol or abs(bly - bry) > tol:
         return []
@@ -595,6 +799,8 @@ def _detect_anamorphic_roi(img, placement='outside', min_score=0.50):
         return []
     if trx <= tlx + 30 or bry <= tly + 30:
         return []
+    # One shared size (median per axis): all four markers went through the
+    # same rescale, so per-corner jitter must not fork the zone.
     import statistics
     sw = int(round(statistics.median([tlsw, trsw, blsw, brsw])))
     sh = int(round(statistics.median([tlsh, trsh, blsh, brsh])))
@@ -612,33 +818,53 @@ def _detect_anamorphic_roi(img, placement='outside', min_score=0.50):
     nx2, ny2 = min(w, int(round(nx2))), min(h, int(round(ny2)))
     if nx2 - nx1 < 2 * sw or ny2 - ny1 < 2 * sh:
         return []
+    # Final witness: rebuild corner boxes at the measured size and demand
+    # at least 3 of 4 to correlate (lower bar than the square path — the
+    # media reaching this fallback is degraded by definition).
     verify = []
     for (cx, cy) in ((tlx, tly), (trx, try_), (blx, bly), (brx, bry)):
         verify.append(_anamorphic_score(gray, cx, cy, sw, sh))
     if sum(1 for v in verify if v >= 0.45) < 3:
         return []
     return [(round(nx1 / w, 4), round(ny1 / h, 4), round(nx2 / w, 4), round(ny2 / h, 4))]
+
+
 def detect_all_optical_markers(img, placement='outside'):
+    """
+    Detects all sets of 4 optical markers in an image using fast template matching
+    and strict quadrilateral verification.
+    Eliminates false positives and crooked zones.
+    Returns list of normalized bounding boxes [(rx1, ry1, rx2, ry2), ...].
+    """
     if img is None:
         return []
     h, w = img.shape[:2]
     if h < 32 or w < 32:
         return []
+
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+
     all_rois = []
-    candidates = []                 
+    # Search every standard marker size: rescaled media carries resampled
+    # markers (e.g. 18px stamped then x1.25 -> 22.5px) that the first size
+    # matches with shifted top-lefts. Collect all candidates, then keep the
+    # best-verified one instead of the first found.
+    candidates = []  # (roi, m_size)
+    # Fast multi-scale search across standard marker sizes
     for m_size in [18, 24, 16, 32]:
         pattern = create_marker_pattern(m_size)
         pat_gray = cv2.cvtColor(pattern, cv2.COLOR_BGR2GRAY)
         res = cv2.matchTemplate(gray, pat_gray, cv2.TM_CCOEFF_NORMED)
         loc = np.where(res >= 0.78)
-        pts = list(zip(*loc[::-1]))          
+        pts = list(zip(*loc[::-1]))  # (x, y)
+
         if len(pts) >= 4:
             clustered = []
             half = max(4, m_size // 2)
             for (px, py) in pts:
                 if not any(abs(px - cx) < half and abs(py - cy) < half for (cx, cy) in clustered):
                     clustered.append((int(px), int(py)))
+
             if len(clustered) >= 4:
                 rois = _group_markers_into_rois(clustered, m_size, w, h, placement=placement, img_for_verification=img)
                 for r in rois:
@@ -651,11 +877,18 @@ def detect_all_optical_markers(img, placement='outside'):
                     ):
                         all_rois.append(r)
                         candidates.append((r, m_size))
+
     if not candidates:
+        # No square template matched (non-uniformly rescaled or heavily
+        # JPEG-degraded markers): fall back to template-free blob centers +
+        # per-axis size measurement before giving up.
         try:
             return _detect_anamorphic_roi(img, placement=placement)
         except Exception:
             return []
+    # Score every candidate by verification (most boxes above threshold,
+    # tie-break by total template score — a nearer-size reconstruction
+    # correlates better), refine each via marker centers, best first.
     scored = []
     for (r, m) in candidates:
         boxes = _calculate_marker_boxes(w, h, r[0], r[1], r[2], r[3], placement, m)
@@ -675,6 +908,12 @@ def detect_all_optical_markers(img, placement='outside'):
         ):
             refined_rois.append(rr)
     return refined_rois
+
 def detect_optical_markers(img, placement='outside'):
+    """
+    Detects 4 concentric square optical markers in an image.
+    Returns normalized bounding box (rx1, ry1, rx2, ry2) from 0.0 to 1.0, or None if not found.
+    """
     rois = detect_all_optical_markers(img, placement=placement)
     return rois[0] if rois else None
+

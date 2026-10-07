@@ -2,12 +2,24 @@ from core.grid_utils import get_blocks, get_outer_blocks, find_best_grid, center
 from core.crypto import seeded_shuffle
 import base64
 import os
+
+# Colors for the zone+markers set (separate files, see export_zone_to_svg):
+# green = encrypt zone, black = markers, blue/red = block numbers.
 _ZONE_COLOR = "green"
 _MARKER_FILL = "black"
 _MARKER_STROKE = "white"
+
+# Pixel-gradient debug backdrop: a synthetic HSV rainbow (hue = X, value = Y)
+# encoded once as JPEG and embedded as a data URI. Every block shows a CROP
+# of it (nested <svg> + viewBox), so the scrambling is visible per-pixel:
+# the scrambled file shows the same pixels shuffled across the frame.
+# The JPEG is downscaled (max side _GRAD_MAX_SIDE) — a smooth gradient
+# stretches without visible loss, and the file stays small (~tens of KB).
 _GRAD_MAX_SIDE = 640
 _GRAD_JPEG_QUALITY = 82
 _GRAD_CACHE = {}
+
+
 def _grad_size(w, h):
     w, h = max(1, int(w)), max(1, int(h))
     m = max(w, h)
@@ -15,7 +27,10 @@ def _grad_size(w, h):
         return w, h
     s = _GRAD_MAX_SIDE / m
     return max(1, int(round(w * s))), max(1, int(round(h * s)))
+
+
 def _grad_data_uri(w, h):
+    """Data URI of the synthetic pixel gradient for a WxH frame (cached)."""
     sw, sh = _grad_size(w, h)
     key = (sw, sh)
     uri = _GRAD_CACHE.get(key)
@@ -36,6 +51,8 @@ def _grad_data_uri(w, h):
     uri = "data:image/jpeg;base64," + base64.b64encode(bytes(buf)).decode("ascii")
     _GRAD_CACHE[key] = uri
     return uri, sw, sh
+
+
 def _svg_head(w, h, comment=""):
     lines = [
         f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
@@ -44,54 +61,83 @@ def _svg_head(w, h, comment=""):
     if comment:
         lines.append(f'  <!-- {comment} -->')
     return lines
+
+
 def _grad_defs(uri, sw, sh):
+    # Single embedded raster; every block below crops it via nested viewBox.
     return [
         '  <defs>',
         f'    <image id="pxgrad" x="0" y="0" width="{sw}" height="{sh}" '
         f'href="{uri}" xlink:href="{uri}" preserveAspectRatio="none" />',
         '  </defs>',
     ]
+
+
 def _patch(lines, dx, dy, bw, bh, sx, sy, sw, sh):
+    """Draw source-gradient patch (sx,sy,sw,sh in GRADIENT px) at dest block."""
     lines.append(
         f'  <svg x="{dx}" y="{dy}" width="{bw}" height="{bh}" '
         f'viewBox="{sx:.2f} {sy:.2f} {sw:.2f} {sh:.2f}" preserveAspectRatio="none">'
         '<use href="#pxgrad" xlink:href="#pxgrad" /></svg>'
     )
+
+
 def _outline(lines, x1, y1, bw, bh, stroke, stroke_w="1.5"):
     lines.append(
         f'  <rect x="{x1}" y="{y1}" width="{bw}" height="{bh}" '
         f'fill="none" stroke="{stroke}" stroke-width="{stroke_w}" />'
     )
+
+
 def _number(lines, cx, cy, font_size, color, num):
+    # White halo keeps numbers readable on top of saturated pixels.
     lines.append(
         f'  <text x="{cx}" y="{cy}" font-family="Arial" font-size="{font_size:.1f}" '
         f'fill="{color}" stroke="white" stroke-width="{max(0.5, font_size / 8.0):.1f}" '
         f'paint-order="stroke" text-anchor="middle" dominant-baseline="central">{num}</text>'
     )
+
+
 def _frame_to_grad(x, y, w, h, sw, sh):
     return x / w * sw, y / h * sh
+
+
 def _block_patch(lines, dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2, w, h, sw, sh):
+    """Dest block (dx*, frame px) shows source patch (sx*, frame px)."""
     bw, bh = dx2 - dx1, dy2 - dy1
     if bw <= 0 or bh <= 0:
         return
     gx, gy = _frame_to_grad(sx1, sy1, w, h, sw, sh)
     gx2, gy2 = _frame_to_grad(sx2, sy2, w, h, sw, sh)
     _patch(lines, dx1, dy1, bw, bh, gx, gy, max(0.01, gx2 - gx), max(0.01, gy2 - gy))
+
+
 def _write(path, lines):
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines + ['</svg>']))
+
+
 def _fmt_roi(roi):
     try:
         return "[%s]" % (", ".join(f"{float(v):.3f}" for v in list(roi)[:4]))
     except Exception:
         return "[?]"
+
+
 def export_grid_to_svg(output_svg_path, w, h, cols, rows, has_center=False, center_size='1/4'):
+    """
+    Grid layout with a per-pixel rainbow photo underneath.
+    Normal mode: red outlines. Center mode: blue outer + red center outlines.
+    Each cell shows its own gradient pixels (unshuffled layout).
+    """
     uri, sw, sh = _grad_data_uri(w, h)
     svg_lines = _svg_head(w, h, "pixel-gradient debug backdrop (own pixels per cell)")
     svg_lines += _grad_defs(uri, sw, sh)
+
     if has_center:
         outer_indices, inner_indices, (cx1, cy1, cx2, cy2) = get_outer_blocks(cols, rows, w, h, center_size=center_size)
         all_blocks = get_blocks(w, h, cols, rows)
+
         svg_lines.append('  <!-- Video 1 (Outer Background) - Blue -->')
         for idx in outer_indices:
             x1, y1, x2, y2 = all_blocks[idx]
@@ -99,11 +145,13 @@ def export_grid_to_svg(output_svg_path, w, h, cols, rows, has_center=False, cent
         for idx in outer_indices:
             x1, y1, x2, y2 = all_blocks[idx]
             _outline(svg_lines, x1, y1, x2 - x1, y2 - y1, "blue")
+
         cw, ch = cx2 - cx1, cy2 - cy1
         cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
         center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
         svg_lines.append('  <!-- Video 2 (Center Overlay) - Red -->')
         for (x1, y1, x2, y2) in center_blocks:
+            # Center tiles sample the gradient under the bbox (frame coords).
             _block_patch(svg_lines, cx1 + x1, cy1 + y1, cx1 + x2, cy1 + y2,
                          cx1 + x1, cy1 + y1, cx1 + x2, cy1 + y2, w, h, sw, sh)
         svg_lines.append(f'  <rect x="{cx1}" y="{cy1}" width="{cw}" height="{ch}" fill="none" stroke="red" stroke-width="3" />')
@@ -116,25 +164,40 @@ def export_grid_to_svg(output_svg_path, w, h, cols, rows, has_center=False, cent
             _block_patch(svg_lines, x1, y1, x2, y2, x1, y1, x2, y2, w, h, sw, sh)
         for (x1, y1, x2, y2) in all_blocks:
             _outline(svg_lines, x1, y1, x2 - x1, y2 - y1, "red")
+
     _write(output_svg_path, svg_lines)
+
+
 def export_scrambled_grid_to_svg(output_svg_path, w, h, cols, rows, seed, has_center=False, center_size='1/4', prefix_original=False):
+    """
+    Numbered twin of export_grid_to_svg.
+    prefix_original=True:  original layout, numbers 1..N, own pixels per cell.
+    prefix_original=False: scrambled layout — each cell shows the SOURCE
+                           tile's pixels (with its number), i.e. what the
+                           encryptor actually pastes there.
+    """
     uri, sw, sh = _grad_data_uri(w, h)
     svg_lines = _svg_head(w, h, f"pixel-gradient scrambled seed={seed} original={prefix_original}")
     svg_lines += _grad_defs(uri, sw, sh)
     svg_lines.append(f'  <rect width="{w}" height="{h}" fill="white" stroke="black" stroke-width="2" />')
+
     all_blocks = get_blocks(w, h, cols, rows)
     n_blocks = len(all_blocks)
+
     if has_center:
         outer_indices, inner_indices, (cx1, cy1, cx2, cy2) = get_outer_blocks(cols, rows, w, h, center_size=center_size)
         N_outer = len(outer_indices)
         C1, R1 = find_best_grid(N_outer, target_ratio=cols / rows)
         src_blocks_outer = get_blocks(w, h, C1, R1)
         shuffled_outer = seeded_shuffle(list(outer_indices), seed)
+
         cw, ch = cx2 - cx1, cy2 - cy1
         cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
         center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
         shuffled_center = seeded_shuffle(list(range(cols_inner * rows_inner)), seed)
-        cells = []                          
+
+        # 1. Background outer blocks (pixels travel with the SOURCE tile)
+        cells = []  # (dx1,dy1,dx2,dy2, num)
         for j in range(N_outer):
             orig_idx = outer_indices[j]
             if prefix_original:
@@ -152,6 +215,8 @@ def export_scrambled_grid_to_svg(output_svg_path, w, h, cols, rows, seed, has_ce
             bw, bh = x2 - x1, y2 - y1
             _outline(svg_lines, x1, y1, bw, bh, "blue")
             _number(svg_lines, x1 + bw / 2, y1 + bh / 2, min(bw, bh) * 0.4, "blue", num)
+
+        # 2. Central blocks
         svg_lines.append('  <!-- Center Bounding Box -->')
         svg_lines.append(f'  <rect x="{cx1}" y="{cy1}" width="{cw}" height="{ch}" fill="none" stroke="red" stroke-width="3" />')
         ccells = []
@@ -168,6 +233,7 @@ def export_scrambled_grid_to_svg(output_svg_path, w, h, cols, rows, seed, has_ce
             _outline(svg_lines, bx1, by1, bw, bh, "red")
             _number(svg_lines, bx1 + bw / 2, by1 + bh / 2, min(bw, bh) * 0.4, "red", num)
     else:
+        # Full frame scrambling (pixels = SOURCE tile, travels with content)
         shuffled = seeded_shuffle(list(range(n_blocks)), seed)
         cells = []
         for i in range(n_blocks):
@@ -180,13 +246,18 @@ def export_scrambled_grid_to_svg(output_svg_path, w, h, cols, rows, seed, has_ce
             bw, bh = x2 - x1, y2 - y1
             _outline(svg_lines, x1, y1, bw, bh, "black")
             _number(svg_lines, x1 + bw / 2, y1 + bh / 2, min(bw, bh) * 0.4, "black", num)
+
     _write(output_svg_path, svg_lines)
+
+
 def _zone_svg_head(w, h, roi, caption):
     return [
         f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
         'xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">',
         f'  <!-- Encrypt zone roi={_fmt_roi(roi)} {caption} -->',
     ]
+
+
 def _zone_svg_roi(svg_lines, roi, w, h):
     try:
         rx1, ry1, rx2, ry2 = list(roi)[:4]
@@ -197,6 +268,8 @@ def _zone_svg_roi(svg_lines, roi, w, h):
     except Exception:
         return
     svg_lines.append(f'  <rect x="{px1:.1f}" y="{py1:.1f}" width="{max(0.0, px2 - px1):.1f}" height="{max(0.0, py2 - py1):.1f}" fill="none" stroke="{_ZONE_COLOR}" stroke-width="3" />')
+
+
 def _zone_svg_markers(svg_lines, marker_boxes):
     if not marker_boxes:
         return
@@ -207,6 +280,8 @@ def _zone_svg_markers(svg_lines, marker_boxes):
         except Exception:
             continue
         svg_lines.append(f'  <rect x="{x1}" y="{y1}" width="{max(0, x2 - x1)}" height="{max(0, y2 - y1)}" fill="{_MARKER_FILL}" stroke="{_MARKER_STROKE}" stroke-width="1" />')
+
+
 def _zone_svg_block(svg_lines, x1, y1, x2, y2, num, color, grad, w, h, sw, sh, src_box=None):
     bw, bh = x2 - x1, y2 - y1
     sx1, sy1, sx2, sy2 = src_box if src_box is not None else (x1, y1, x2, y2)
@@ -215,7 +290,11 @@ def _zone_svg_block(svg_lines, x1, y1, x2, y2, num, color, grad, w, h, sw, sh, s
     _outline(svg_lines, x1, y1, bw, bh, color)
     if num is not None:
         _number(svg_lines, x1 + bw / 2, y1 + bh / 2, min(bw, bh) * 0.4, color, num)
+
+
 def export_zone_to_svg(output_svg_path, w, h, roi, blocks, marker_boxes=None, caption=""):
+    """Zone layout over the pixel gradient: zone rect (green), zone blocks
+    (green outlines, own gradient pixels), optical markers (black, last)."""
     uri, sw, sh = _grad_data_uri(w, h)
     svg_lines = _zone_svg_head(w, h, roi, caption)
     svg_lines += _grad_defs(uri, sw, sh)
@@ -224,8 +303,13 @@ def export_zone_to_svg(output_svg_path, w, h, roi, blocks, marker_boxes=None, ca
         _zone_svg_block(svg_lines, x1, y1, x2, y2, None, _ZONE_COLOR, True, w, h, sw, sh)
     _zone_svg_markers(svg_lines, marker_boxes)
     _write(output_svg_path, svg_lines)
+
+
 def export_scrambled_zone_to_svg(output_svg_path, w, h, roi, blocks, seed,
                                  marker_boxes=None, prefix_original=False, caption=""):
+    """Numbered twin of export_zone_to_svg over the pixel gradient:
+    original layout shows 1..N with own pixels, scrambled shows each cell
+    with its SOURCE tile's pixels (+1 index)."""
     n = len(blocks or [])
     shuffled = seeded_shuffle(list(range(n)), seed) if n else []
     uri, sw, sh = _grad_data_uri(w, h)

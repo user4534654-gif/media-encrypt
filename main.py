@@ -26,17 +26,22 @@ from core.metadata import load_project_metadata
 from core.logger import LiveDebugger
 from core.job_manager import JobManager
 from static.icons.icons import ICON_MAPPINGS
+
+# Silence Werkzeug/Flask default GET/POST polling logs
 werkzeug_log = logging.getLogger('werkzeug')
 werkzeug_log.setLevel(logging.ERROR)
+
 mimetypes.add_type('video/webm', '.webm')
 mimetypes.add_type('video/mp4', '.mp4')
 mimetypes.add_type('video/ogg', '.ogv')
 mimetypes.add_type('audio/webm', '.weba')
+
 def sanitize_audio_sr(aud_sr, aud_codec):
     try:
         sr_int = int(aud_sr)
     except (ValueError, TypeError):
         sr_int = 48000
+
     if aud_codec == 'aac':
         valid_srs = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 88200, 96000]
         closest = min(valid_srs, key=lambda x: abs(x - sr_int))
@@ -46,31 +51,45 @@ def sanitize_audio_sr(aud_sr, aud_codec):
         closest = min(valid_srs, key=lambda x: abs(x - sr_int))
         return str(closest)
     return str(sr_int)
+
 if getattr(sys, 'frozen', False):
+    # Running inside PyInstaller EXE bundle
     base_dir = sys._MEIPASS
     vault_base_dir = os.path.dirname(sys.executable)
 else:
+    # Running from raw Python source
     base_dir = os.path.abspath(os.path.dirname(__file__))
     vault_base_dir = base_dir
+
 app = Flask(__name__, template_folder=os.path.join(base_dir, 'templates'), static_folder=os.path.join(base_dir, 'static'))
 PORT = 5050
+
+# Responsive Web Design layout: "desktop" (default, unchanged UI) or "mobile"
+# (compact touch-friendly scale). Plain `python main.py` always uses desktop;
+# mobile activates only via an explicit --layout mobile flag or WEB_LAYOUT env.
 WEB_LAYOUT = os.environ.get("WEB_LAYOUT", "desktop").strip().lower()
 if WEB_LAYOUT not in ("desktop", "mobile"):
     WEB_LAYOUT = "desktop"
+
 @app.context_processor
 def inject_metadata():
     return {'metadata': load_project_metadata()}
+
 @app.route('/api/metadata')
 def get_metadata():
     return jsonify(load_project_metadata())
+
 VAULT_FOLDER = os.path.join(vault_base_dir, 'media_encrypt_vault')
 INPUT_FOLDER = os.path.join(VAULT_FOLDER, 'input')
 ENCRYPTED_FOLDER = os.path.join(VAULT_FOLDER, 'encrypted')
 DECRYPTED_FOLDER = os.path.join(VAULT_FOLDER, 'decrypted')
+
 for folder in [INPUT_FOLDER, ENCRYPTED_FOLDER, DECRYPTED_FOLDER]:
     if not os.path.exists(folder):
         os.makedirs(folder)
+
 def save_key_file(filename, key):
+    """Write the encryption key to a .key.txt file next to the encrypted media."""
     try:
         base_name, _ = os.path.splitext(filename)
         key_path = os.path.join(ENCRYPTED_FOLDER, f"{base_name}.key.txt")
@@ -81,47 +100,70 @@ def save_key_file(filename, key):
         return key_path
     except Exception as e:
         return None
+
 task_progress = {}
-job_manager = None                                                     
+job_manager = None  # Initialized after resolve_auto_quality definition
+
+# ── pywebview JS-Python Fullscreen Bridge ──────────────────────────────────────
 class WebviewApi:
     def __init__(self):
         self._window = None
+
     def set_window(self, window):
         self._window = window
+
     def toggle_fullscreen(self):
         if self._window:
             self._window.toggle_fullscreen()
             return self._window.fullscreen
         return False
-active_sessions = {}                                  
-MAX_SESSIONS = 2                                                           
-SESSION_TIMEOUT = 12                                          
+
+# ── Simultaneous Connection Limits (Max 2 tabs/sessions) ───────────────────────
+active_sessions = {}  # session_id -> last_active_time
+MAX_SESSIONS = 2      # Allows maximum of 2 concurrent client sessions/tabs
+SESSION_TIMEOUT = 12  # seconds (cleanup after 2 missed pings)
+
 @app.before_request
 def limit_connections():
+    # Always allow static resources to load
     if request.path.startswith('/static/'):
         return
+
+    # Clean up expired sessions
     now = time.time()
     expired = [sid for sid, last_active in active_sessions.items() if now - last_active > SESSION_TIMEOUT]
     for sid in expired:
         active_sessions.pop(sid, None)
+
+    # Special handling for heartbeat endpoint to avoid creating session loops
     if request.path == '/api/heartbeat':
         session_id = request.cookies.get('session_id')
         if session_id and session_id in active_sessions:
             active_sessions[session_id] = now
             return jsonify({"status": "ok"})
         return jsonify({"status": "unauthorized"}), 401
+
+    # Retrieve session ID cookie
     session_id = request.cookies.get('session_id')
+
+    # If it is an active valid session, update activity time and allow
     if session_id and session_id in active_sessions:
         active_sessions[session_id] = now
         return
+
+    # For new/unregistered sessions, check if the limit is reached
     if len(active_sessions) >= MAX_SESSIONS:
+        # Serve a clean 403 Page limit message
         return Response(
             "<html><head><title>403 Forbidden</title><style>body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 60px 20px; background: #f4f6f8; color: #333; } h1 { color: #ff3b30; font-size: 32px; margin-bottom: 10px; } p { font-size: 16px; color: #555; line-height: 1.5; max-width: 500px; margin: 0 auto; }</style></head><body><h1>403 Forbidden</h1><p>Connection limit reached. This application is configured to allow a maximum of 2 simultaneous browser tabs or client sessions.</p></body></html>",
             status=403
         )
+
+    # Allocate new session (will set cookie in after_request)
     from flask import g
     g.new_session_id = secrets.token_hex(16)
     active_sessions[g.new_session_id] = now
+
 @app.after_request
 def set_session_cookie(response):
     from flask import g
@@ -129,12 +171,15 @@ def set_session_cookie(response):
     if new_sid:
         response.set_cookie('session_id', new_sid, max_age=3600, httponly=True, samesite='Lax')
     return response
+
 @app.route('/api/heartbeat')
 def heartbeat_endpoint():
     return jsonify({"status": "ok"})
+
 @app.route('/api/icons')
 def get_icons():
     return jsonify(ICON_MAPPINGS)
+
 def is_colab():
     try:
         import google.colab
@@ -142,15 +187,21 @@ def is_colab():
         return get_ipython() is not None
     except (ImportError, NameError):
         return False
+
 def resolve_auto_quality(file_path, options):
     is_auto = any(val == 'auto' for val in options.values())
     if not is_auto:
         return options
+        
     info = probe_media_file(file_path)
+    
+    # 1. Video Format Auto Resolution
     if options.get('vid_format') == 'auto':
         options['vid_format'] = info.get('format', '.mp4')
         if options['vid_format'] not in ['.mp4', '.mkv', '.avi', '.webm', '.mov']:
             options['vid_format'] = '.mp4'
+            
+    # 2. Video Codec Auto Resolution
     if options.get('vid_codec') == 'auto':
         fmt = options.get('vid_format', '.mp4')
         if fmt == '.webm':
@@ -171,6 +222,14 @@ def resolve_auto_quality(file_path, options):
                 options['vid_codec'] = 'prores'
             else:
                 options['vid_codec'] = 'libx264'
+                
+    # 3. Video Bitrate Auto Resolution
+    # The composited output carries BOTH sources (background + pasted center
+    # video), so the ceiling must cover the most demanding one -> max().
+    # Probing only the background systematically under-encodes jobs whose
+    # center video is sharper (the classic "center looks bad on auto" bug).
+    # An explicit 🌊 wave envelope always wins: it already carries its own
+    # avg/max, so 'auto' + envelope resolves to the wave average.
     _env = options.get('vid_bitrate_envelope')
     _env_avg = None
     if isinstance(_env, dict) and _env.get('points'):
@@ -191,6 +250,10 @@ def resolve_auto_quality(file_path, options):
                 center_br = probe_media_file(center_path).get('video_bitrate')
             except Exception as e:
                 LiveDebugger.log("AUTO_BR_WARN", f"Center probe failed, using background bitrate: {e}", level="WARNING", module="HTTP")
+        # Match-original-weight: derive bitrate from container size so the
+        # encrypted output weighs ~like the input (Colab parity). Audio
+        # reserve 128k, floor 500k. max() with probed streams keeps the
+        # center-paste fix: the ceiling must cover the sharpest source.
         weight_br = None
         try:
             dur = info.get('duration_sec') or 0
@@ -201,10 +264,16 @@ def resolve_auto_quality(file_path, options):
             LiveDebugger.log("AUTO_BR_WARN", f"Weight-derived bitrate failed: {e}", level="WARNING", module="HTTP")
         options['vid_bitrate'] = pick_max_video_bitrate(bg_br, center_br, weight_br)
         LiveDebugger.log("AUTO_BR", f"Auto bitrate: background={bg_br or 'unknown'} center={center_br or 'unknown'} weight={weight_br or 'unknown'} -> picked {options['vid_bitrate']} (max)", level="INFO", module="HTTP")
+        
+    # 4. Preset
     if options.get('vid_preset') == 'auto':
         options['vid_preset'] = 'medium'
+        
+    # 5. Audio Hz
     if options.get('aud_sr') == 'auto':
         options['aud_sr'] = info.get('audio_sr') or '48000'
+        
+    # 6. Audio Codec
     if options.get('aud_codec') == 'auto':
         fmt = options.get('vid_format', '.mp4')
         if fmt == '.webm':
@@ -221,78 +290,105 @@ def resolve_auto_quality(file_path, options):
                 options['aud_codec'] = 'flac'
             else:
                 options['aud_codec'] = 'aac'
+                
+    # 7. Audio Bitrate
     if options.get('aud_bitrate') == 'auto':
         options['aud_bitrate'] = info.get('audio_bitrate') or '320k'
     from core.metadata_prober import sanitize_audio_bitrate
     options['aud_bitrate'] = sanitize_audio_bitrate(options.get('aud_bitrate', '320k'), options.get('aud_codec', 'aac')) or '320k'
+        
+    # 8. Audio Method, Splits, and Volume Factor
     if options.get('aud_method') == 'auto':
         options['aud_method'] = 'inversion'
     if options.get('aud_splits') == 'auto':
         options['aud_splits'] = 10
     if options.get('vol_factor') == 'auto':
         options['vol_factor'] = 1.0
+        
     options['aud_sr'] = sanitize_audio_sr(options.get('aud_sr', '48000'), options.get('aud_codec', 'aac'))
     return options
+
 job_manager = JobManager(
     INPUT_FOLDER, ENCRYPTED_FOLDER, DECRYPTED_FOLDER,
     save_key_file, resolve_auto_quality, sanitize_audio_sr
 )
+
 @app.route('/')
 def index():
     return render_template('index.html', layout=WEB_LAYOUT)
+
 @app.route('/api/progress')
 def get_progress():
     return jsonify({"progress": task_progress.get(request.args.get('task_id'), 0)})
+
 @app.route('/api/download/stream')
 def download_stream():
+    """Streams yt-dlp (for video/audio) or requests+Pillow (for images) via Server-Sent Events (SSE)."""
     raw_cmd = request.args.get('cmd', '').strip()
     media_type = request.args.get('media_type', 'video').strip().lower()
     is_center = request.args.get('is_center', 'false').lower() == 'true'
+
     if not raw_cmd:
         def error_gen():
             yield "data: " + json.dumps({"type": "stderr", "line": "Error: Empty URL or command.\n"}) + "\n\n"
             yield "data: " + json.dumps({"type": "completed", "status": "error", "error": "Empty command"}) + "\n\n"
         return Response(error_gen(), mimetype='text/event-stream')
+
     def generate():
         abs_input_dir = os.path.abspath(INPUT_FOLDER)
         before_files = set(os.listdir(INPUT_FOLDER)) if os.path.exists(INPUT_FOLDER) else set()
+
+        # ── IMAGE DOWNLOAD ENGINE (requests + Pillow) ─────────────────────────
         if media_type == 'image':
             cleaned_url = raw_cmd
+            # Strip any leading words if user typed 'download URL'
             url_match = re.search(r'https?://[^\s]+', cleaned_url)
             if url_match:
                 img_url = url_match.group(0)
             else:
                 img_url = cleaned_url.strip().strip('"\'')
+
             yield "data: " + json.dumps({"type": "stdout", "line": f"[Image Downloader] Connecting to: {img_url}\n"}) + "\n\n"
             LiveDebugger.log("Image Download", f"Fetching image via requests+Pillow from: {img_url}", level="INFO", module="HTTP")
+
             try:
                 headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 }
                 resp = requests.get(img_url, headers=headers, timeout=30)
                 resp.raise_for_status()
+
                 yield "data: " + json.dumps({"type": "stdout", "line": f"[Image Downloader] Downloaded {len(resp.content)} bytes. Validating image with Pillow...\n"}) + "\n\n"
+
+                # Verify and open image with Pillow
                 img = Image.open(io.BytesIO(resp.content))
                 img_format = (img.format or 'png').lower()
                 if img_format == 'jpeg':
                     img_format = 'jpg'
+
+                # Determine clean filename
                 parsed = urllib.parse.urlparse(img_url)
                 path_part = os.path.basename(parsed.path)
                 if path_part and '.' in path_part:
                     clean_name = re.sub(r'[^a-zA-Z0-9_\.\-]', '_', path_part)
                 else:
                     clean_name = f"downloaded_image_{int(time.time())}.{img_format}"
+
                 if not is_image_filename(clean_name):
                     clean_name = f"{clean_name}.{img_format}"
+
                 target_file_path = os.path.join(abs_input_dir, clean_name)
+                # Handle filename collisions
                 counter = 1
                 base_stem, ext = os.path.splitext(clean_name)
                 while os.path.exists(target_file_path):
                     clean_name = f"{base_stem}_{counter}{ext}"
                     target_file_path = os.path.join(abs_input_dir, clean_name)
                     counter += 1
+
                 with open(target_file_path, 'wb') as f:
                     f.write(resp.content)
+
                 yield "data: " + json.dumps({"type": "stdout", "line": f"[Image Downloader] Verified image: {img.size[0]}x{img.size[1]} ({img.format}).\n"}) + "\n\n"
                 yield "data: " + json.dumps({"type": "stdout", "line": f"[SUCCESS] Saved image to input vault: '{clean_name}'\n"}) + "\n\n"
                 yield "data: " + json.dumps({
@@ -314,22 +410,30 @@ def download_stream():
                     "error": str(e)
                 }) + "\n\n"
             return
+
+        # ── VIDEO / AUDIO DOWNLOAD ENGINE (yt-dlp) ───────────────────────────
         cleaned_cmd = raw_cmd
         if cleaned_cmd.startswith('yt-dlp '):
             cleaned_cmd = cleaned_cmd[7:].strip()
         elif cleaned_cmd.startswith('ytdlp '):
             cleaned_cmd = cleaned_cmd[6:].strip()
+
         try:
             tokens = shlex.split(cleaned_cmd, posix=False)
         except Exception:
             tokens = cleaned_cmd.split()
+
         extra_args = []
         if media_type == 'audio' and not any(arg in cleaned_cmd for arg in ['-x', '--extract-audio', '-f']):
             extra_args = ['-x', '--audio-format', 'mp3']
+
         if not any(arg in cleaned_cmd for arg in ['--no-playlist', '--yes-playlist']):
             extra_args.append('--no-playlist')
+
+        # Determine execution strategy for yt-dlp (CLI vs in-process library)
         is_frozen = getattr(sys, 'frozen', False)
         yt_dlp_cli = shutil.which('yt-dlp') or shutil.which('yt-dlp.exe')
+
         use_subprocess = False
         if not is_frozen:
             cmd_list = [sys.executable, '-m', 'yt_dlp', '-P', abs_input_dir, '-o', '%(title)s.%(ext)s'] + extra_args + tokens
@@ -337,14 +441,17 @@ def download_stream():
         elif yt_dlp_cli:
             cmd_list = [yt_dlp_cli, '-P', abs_input_dir, '-o', '%(title)s.%(ext)s'] + extra_args + tokens
             use_subprocess = True
+
         display_cmd = f"yt-dlp {' '.join(tokens)}"
         LiveDebugger.log("URL Download", f"Executing yt-dlp: {display_cmd} (mode={'subprocess' if use_subprocess else 'in-process'})", level="INFO", module="HTTP")
         yield "data: " + json.dumps({"type": "stdout", "line": f"$ {display_cmd}\n"}) + "\n\n"
+
         try:
             if use_subprocess:
                 env = os.environ.copy()
                 env['PYTHONIOENCODING'] = 'utf-8'
                 env['PYTHONUNBUFFERED'] = '1'
+
                 proc = subprocess.Popen(
                     cmd_list,
                     stdout=subprocess.PIPE,
@@ -357,19 +464,24 @@ def download_stream():
                     env=env,
                     creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
                 )
+
                 for line in iter(proc.stdout.readline, ''):
                     if line:
                         yield "data: " + json.dumps({"type": "stdout", "line": line}) + "\n\n"
+
                 proc.stdout.close()
                 return_code = proc.wait()
             else:
+                # In-process yt_dlp execution for frozen PyInstaller package without external binary
                 import queue
                 import threading
                 import yt_dlp
+
                 full_args = ['-P', abs_input_dir, '-o', '%(title)s.%(ext)s'] + extra_args + tokens
                 log_q = queue.Queue()
                 thread_done = threading.Event()
                 result_holder = {'code': 0, 'error': None}
+
                 class StreamLogger:
                     def debug(self, msg):
                         if not msg.startswith('[debug] '):
@@ -380,6 +492,7 @@ def download_stream():
                         log_q.put(('stderr', f"[WARNING] {msg}\n"))
                     def error(self, msg):
                         log_q.put(('stderr', f"[ERROR] {msg}\n"))
+
                 def progress_hook(d):
                     if d.get('status') == 'downloading':
                         pct = d.get('_percent_str', '').strip()
@@ -389,6 +502,7 @@ def download_stream():
                         log_q.put(('stdout', f"[download] {pct} of {total} at {speed} ETA {eta}\n"))
                     elif d.get('status') == 'finished':
                         log_q.put(('stdout', f"[download] 100% finished: '{os.path.basename(d.get('filename', ''))}'\n"))
+
                 def run_yt_dlp():
                     try:
                         parser, opts, urls = yt_dlp.parse_options(full_args)
@@ -404,19 +518,24 @@ def download_stream():
                         log_q.put(('stderr', f"[ERROR] {str(ex)}\n"))
                     finally:
                         thread_done.set()
+
                 worker = threading.Thread(target=run_yt_dlp, daemon=True)
                 worker.start()
+
                 while not thread_done.is_set() or not log_q.empty():
                     try:
                         stream_type, text = log_q.get(timeout=0.1)
                         yield "data: " + json.dumps({"type": stream_type, "line": text}) + "\n\n"
                     except queue.Empty:
                         pass
+
                 worker.join()
                 return_code = result_holder['code']
+
             after_files = set(os.listdir(INPUT_FOLDER)) if os.path.exists(INPUT_FOLDER) else set()
             new_files = [f for f in (after_files - before_files) if os.path.isfile(os.path.join(INPUT_FOLDER, f))]
             new_files.sort(key=lambda x: os.path.getmtime(os.path.join(INPUT_FOLDER, x)), reverse=True)
+
             if return_code == 0:
                 msg = f"\n[SUCCESS] Download completed. {len(new_files)} new file(s) saved to input vault.\n"
                 yield "data: " + json.dumps({"type": "stdout", "line": msg}) + "\n\n"
@@ -441,10 +560,12 @@ def download_stream():
             err_msg = f"\n[EXCEPTION] {str(e)}\n{traceback.format_exc()}\n"
             yield "data: " + json.dumps({"type": "stderr", "line": err_msg}) + "\n\n"
             yield "data: " + json.dumps({"type": "completed", "status": "error", "error": str(e), "files": []}) + "\n\n"
+
     response = Response(generate(), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['X-Accel-Buffering'] = 'no'
     return response
+
 @app.route('/api/vault_file_info', methods=['GET'])
 def vault_file_info():
     filename = request.args.get('filename')
@@ -468,12 +589,15 @@ def vault_file_info():
         "size_bytes": size_bytes,
         "url": f"/vault/{folder}/{safe_filename}",
     })
+
 @app.route('/api/process', methods=['POST'])
 def process_api():
     try:
         action = request.form['action']
         task_id = request.form['task_id']
         task_progress[task_id] = 0
+
+        # Check if file was uploaded via multipart or referenced from vault
         if 'file' in request.files and request.files['file'].filename:
             file = request.files['file']
             filename = file.filename
@@ -492,13 +616,17 @@ def process_api():
                     return jsonify({"error": f"File not found: {filename}"}), 404
         else:
             return jsonify({"error": "No file provided"}), 400
+
+        # Probe file metadata and log load event
         info = probe_media_file(path)
         meta_str = f"Format: {info.get('format', 'unknown')} | Size: {info.get('file_size_mb', 'unknown')} MB"
         if info.get('resolution'): meta_str += f" | Res: {info.get('resolution')}"
         if info.get('duration'): meta_str += f" | Dur: {info.get('duration')}"
         if info.get('video_codec'): meta_str += f" | Video Codec: {info.get('video_codec')}"
         if info.get('audio_codec'): meta_str += f" | Audio Codec: {info.get('audio_codec')} ({info.get('audio_sr', 'unknown')} Hz)"
+        
         LiveDebugger.log("Load File", f"Loaded user file '{filename}' for action '{action}' | Location: {path} | Metadata: {meta_str}", level="INFO", module="HTTP", extra="Modules: Flask, os, subprocess, imageio-ffmpeg")
+
         raw_aud_sr = request.form.get('aud_sr', '48000')
         raw_aud_codec = request.form.get('aud_codec', 'aac')
         options = {
@@ -526,6 +654,7 @@ def process_api():
             'outer_end_action': request.form.get('outer_end_action', 'stop'),
             'spatial_compression_mode': request.form.get('spatial_compression_mode', 'off'),
         }
+        # Normalize spatial mode ('zone' = legacy alias of 'priority').
         if options['spatial_compression_mode'] == 'zone':
             options['spatial_compression_mode'] = 'priority'
         elif options['spatial_compression_mode'] not in ('off', 'priority'):
@@ -535,6 +664,8 @@ def process_api():
                 0, min(100, int(request.form.get('zone_priority_strength', 40))))
         except Exception:
             options['zone_priority_strength'] = 40
+        # Per-channel audio routing (L/R track matrix): sources are
+        # 'background' | 'center' | 'custom'; honoured only when valid.
         for _ch in ('l', 'r'):
             _src = request.form.get(f'track_{_ch}_source')
             if _src in ('background', 'center', 'custom'):
@@ -544,7 +675,11 @@ def process_api():
                      request.form.get(f'enc_custom_{_ch}', 'true')))
             options[f'track_{_ch}_enc'] = str(_enc).lower() not in ('false', '0', 'no', 'off')
             options[f'custom_audio_{_ch}_enc'] = options[f'track_{_ch}_enc']
+        
+        # Resolve auto quality values
         options = resolve_auto_quality(path, options)
+        
+        # Output extension logic based on file type
         fn_lower = filename.lower()
         if is_image_filename(fn_lower):
             out_ext = request.form.get('img_format', '.png')
@@ -556,9 +691,12 @@ def process_api():
                 out_ext = os.path.splitext(filename)[1].lower()
         else:
             out_ext = options['vid_format']
+        
+        # Capture Resolution Details
         req_w, req_h = request.form.get('resize_w'), request.form.get('resize_h')
         if req_w and req_w.isdigit(): options['target_w'] = int(req_w)
         if req_h and req_h.isdigit(): options['target_h'] = int(req_h)
+
         if action == "scramble":
             options.update({
                 'process_video': request.form.get('enc_video') == 'true',
@@ -569,9 +707,12 @@ def process_api():
                 'export_svg': request.form.get('export_svg', 'true') == 'true',
                 'export_timeline': request.form.get('export_timeline', 'true') == 'true'
             })
+            
             sid = request.form.get('sid', '').strip() or secrets.token_hex(4)
             options['seed'] = hash_str(sid)
             options['aud_key'] = hash_str(sid)
+
+            # Central video/image processing
             center_path = None
             is_center = request.form.get('center_mode') == 'true'
             if is_center:
@@ -591,6 +732,8 @@ def process_api():
                     if os.path.exists(center_path):
                         options['center'] = True
                         options['center_path'] = center_path
+
+            # Custom L/R replacement audio (uploads or vault picks)
             for _ch in ('l', 'r'):
                 _up_key = f'custom_audio_{_ch}'
                 if _up_key in request.files and request.files[_up_key].filename:
@@ -605,19 +748,25 @@ def process_api():
                         if os.path.exists(_cand):
                             options[_up_key] = _cand
                             break
+
+            # Construct key string with all audio options embedded
             method_tag = 'ainv'
             if options['aud_method'] == 'band_scramble':
                 method_tag = 'abs'
             elif options['aud_method'] == 'combined':
                 method_tag = 'acb'
+
             if options['process_video'] and options['process_audio']:
                 key = f"{options['cols']}x{options['rows']}|{sid}"
                 if options.get('center'):
                     key += format_center_key(options.get('center_size', '1/4'))
+                        
+                # Append video encryption mode tag
                 if options['video_encrypt_mode'] == 'center':
                     key += "|em_cnt"
                 elif options['video_encrypt_mode'] == 'both':
                     key += "|em_both"
+                    
                 key += "|a"
                 key += f"|{method_tag}"
                 key += f"|as_{options['aud_splits']}"
@@ -637,17 +786,22 @@ def process_api():
                         key += "|car0"
                 if options.get('vol_factor', 1.0) != 1.0:
                     key += f"|v_{options['vol_factor']}"
+                    
+                # Append audio track selection tag
                 if options['aud_track'] == 'left':
                     key += "|at_l"
                 elif options['aud_track'] == 'right':
                     key += "|at_r"
             elif options['process_audio']:
+                # For audio-only, encode the seed so it affects the audio permutation and is visible in the key
                 key = f"|a|{sid}"
                 key += f"|{method_tag}"
                 key += f"|as_{options['aud_splits']}"
                 key += f"|cf_{options['carrier_freq']}"
                 if options.get('vol_factor', 1.0) != 1.0:
                     key += f"|v_{options['vol_factor']}"
+                    
+                # Append audio track selection tag
                 if options['aud_track'] == 'left':
                     key += "|at_l"
                 elif options['aud_track'] == 'right':
@@ -656,18 +810,25 @@ def process_api():
                 key = f"{options['cols']}x{options['rows']}|{sid}"
                 if options.get('center'):
                     key += format_center_key(options.get('center_size', '1/4'))
+                        
+                # Append video encryption mode tag
                 if options['video_encrypt_mode'] == 'center':
                     key += "|em_cnt"
                 elif options['video_encrypt_mode'] == 'both':
                     key += "|em_both"
+
             out_path = os.path.join(ENCRYPTED_FOLDER, f"locked_{base_name}{out_ext}")
             LiveDebugger.log("Start Process", f"Encrypting '{filename}' -> '{out_path}' | Key: '{key}'", level="INFO", module="HTTP", extra="Modules: Flask, core.pipeline")
             process_media(path, out_path, options, task_progress, task_id)
             LiveDebugger.log("Process Complete", f"Successfully encrypted and saved output file: '{out_path}'", level="INFO", module="HTTP", extra="Modules: Flask, core.pipeline, os")
+
+            # Auto-save the key next to the encrypted media file
             key_path = save_key_file(os.path.basename(out_path), key)
             if key_path:
                 LiveDebugger.log("Save Key", f"Auto-saved encryption key to: {key_path}", level="INFO", module="HTTP", extra="Modules: os")
+
             return jsonify({"status": "ok", "key": key, "file": out_path})
+
         elif action == "unscramble":
             raw_key = clean_key(request.form.get('key'))
             options.update({
@@ -686,9 +847,11 @@ def process_api():
                 'track_l_enc': True,
                 'track_r_enc': True
             })
+            
             if raw_key.startswith("|a"):
                 options['process_audio'] = True
                 parts = raw_key.split('|')
+                # The part after |a is the seed, if it is not a tag
                 if len(parts) > 2:
                     p2 = parts[2]
                     if not (p2.startswith('am_') or p2.startswith('as_') or p2.startswith('cf_') or p2.startswith('v_') or p2 in ['abs', 'acb', 'ainv', 'inversion', 'band_scramble', 'combined'] or p2.startswith('at_')):
@@ -717,10 +880,12 @@ def process_api():
                 parts = raw_key.split('|')
                 dim = parts[0]
                 seed_str = parts[1]
+                
                 options['process_video'] = True
                 options['cols'], options['rows'] = map(int, dim.split('x'))
                 options['seed'] = hash_str(seed_str)
                 options['aud_key'] = hash_str(seed_str)
+                
                 for part in parts[2:]:
                     if part == 'a':
                         options['process_audio'] = True
@@ -768,11 +933,13 @@ def process_api():
                         options['carrier_freq'] = int(part[3:])
                     elif part.startswith('v_'):
                         options['vol_factor'] = float(part[2:])
+
             out_path = os.path.join(DECRYPTED_FOLDER, f"restored_{base_name}{out_ext}")
             LiveDebugger.log("Start Process", f"Decrypting '{filename}' -> '{out_path}' | Key: '{raw_key}'", level="INFO", module="HTTP", extra="Modules: Flask, core.pipeline")
             process_media(path, out_path, options, task_progress, task_id)
             LiveDebugger.log("Process Complete", f"Successfully decrypted and saved output file: '{out_path}'", level="INFO", module="HTTP", extra="Modules: Flask, core.pipeline, os")
             return jsonify({"status": "ok", "file": out_path})
+
     except Exception as e:
         tb = traceback.format_exc()
         diagnostic = LiveDebugger.analyze_exception(e, module_name="HTTP", func_name="process_api")
@@ -782,14 +949,18 @@ def process_api():
             "traceback": tb,
             "diagnostic": diagnostic
         })
+
 @app.route('/api/job/start', methods=['POST'])
 def start_job_api():
     try:
         action = request.form.get('action', 'scramble')
         files_info = []
+
+        # 1. Check for uploaded files (multi-file support: request.files.getlist('files') or request.files.get('file'))
         uploaded_files = request.files.getlist('files')
         if not uploaded_files and 'file' in request.files:
             uploaded_files = [request.files['file']]
+
         for f in uploaded_files:
             if f and f.filename:
                 safe_name = os.path.basename(f.filename)
@@ -800,6 +971,8 @@ def start_job_api():
                     'path': save_path,
                     'display_name': safe_name
                 })
+
+        # 2. Check for vault files
         vault_raw = request.form.get('vault_filenames')
         if vault_raw:
             try:
@@ -828,8 +1001,11 @@ def start_job_api():
                     'path': v_path,
                     'display_name': v_name
                 })
+
         if not files_info:
             return jsonify({"status": "error", "message": "No media files provided to process."}), 400
+
+        # Central file support
         center_path = None
         if 'center_file' in request.files and request.files['center_file'].filename:
             c_file = request.files['center_file']
@@ -844,6 +1020,8 @@ def start_job_api():
                 cp = os.path.join(INPUT_FOLDER, c_name)
             if os.path.exists(cp):
                 center_path = cp
+
+        # Custom Audio Tracks support
         custom_audio_l_path = None
         if 'custom_audio_l' in request.files and request.files['custom_audio_l'].filename:
             cal_file = request.files['custom_audio_l']
@@ -856,6 +1034,7 @@ def start_job_api():
                 if os.path.exists(cand):
                     custom_audio_l_path = cand
                     break
+
         custom_audio_r_path = None
         if 'custom_audio_r' in request.files and request.files['custom_audio_r'].filename:
             car_file = request.files['custom_audio_r']
@@ -868,6 +1047,7 @@ def start_job_api():
                 if os.path.exists(cand):
                     custom_audio_r_path = cand
                     break
+
         form_data = dict(request.form)
         if center_path:
             form_data['center_path'] = center_path
@@ -875,20 +1055,25 @@ def start_job_api():
             form_data['custom_audio_l'] = custom_audio_l_path
         if custom_audio_r_path:
             form_data['custom_audio_r'] = custom_audio_r_path
+
         ok, msg, jid = job_manager.start_job(action, files_info, form_data)
         if not ok:
             return jsonify({"status": "error", "message": msg, "job_id": jid}), 409
+
         return jsonify({"status": "ok", "job_id": jid, "total_files": len(files_info)})
+
     except Exception as e:
         tb = traceback.format_exc()
         diag = LiveDebugger.analyze_exception(e, module_name="HTTP", func_name="start_job_api")
         return jsonify({"status": "error", "message": str(e), "traceback": tb, "diagnostic": diag}), 500
+
 @app.route('/api/detect_optical_markers', methods=['POST'])
 def detect_optical_markers_api():
     try:
         from core.crypto import detect_optical_markers
         import cv2
         import numpy as np
+
         img = None
         if 'file' in request.files and request.files['file'].filename:
             file_bytes = np.frombuffer(request.files['file'].read(), np.uint8)
@@ -908,8 +1093,10 @@ def detect_optical_markers_api():
                         img = frame
                 else:
                     img = cv2.imread(f_path)
+
         if img is None:
             return jsonify({"status": "error", "message": "Could not read media file or image frame."}), 400
+
         placement = request.form.get('marker_placement', 'outside')
         roi = detect_optical_markers(img, placement=placement)
         if roi:
@@ -918,11 +1105,13 @@ def detect_optical_markers_api():
             return jsonify({"status": "not_found", "message": "No optical markers detected."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/api/scan_qr', methods=['POST'])
 def scan_qr_api():
     try:
         import cv2
         import numpy as np
+
         img = None
         if 'file' in request.files and request.files['file'].filename:
             file_bytes = np.frombuffer(request.files['file'].read(), np.uint8)
@@ -934,8 +1123,10 @@ def scan_qr_api():
                 f_path = os.path.join(INPUT_FOLDER, v_name)
             if os.path.exists(f_path):
                 img = cv2.imread(f_path)
+
         if img is None:
             return jsonify({"status": "error", "message": "No image provided."}), 400
+
         detector = cv2.QRCodeDetector()
         decoded_text, points, _ = detector.detectAndDecode(img)
         if decoded_text:
@@ -944,14 +1135,18 @@ def scan_qr_api():
             return jsonify({"status": "not_found", "message": "No QR code detected in image."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route('/api/job/status', methods=['GET'])
 def get_job_status_api():
     status = job_manager.get_status()
     return jsonify(status)
+
 @app.route('/api/job/cancel', methods=['POST'])
 def cancel_job_api():
     ok, msg = job_manager.cancel_job()
     return jsonify({"status": "ok" if ok else "error", "message": msg})
+
 @app.route('/api/save_key', methods=['POST'])
 def save_key_api():
     data = request.json or {}
@@ -964,6 +1159,7 @@ def save_key_api():
         LiveDebugger.log("Save Key", f"Saved encryption key file to: {key_path}", level="INFO", module="HTTP", extra="Modules: os")
         return jsonify({"success": True, "path": key_path})
     return jsonify({"success": False, "error": "Could not write key file"})
+
 @app.route('/api/save_debug_log', methods=['POST'])
 def save_debug_log():
     try:
@@ -975,6 +1171,8 @@ def save_debug_log():
             return jsonify({"success": False, "error": "Could not determine path"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+# --- VAULT APIS ---
 @app.route('/api/vault', methods=['GET'])
 def list_vault():
     folder = request.args.get('folder', 'input')
@@ -986,11 +1184,15 @@ def list_vault():
         target_dir = DECRYPTED_FOLDER
     else:
         return jsonify({"error": "invalid folder"}), 400
+        
     if not os.path.exists(target_dir):
         return jsonify({"files": []})
+        
     files = [f for f in os.listdir(target_dir) if os.path.isfile(os.path.join(target_dir, f))]
+    # Sort files by modification/creation time in descending order (newest first)
     files.sort(key=lambda x: os.path.getmtime(os.path.join(target_dir, x)), reverse=True)
     return jsonify({"files": files})
+
 @app.route('/vault/<folder>/<path:filename>')
 def serve_vault_file(folder, filename):
     if folder == 'input':
@@ -1001,11 +1203,14 @@ def serve_vault_file(folder, filename):
         target_dir = DECRYPTED_FOLDER
     else:
         return "Invalid folder", 400
+        
     path = os.path.join(target_dir, filename)
     if not os.path.exists(path):
         return "File not found", 404
+        
     mime, _ = mimetypes.guess_type(path)
     return send_file(path, conditional=True, mimetype=mime)
+
 @app.route('/api/vault/<folder>/<path:filename>', methods=['DELETE'])
 def delete_vault_file(folder, filename):
     if folder == 'input':
@@ -1021,6 +1226,7 @@ def delete_vault_file(folder, filename):
         os.remove(path)
         return jsonify({"status": "ok"})
     return jsonify({"status": "not_found"}), 404
+
 @app.route('/api/open_folder', methods=['POST'])
 def open_folder():
     data = request.json or {}
@@ -1033,11 +1239,13 @@ def open_folder():
         target_dir = DECRYPTED_FOLDER
     else:
         target_dir = VAULT_FOLDER
+    
     try:
         os.startfile(os.path.abspath(target_dir))
     except AttributeError:
         pass
     return jsonify({"status": "ok"})
+
 @app.route('/api/open_file', methods=['POST'])
 def open_file():
     data = request.json or {}
@@ -1045,6 +1253,7 @@ def open_file():
     filename = data.get('filename')
     if not filename:
         return jsonify({"error": "filename required"}), 400
+        
     if folder == 'input':
         target_dir = INPUT_FOLDER
     elif folder == 'encrypted':
@@ -1053,9 +1262,11 @@ def open_file():
         target_dir = DECRYPTED_FOLDER
     else:
         return jsonify({"error": "invalid folder"}), 400
+        
     path = os.path.join(target_dir, filename)
     if not os.path.exists(path):
         return jsonify({"error": "file not found"}), 404
+        
     try:
         if platform.system() == "Windows":
             os.startfile(os.path.abspath(path))
@@ -1067,7 +1278,9 @@ def open_file():
             subprocess.call(["xdg-open", os.path.abspath(path)])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+        
     return jsonify({"status": "ok"})
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Media-Encrypt Studio Local Server")
     parser.add_argument("--port", type=int, default=5050, help="Port to run Flask server on")
@@ -1076,8 +1289,10 @@ if __name__ == '__main__':
                         help="Responsive Web Design layout: desktop (default, unchanged UI) or mobile (compact touch-friendly scale). "
                              "WEB_LAYOUT env is used as a fallback; plain `python main.py` always runs desktop.")
     args = parser.parse_args()
+
     PORT = args.port
     host = args.host
+
     if args.layout:
         WEB_LAYOUT = args.layout
     elif os.environ.get("WEB_LAYOUT", "").strip().lower() in ("desktop", "mobile"):
@@ -1085,6 +1300,7 @@ if __name__ == '__main__':
     else:
         WEB_LAYOUT = "desktop"
     print(f"Web layout: {WEB_LAYOUT.upper()}")
+    
     if is_colab():
         host = host or '0.0.0.0'
         from google.colab.output import eval_js
@@ -1116,12 +1332,16 @@ if __name__ == '__main__':
                 except Exception as e:
                     print(f"Could not auto-install pywebview: {e}")
                     print("Tip: Install 'pywebview' to run this app in a dedicated app window (pip install pywebview)")
+                
         if use_webview:
             import webview
             from threading import Thread
+            # Start Flask server in background thread
             t = Thread(target=lambda: app.run(host=host, port=PORT, debug=False, use_reloader=False))
             t.daemon = True
             t.start()
+            
+            # Start standalone app window
             print("Starting Media-Encrypt Studio in Webview window...")
             api = WebviewApi()
             window = webview.create_window("Media-Encrypt Studio", f"http://{host}:{PORT}", width=1020, height=820, js_api=api)

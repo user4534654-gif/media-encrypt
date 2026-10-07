@@ -1,4 +1,7 @@
-                          
+# Icons Registry Reference
+# This file is used as a reference so that future developers and AI assistants
+# do not forget the mapping between emojis and graphic icons used in the DOM.
+
 ICON_MAPPINGS = {
     "🔒": "lock.png",
     "🔓": "unlock.png",
@@ -22,6 +25,8 @@ ICON_MAPPINGS = {
     "📺": "tv.png",
     "🔊": "speaker.png",
     "🧩": "puzzle.png",
+    # Zone / wave / timeline additions (font-rendered 256x256 RGBA).
+    # Keys are the base chars; ui.js matches base and VS16 forms of each.
     "⏮": "prev.png",
     "⏱": "stopwatch.png",
     "⏳": "hourglass.png",

@@ -1,8 +1,29 @@
+"""
+core/gridmap.py — machine-readable grid sidecar (replacement for SVG-as-proof).
+--------------------------------------------------------------------------------
+SVG (`core/svg_generator.py`) is a human eyeball aid: float coordinates as
+strings, viewer-dependent fonts, unassertable. This module instead exports TWO
+artifacts whose contents are exactly verifiable:
 
+  1. ``<base>_gridmap.json`` — THE source of truth. Integer-only permutation
+     record mirroring the encrypt path of ``image_processor`` /
+     ``video_processor`` bit for bit:
+       dest block i receives the tile of source block ``shuffled[i]``
+     (full-frame), plus the outer/inner partition and both shuffles for
+     center mode. A tester can ``assert`` it against golden vectors instead
+     of checking ``file size > 50``.
+  2. ``<base>_gridmap.png`` — human preview rendered with the SAME cv2 the
+     pipeline uses: integer geometry, Hershey fonts, fully deterministic.
+     Two exports of the same params are byte-identical (assertable).
+
+Nothing here touches encryption itself; decrypt never reads these files.
+"""
 import json
 import hashlib
+
 import cv2
 import numpy as np
+
 from core.crypto import seeded_shuffle
 from core.grid_utils import (
     get_blocks,
@@ -10,8 +31,21 @@ from core.grid_utils import (
     find_best_grid,
     center_inner_grid,
 )
+
 GRIDMAP_FORMAT = "media-encrypt-gridmap/1"
+
+
 def build_gridmap(w, h, cols, rows, seed, has_center=False, center_size="1/4"):
+    """Build the integer-only grid description. Mirrors the encrypt mapping.
+
+    Full-frame:  ``shuffled = seeded_shuffle(range(n), seed)``;
+                 destination block i takes source block ``shuffled[i]`` —
+                 identical to ``dest_to_src`` in ``process_image_file``.
+    Center:      ``shuffled_outer`` maps packed-source position j onto
+                 ``outer_indices`` destination (``dest[shuffled_outer[j]] = j``),
+                 ``shuffled_center[i]`` is the source tile drawn at center
+                 destination i — identical to the pipeline's encrypt branch.
+    """
     w, h, cols, rows, seed = int(w), int(h), int(cols), int(rows), int(seed)
     gm = {
         "format": GRIDMAP_FORMAT,
@@ -25,6 +59,7 @@ def build_gridmap(w, h, cols, rows, seed, has_center=False, center_size="1/4"):
     if not has_center:
         gm["perm"] = {
             "mode": "full",
+            # shuffled[i] = source block index placed at destination block i
             "shuffled": seeded_shuffle(list(range(n)), seed),
         }
     else:
@@ -42,26 +77,44 @@ def build_gridmap(w, h, cols, rows, seed, has_center=False, center_size="1/4"):
             "packed_blocks": [list(b) for b in get_blocks(w, h, c1, r1)],
             "inner_grid": [int(ci), int(ri)],
             "inner_blocks": [list(b) for b in get_blocks(cw, ch, ci, ri)],
+            # dest outer position shuffled_outer[j] takes packed source j
             "shuffled_outer": seeded_shuffle(list(outer), seed),
+            # dest center cell i takes source cell shuffled_center[i]
             "shuffled_center": seeded_shuffle(list(range(ci * ri)), seed),
         }
     return gm
+
+
 def export_gridmap_json(path, gridmap):
+    """Write canonical JSON (sorted keys + fixed indent => byte-deterministic)."""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(gridmap, f, indent=2, sort_keys=True)
         f.write("\n")
     return path
+
+
 def load_gridmap_json(path):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
 def _scale_text(min_side):
     scale = max(0.4, min(2.0, min_side / 40.0))
     thick = 1 if min_side < 40 else 2
     return scale, thick
+
+
 def export_gridmap_png(path, gridmap):
+    """Render deterministic preview: black canvas, block outlines + indices.
+
+    Full-frame: red outlines. Center: blue outer, red bbox + red inner.
+    Numbers are 1-based source indices per the encrypt mapping, i.e. the
+    human-readable twin of the JSON (same numbers a correct SVG would show).
+    """
     w, h = gridmap["w"], gridmap["h"]
     img = np.zeros((h, w, 3), dtype=np.uint8)
     font = cv2.FONT_HERSHEY_SIMPLEX
+
     def label(x1, y1, x2, y2, num, color):
         bw, bh = x2 - x1, y2 - y1
         if bw <= 0 or bh <= 0:
@@ -76,6 +129,7 @@ def export_gridmap_png(path, gridmap):
             ty = y1 + max(0, (bh + th) // 2)
             cv2.putText(img, txt, (tx, ty), font, scale, color, thick,
                         cv2.LINE_8)
+
     blocks = gridmap["blocks"]
     if not gridmap["has_center"]:
         shuffled = gridmap["perm"]["shuffled"]
@@ -98,6 +152,8 @@ def export_gridmap_png(path, gridmap):
         _ = pos_of
     cv2.imwrite(path, img)
     return path
+
+
 def gridmap_sha256(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:

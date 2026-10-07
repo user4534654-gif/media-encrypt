@@ -1,7 +1,10 @@
 import json
 import os
+
 METADATA_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "version.json")
+
 def load_project_metadata():
+    """Load project metadata (name, version, description) from version.json."""
     default_metadata = {
         "name": "Media-Encrypt Studio",
         "version": "2.2",

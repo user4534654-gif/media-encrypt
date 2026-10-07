@@ -1,11 +1,20 @@
+/* Media Inspector — pre-playback media data preview.
+ * Shows a player + table: name, file size, resolution,
+ * duration, video/audio codecs, bitrates, format.
+ * Works for local files (input[type=file]) and Vault files
+ * (via /api/vault_file_info). Called from vault.js:
+ * loadVideoPreview / loadCenterVideoPreview / loadImagePreview / loadAudioPreview.
+ */
 
 (function () {
     'use strict';
+
     function esc(s) {
         return String(s == null ? '' : s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;')
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
+
     function formatBytes(bytes) {
         if (bytes == null || isNaN(bytes)) return '—';
         bytes = Number(bytes);
@@ -15,6 +24,7 @@
         while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
         return bytes.toFixed(bytes >= 100 ? 1 : 2) + ' ' + units[i];
     }
+
     function formatClock(sec) {
         if (sec == null || !isFinite(sec)) return '—';
         sec = Math.max(0, Number(sec));
@@ -24,11 +34,15 @@
         function p(n, l) { n = String(n); while (n.length < l) n = '0' + n; return n; }
         return p(h, 2) + ':' + p(m, 2) + ':' + (s < 10 ? '0' : '') + s.toFixed(2);
     }
+
     function row(label, value) {
         return '<div class="mi-row"><span class="mi-label">' + esc(label) +
             '</span><span class="mi-value">' + value + '</span></div>';
     }
+
     function val(text) { return esc(text == null || text === '' ? '—' : text); }
+
+    // Probe a local File via <video>/<img>: resolution + duration.
     function probeLocalFile(file) {
         return new Promise(function (resolve) {
             var out = { width: null, height: null, durationSec: null };
@@ -58,13 +72,17 @@
             }
         });
     }
+
     function estimateKbps(sizeBytes, durationSec) {
         if (!sizeBytes || !durationSec || durationSec <= 0) return null;
         return Math.max(1, Math.round((sizeBytes * 8) / durationSec / 1000));
     }
+
+    // Single shared inspector card renderer.
     function renderInspector(containerId, opts) {
         var box = document.getElementById(containerId);
         if (!box) return;
+        // opts: {title, filename, playerHtml, rowsHtml, note}
         box.classList.remove('hidden');
         box.innerHTML =
             '<div class="mi-header"><span>' + esc(opts.title || '👁 Preview') + '</span>' +
@@ -77,12 +95,14 @@
             '</div></div>' +
             (opts.note ? '<div class="mi-note">' + opts.note + '</div>' : '');
     }
+
     window.clearMediaInspector = function (containerId) {
         var box = document.getElementById(containerId);
         if (!box) return;
         box.classList.add('hidden');
         box.innerHTML = '';
     };
+
     function serverRows(info, sizeBytes) {
         info = info || {};
         var res = info.resolution || '—';
@@ -98,6 +118,7 @@
             row('📦 Format', val(info.format))
         );
     }
+
     function playerFor(url, kind, filename) {
         if (kind === 'image') {
             return '<img src="' + esc(url) + '" alt="' + esc(filename || '') + '">';
@@ -107,6 +128,8 @@
         }
         return '<video src="' + esc(url) + '" controls muted playsinline preload="metadata"></video>';
     }
+
+    // ── API expected by vault.js ──────────────────────────────────────────────
     window.loadVideoPreview = function (fileUrl, filename, serverInfo) {
         function done(info, sizeBytes) {
             renderInspector('videoInspector', {
@@ -119,12 +142,14 @@
         if (serverInfo) {
             done(serverInfo, null);
         } else {
+            // Vault file without info (e.g. right after upload): retry via the server.
             fetch('/api/vault_file_info?filename=' + encodeURIComponent(filename || '') + '&folder=input')
                 .then(function (r) { return r.ok ? r.json() : null; })
                 .then(function (d) { done(d && d.info, d && d.size_bytes); })
                 .catch(function () { done(null, null); });
         }
     };
+
     window.loadCenterVideoPreview = function (fileUrl, filename, serverInfo) {
         function done(info, sizeBytes) {
             renderInspector('centerVideoInspector', {
@@ -137,6 +162,7 @@
         if (serverInfo) { done(serverInfo, null); return; }
         var m = /folder=([^&]+)/.exec(fileUrl || '');
         var folder = m ? decodeURIComponent(m[1]) : 'input';
+        // fileUrl looks like /vault/<folder>/<name> — extract folder directly
         var vm = /\/vault\/([^/]+)\//.exec(fileUrl || '');
         if (vm) folder = vm[1];
         fetch('/api/vault_file_info?filename=' + encodeURIComponent(filename || '') + '&folder=' + encodeURIComponent(folder))
@@ -144,6 +170,7 @@
             .then(function (d) { done(d && d.info, d && d.size_bytes); })
             .catch(function () { done(null, null); });
     };
+
     window.loadImagePreview = function (fileUrl, filename) {
         fetch('/api/vault_file_info?filename=' + encodeURIComponent(filename || '') + '&folder=input')
             .then(function (r) { return r.ok ? r.json() : null; })
@@ -165,6 +192,7 @@
                 });
             });
     };
+
     window.loadAudioPreview = function (fileUrl, filename) {
         fetch('/api/vault_file_info?filename=' + encodeURIComponent(filename || '') + '&folder=input')
             .then(function (r) { return r.ok ? r.json() : null; })
@@ -186,6 +214,8 @@
                 });
             });
     };
+
+    // ── Local files (not in Vault yet): size is known immediately, the rest comes from the browser
     function showLocalPreview(containerId, title, file, kind) {
         if (!file) { window.clearMediaInspector(containerId); return; }
         var objectUrl = URL.createObjectURL(file);
@@ -215,26 +245,31 @@
             });
         });
     }
+
     window.showLocalVideoPreview = function (file) {
         showLocalPreview('videoInspector', '👁 Video preview before processing', file, 'video');
     };
     window.showLocalCenterPreview = function (file) {
         showLocalPreview('centerVideoInspector', '👁 Center video before processing', file, 'video');
     };
+
+    // Hook up the inputs after DOM load (in addition to ui.js).
     document.addEventListener('DOMContentLoaded', function () {
         var main = document.getElementById('mediaUpload');
         if (main) {
             main.addEventListener('change', function (e) {
                 var files = e.target.files ? Array.prototype.slice.call(e.target.files) : [];
+                // Reset the Vault selection — the source is local now.
                 try {
                     if (typeof selectedVaultMedia !== 'undefined' && selectedVaultMedia) {
                         selectedVaultMedia.video = null;
                     }
-                } catch (err) {  }
+                } catch (err) { /* ignore */ }
                 if (!files.length) { window.clearMediaInspector('videoInspector'); return; }
                 window.showLocalVideoPreview(files[0]);
                 var box = document.getElementById('videoInspector');
                 if (box && files.length > 1) {
+                    // the batch-processing badge already lives in fileList; no duplicate here
                 }
             });
         }
@@ -246,11 +281,12 @@
                     if (typeof selectedVaultMedia !== 'undefined' && selectedVaultMedia) {
                         selectedVaultMedia.videoCenter = null;
                     }
-                } catch (err) {  }
+                } catch (err) { /* ignore */ }
                 if (!files.length) { window.clearMediaInspector('centerVideoInspector'); return; }
                 window.showLocalCenterPreview(files[0]);
             });
         }
+        // Image / Audio local previews (when their containers exist).
         var imgInput = document.getElementById('imageUpload');
         if (imgInput) {
             imgInput.addEventListener('change', function (e) {

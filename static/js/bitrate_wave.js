@@ -1,28 +1,45 @@
+// bitrate_wave.js — Dynamic Bitrate Wave editor ("Wave" button).
+// Two switchable curves sharing one canvas:
+//   BLUE (rest)  — drives the encode: avg -> target, max -> ceiling.
+//   GREEN (zone) — encrypt zones over time: the per-frame green/blue ratio
+//                  steers Zone Priority strength along the timeline.
+// First switch to green copies blue as a starting point.
+// Applied result is stored in #vid_bitrate_envelope as JSON:
+//   {"points":[...blue...],"zone_points":[...green...]|null,
+//    "avg":867,"max":1100,"duration":12.5|null}
+// and sent as `vid_bitrate_envelope` (see process.js). v1 envelopes
+// (3 blue points, no green) keep working unchanged.
 
-let waveRest = null;    
-let waveZone = null;    
-let waveCurve = 'rest'; 
-let waveGain = 0;       
+let waveRest = null;    // blue kbps values
+let waveZone = null;    // green kbps values (null = not defined)
+let waveCurve = 'rest'; // curve being edited
+let waveGain = 0;       // master shift applied to the ACTIVE curve
 let waveDragIdx = -1;
+
 const WAVE_MIN = 100;
 const WAVE_MAX = 25000;
 const WAVE_MAX_PTS = 100;
 const WAVE_COLORS = { rest: '#007aff', zone: '#22c55e' };
+
 function waveClamp(v) {
     return Math.max(WAVE_MIN, Math.min(WAVE_MAX, Math.round(v / 10) * 10));
 }
+
 function waveActive() {
     return waveCurve === 'zone' ? waveZone : waveRest;
 }
+
 function waveActiveColor() {
     return WAVE_COLORS[waveCurve] || WAVE_COLORS.rest;
 }
+
 function waveCount() {
     const el = document.getElementById('bitrateWaveCount');
     let n = el ? parseInt(el.value, 10) : 3;
     if (!isFinite(n)) n = 3;
     return Math.max(2, Math.min(WAVE_MAX_PTS, n));
 }
+
 function waveResample(pts, n) {
     pts = (pts && pts.length) ? pts.slice() : [3000];
     if (pts.length === 1) pts.push(pts[0]);
@@ -36,11 +53,16 @@ function waveResample(pts, n) {
     }
     return out;
 }
+
 function waveAvg(pts) {
     if (!pts || !pts.length) return 0;
     return Math.round(pts.reduce((a, b) => a + b, 0) / pts.length);
 }
+
 function waveSeedDefaults(n) {
+    // Seed from the manual slider; when upload bitrates were probed, use
+    // them literally: left = background, right = center video, dip between.
+    // (window._lastBitrates is filled by refreshUploadBitrateInfo in ui.js.)
     n = n || waveCount();
     const slider = document.getElementById('v_bit_slider');
     const base = slider ? (parseInt(slider.value, 10) || 3000) : 3000;
@@ -55,9 +77,11 @@ function waveSeedDefaults(n) {
     const mid = Math.max(WAVE_MIN, Math.round(Math.min(left, right) * 0.4 / 10) * 10);
     return waveResample([left, mid, right], n);
 }
+
 function switchWaveCurve(which) {
     waveCurve = (which === 'zone') ? 'zone' : 'rest';
     if (waveCurve === 'zone' && !waveZone) {
+        // First switch copies blue as a starting point.
         waveZone = (waveRest && waveRest.length ? waveRest.slice() : waveSeedDefaults());
     }
     const bR = document.getElementById('waveCurveRest');
@@ -67,10 +91,12 @@ function switchWaveCurve(which) {
     waveDragIdx = -1;
     drawBitrateWave();
 }
+
 function openBitrateWave() {
     const modal = document.getElementById('bitrateWaveModal');
     if (!modal) return;
     if (!waveRest) {
+        // Resume a previously applied envelope (v1 or v2), else seed fresh.
         try {
             const raw = document.getElementById('vid_bitrate_envelope').value;
             if (raw) {
@@ -91,6 +117,7 @@ function openBitrateWave() {
         } catch (e) {}
         if (!waveRest) waveRest = waveSeedDefaults();
     } else {
+        // Keep point count in sync if it was changed while closed.
         const n = waveCount();
         waveRest = waveResample(waveRest, n);
         if (waveZone) waveZone = waveResample(waveZone, n);
@@ -107,11 +134,13 @@ function openBitrateWave() {
     modal.style.display = 'flex';
     drawBitrateWave();
 }
+
 function closeBitrateWave() {
     const modal = document.getElementById('bitrateWaveModal');
     if (modal) modal.style.display = 'none';
     applyBitrateWave();
 }
+
 function resetBitrateWave() {
     const n = waveCount();
     waveRest = waveSeedDefaults(n);
@@ -127,6 +156,7 @@ function resetBitrateWave() {
     updateWaveGainLabel();
     drawBitrateWave();
 }
+
 function onBitrateWaveCount(val) {
     const n = Math.max(2, Math.min(WAVE_MAX_PTS, parseInt(val, 10) || 3));
     const cnt = document.getElementById('bitrateWaveCount');
@@ -135,6 +165,7 @@ function onBitrateWaveCount(val) {
     if (waveZone) waveZone = waveResample(waveZone, n);
     drawBitrateWave();
 }
+
 function clearBitrateWave() {
     waveRest = null;
     waveZone = null;
@@ -149,10 +180,12 @@ function clearBitrateWave() {
     if (label && slider) label.innerHTML = 'Max Dynamic Bitrate: ' + slider.value + 'k';
     closeBitrateWaveModalOnly();
 }
+
 function closeBitrateWaveModalOnly() {
     const modal = document.getElementById('bitrateWaveModal');
     if (modal) modal.style.display = 'none';
 }
+
 function onBitrateWaveGain(val) {
     const g = parseInt(val, 10) || 0;
     const delta = g - waveGain;
@@ -166,12 +199,14 @@ function onBitrateWaveGain(val) {
     updateWaveGainLabel();
     drawBitrateWave();
 }
+
 function updateWaveGainLabel() {
     const val = document.getElementById('bitrateWaveGainVal');
     if (val) val.textContent = (waveGain >= 0 ? '+' : '') + waveGain;
     const lab = document.getElementById('bitrateWaveGainLabel');
     if (lab) lab.childNodes[0].textContent = 'Master shift (' + waveCurve + '): ' + (waveGain >= 0 ? '+' : '') + waveGain + ' kbps (whole curve up / down)';
 }
+
 function waveDuration() {
     try {
         const lb = window._lastBitrates || null;
@@ -179,6 +214,7 @@ function waveDuration() {
     } catch (e) {}
     return null;
 }
+
 function applyBitrateWave() {
     if (!waveRest) return;
     const avg = waveAvg(waveRest);
@@ -190,6 +226,9 @@ function applyBitrateWave() {
     if (waveZone && waveZone.length === waveRest.length) {
         env.zone_points = waveZone.slice();
         const zAvg = waveAvg(waveZone);
+        // Zone/rest targets feed Zone Priority steering: enable it and derive
+        // the fallback Strength from the average ratio (approximate split).
+        // With known duration the backend steers per-frame along the curves.
         const modeSel = document.getElementById('v_spatial_mode');
         if (modeSel) {
             modeSel.value = 'priority';
@@ -210,6 +249,8 @@ function applyBitrateWave() {
     }
     const hidden = document.getElementById('vid_bitrate_envelope');
     if (hidden) hidden.value = JSON.stringify(env);
+    // A shaped wave is an explicit (non-auto) choice: switch Auto off and
+    // park the plain slider on the wave average so legacy paths stay sane.
     const auto = document.getElementById('autoVidBitrate');
     if (auto && auto.checked) {
         auto.checked = false;
@@ -235,6 +276,7 @@ function applyBitrateWave() {
         info.innerHTML = `Wave ${preview} → target ${avg}k, ceiling ${max}k (constrained VBR)${steerNote}`;
     }
 }
+
 function waveGeom(pts) {
     const canvas = document.getElementById('bitrateWaveCanvas');
     const W = canvas.width, H = canvas.height;
@@ -250,6 +292,7 @@ function waveGeom(pts) {
     const yOf = (v) => padT + ih - (Math.min(v, yMax) / yMax) * ih;
     return { W, H, padL, padR, padT, padB, iw, ih, n, yMax, xs, yOf };
 }
+
 function drawBitrateWave() {
     const canvas = document.getElementById('bitrateWaveCanvas');
     const readout = document.getElementById('bitrateWaveReadout');
@@ -259,7 +302,9 @@ function drawBitrateWave() {
     const g = waveGeom(pts);
     const { W, H, padL, padR, padT, xs, yOf, n } = g;
     const color = waveActiveColor();
+
     ctx.clearRect(0, 0, W, H);
+    // Grid + y labels.
     ctx.strokeStyle = '#e2e8f0';
     ctx.fillStyle = '#94a3b8';
     ctx.font = '10px monospace';
@@ -279,6 +324,7 @@ function drawBitrateWave() {
         ctx.fillText('end', xs[n - 1] - 12, H - 8);
         if (n > 2) ctx.fillText('·' + n + ' pts·', xs[Math.floor(n / 2)] - 18, H - 8);
     }
+    // Ghost of the inactive curve for reference.
     const other = (waveCurve === 'zone') ? waveRest : waveZone;
     const otherColor = (waveCurve === 'zone') ? WAVE_COLORS.rest : WAVE_COLORS.zone;
     if (other && other.length === n) {
@@ -291,6 +337,7 @@ function drawBitrateWave() {
         ctx.stroke();
         ctx.globalAlpha = 1.0;
     }
+    // Filled wave area.
     ctx.beginPath();
     ctx.moveTo(xs[0], yOf(pts[0]));
     for (let i = 1; i < n; i++) ctx.lineTo(xs[i], yOf(pts[i]));
@@ -299,12 +346,14 @@ function drawBitrateWave() {
     ctx.closePath();
     ctx.fillStyle = (waveCurve === 'zone') ? 'rgba(34,197,94,0.12)' : 'rgba(0,122,255,0.12)';
     ctx.fill();
+    // Wave line.
     ctx.beginPath();
     ctx.moveTo(xs[0], yOf(pts[0]));
     for (let i = 1; i < n; i++) ctx.lineTo(xs[i], yOf(pts[i]));
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.stroke();
+    // Draggable points (values labeled when sparse).
     const showVals = n <= 12;
     const r = n > 40 ? 4 : 7;
     for (let i = 0; i < n; i++) {
@@ -330,6 +379,7 @@ function drawBitrateWave() {
         readout.textContent = txt;
     }
 }
+
 function waveCanvasPos(ev) {
     const canvas = document.getElementById('bitrateWaveCanvas');
     const r = canvas.getBoundingClientRect();
@@ -340,6 +390,7 @@ function waveCanvasPos(ev) {
         y: (cy - r.top) * (canvas.height / r.height)
     };
 }
+
 function waveHitTest(p) {
     const pts = waveActive();
     if (!pts) return -1;
@@ -352,12 +403,14 @@ function waveHitTest(p) {
     }
     return -1;
 }
+
 function waveValueAtY(y) {
     const pts = waveActive() || [1000];
     const g = waveGeom(pts);
     const frac = (g.padT + g.ih - y) / g.ih;
     return Math.max(WAVE_MIN, Math.min(WAVE_MAX, Math.round(frac * g.yMax / 10) * 10));
 }
+
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('bitrateWaveCanvas');
     if (!canvas) return;
@@ -389,6 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
     canvas.addEventListener('pointermove', move);
     canvas.addEventListener('pointerup', up);
     canvas.addEventListener('pointercancel', up);
+    // Click on the backdrop (outside the card) applies & closes.
     const modal = document.getElementById('bitrateWaveModal');
     if (modal) {
         modal.addEventListener('click', (ev) => {

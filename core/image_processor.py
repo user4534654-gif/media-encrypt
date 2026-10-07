@@ -5,6 +5,7 @@ from core.crypto import seeded_shuffle, stamp_optical_markers, restore_optical_m
 from core.metadata_prober import writable_image_ext
 from core.grid_utils import find_best_grid, get_outer_blocks, get_blocks, get_roi_blocks, center_inner_grid
 from core.logger import LiveDebugger
+
 def save_image(path, img):
     base_p, ext = os.path.splitext(path)
     ext = ext.lower()
@@ -12,9 +13,15 @@ def save_image(path, img):
         path = base_p + '.png'
         ext = '.png'
     if ext in ('.jfif', '.jif', '.jfi', '.ico'):
+        # No OpenCV writer for these aliases (see WRITER_ALIASES in
+        # core/metadata_prober.py): normalize so the export never crashes.
+        # Normally job_manager already picks a writable out_ext; this is the
+        # last-resort safety net for direct pipeline callers.
         path = base_p + writable_image_ext(ext)
         ext = writable_image_ext(ext)
     if ext in ('.jpg', '.jpeg'):
+        # Route JPEG through Pillow for reliable, high-quality output that does
+        # not depend on which encoders the system OpenCV build bundles.
         try:
             from PIL import Image
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -32,7 +39,17 @@ def save_image(path, img):
         except Exception as e:
             raise RuntimeError(f"Failed to save as AVIF: {e}. Ensure 'pillow' and a suitable writer plugin are installed.")
     cv2.imwrite(path, img)
+
 def _polish_zone_roi(gray, w, h, roi_norm, cols, rows, seed, max_rounds=4):
+    """Greedy ±1px hill-climb of an auto-detected zone on descrambled block-
+    boundary smoothness. Detection (template peaks, blur plateaus) routinely
+    lands 1px off, and every pixel shifts the whole descramble grid — the
+    classic image-zone streak artifact. The true ROI minimizes boundary
+    discontinuity by a wide margin (validated ~5x gap), so plain hill
+    climbing with a 0.5% acceptance margin converges instead of wandering.
+    Only the zone's central 50% is descrambled per candidate (phase errors
+    are global, interiors don't discriminate) to keep this to ~seconds.
+    Returns a normalized ROI; never worse than the input."""
     from core.grid_utils import get_roi_blocks as _grb
     try:
         cols, rows = max(1, int(cols)), max(1, int(rows))
@@ -40,9 +57,11 @@ def _polish_zone_roi(gray, w, h, roi_norm, cols, rows, seed, max_rounds=4):
         return list(roi_norm)
     if cols * rows <= 1:
         return list(roi_norm)
+
     def to_px(roi):
         return [int(round(roi[0] * w)), int(round(roi[1] * h)),
                 int(round(roi[2] * w)), int(round(roi[3] * h))]
+
     def boundary_cost(roi_px):
         x1, y1, x2, y2 = roi_px
         if x2 - x1 < 16 or y2 - y1 < 16:
@@ -89,6 +108,7 @@ def _polish_zone_roi(gray, w, h, roi_norm, cols, rows, seed, max_rounds=4):
             cost += float(np.abs(out[ly - 1, :].astype(np.int32) - out[ly, :].astype(np.int32)).sum())
             cnt += cw
         return cost / max(1, cnt)
+
     cur = to_px(list(roi_norm))
     cur[0], cur[1] = max(0, cur[0]), max(0, cur[1])
     cur[2], cur[3] = min(w, cur[2]), min(h, cur[3])
@@ -116,24 +136,30 @@ def _polish_zone_roi(gray, w, h, roi_norm, cols, rows, seed, max_rounds=4):
             break
         cur, cur_cost = best, best_cost
     return [cur[0] / w, cur[1] / h, cur[2] / w, cur[3] / h]
+
 @LiveDebugger.trace(module_name="IMAGE")
 def process_image_file(input_path, output_path, options, progress_dict, task_id):
     is_cancelled_cb = options.get('is_cancelled')
     if is_cancelled_cb and is_cancelled_cb():
         LiveDebugger.log("CANCEL", f"Image processing cancelled for task {task_id}", level="WARNING", module="IMAGE")
         raise RuntimeError("Processing cancelled by user")
+
     proc_vid = options.get('process_video', True)
     reverse = options.get('reverse') or (options.get('action') == 'unscramble')
     cols, rows, seed = options.get('cols', 1), options.get('rows', 1), options.get('seed', 0)
     target_w, target_h = options.get('target_w'), options.get('target_h')
     no_scale = options.get('no_scale', False)
-    video_encrypt_mode = options.get('video_encrypt_mode', 'external')                               
+    video_encrypt_mode = options.get('video_encrypt_mode', 'external') # 'external', 'center', 'both'
+
     LiveDebugger.log("LOAD_IMAGE", f"Loading '{os.path.basename(input_path)}' | grid={cols}x{rows}, seed={seed}, reverse={reverse}", level="DEBUG", module="IMAGE")
+
+
     img = cv2.imread(input_path)
     if img is None:
         from PIL import Image
         pil_img = Image.open(input_path).convert('RGB')
         img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
     if target_w and target_h:
         if no_scale:
             canvas = np.zeros((target_h, target_w, 3), dtype=np.uint8)
@@ -145,9 +171,13 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             img = canvas
         else:
             img = cv2.resize(img, (target_w, target_h))
+    
     h, w, _ = img.shape
-    all_blocks = get_blocks(w, h, cols, rows)                              
-    n_blocks = len(all_blocks)                                   
+
+    # ── Block grid (lossless: last block absorbs edge pixels) ──────────
+    all_blocks = get_blocks(w, h, cols, rows)   # exactly cols*rows entries
+    n_blocks = len(all_blocks)                   # == cols * rows
+
     if not reverse and options.get('export_svg', True):
         try:
             from core.svg_generator import export_grid_to_svg, export_scrambled_grid_to_svg
@@ -156,6 +186,8 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             export_grid_to_svg(f"{base}_grid.svg", w, h, cols, rows, has_center=options.get('center', False), center_size=options.get('center_size', '1/4'))
             export_scrambled_grid_to_svg(f"{base}_grid_original.svg", w, h, cols, rows, seed, has_center=options.get('center', False), center_size=options.get('center_size', '1/4'), prefix_original=True)
             export_scrambled_grid_to_svg(f"{base}_grid_scrambled.svg", w, h, cols, rows, seed, has_center=options.get('center', False), center_size=options.get('center_size', '1/4'), prefix_original=False)
+            # Zone+markers set (separate files): full-roi blocks the encoder
+            # shuffles (images always use the full layout) + marker boxes.
             _zroi = options.get('patch_roi')
             if _zroi and len(_zroi) >= 4:
                 from core.crypto import _calculate_marker_boxes as _img_mbox, effective_marker_placement as _img_eff
@@ -187,6 +219,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                     export_scrambled_zone_to_svg(f"{base}_zone_scrambled.svg", w, h, list(_zroi)[:4], _zblocks, seed, marker_boxes=_mb, prefix_original=False, caption=_cap)
         except Exception as e:
             print("Failed to export SVG grids:", e)
+
     if not reverse and options.get('export_map', False):
         try:
             from core.gridmap import build_gridmap, export_gridmap_json, export_gridmap_png
@@ -198,6 +231,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             export_gridmap_png(f"{base}_gridmap.png", _gm)
         except Exception as e:
             LiveDebugger.log("GRIDMAP_EXPORT_WARN", f"Failed to export gridmap: {e}", level="WARNING", module="IMAGE")
+
     if proc_vid:
         _center_path = options.get('center_path')
         _zone_roi = options.get('patch_roi')
@@ -206,8 +240,15 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
         _img_combine_dec = (reverse and options.get('center')
                             and (bool(_zone_roi) or bool(options.get('optical_markers'))))
         if _img_combine_enc or _img_combine_dec:
+            # ── Zone+Center mode: a regular center-video pipeline runs INSIDE
+            # the zone (nested outer ring + inner center per video_encrypt_mode),
+            # mirroring the fixed-center pipeline. Background outside the zone
+            # stays untouched. 'inside' markers are honored: the nested center
+            # sits mid-zone, corner markers survive on the scrambled ring and
+            # decrypt erases them inpaint-first (see below).
             from core.video_processor import _encrypt_zone_nested, _decrypt_zone_nested
             placement = options.get('marker_placement', 'outside')
+
             roi = list(_zone_roi) if _zone_roi else None
             if _img_combine_dec and options.get('optical_markers') and not roi:
                 d_roi = detect_optical_markers(img, placement=placement)
@@ -225,6 +266,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                     LiveDebugger.log("MARKER_DETECT", "Warning: Optical markers specified in key, but could not be detected in image.", level="WARNING", module="IMAGE")
             if not roi:
                 roi = [0.0, 0.0, 1.0, 1.0]
+
             rx1, ry1, rx2, ry2 = roi
             if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
                 px1, py1 = int(round(rx1 * w)), int(round(ry1 * h))
@@ -234,6 +276,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             px1, py1 = max(0, min(w, px1)), max(0, min(h, py1))
             px2, py2 = max(0, min(w, px2)), max(0, min(h, py2))
             zw, zh = max(2, px2 - px1), max(2, py2 - py1)
+
             if _img_combine_enc:
                 center_img = cv2.imread(_center_path)
                 if center_img is None:
@@ -255,6 +298,8 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                 patch = img[py1:py2, px1:px2]
                 if patch.shape[1] != zw or patch.shape[0] != zh:
                     patch = cv2.resize(patch, (zw, zh))
+                # Inside markers sit ON the scrambled ring: erase them BEFORE
+                # the nested descramble (|mif/ full-layout rule), not after.
                 _in_first = bool(options.get('optical_markers') and placement == 'inside')
                 if _in_first:
                     patch = inpaint_optical_markers(patch, 0, 0, zw, zh, placement='inside')
@@ -275,12 +320,21 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             outer_indices, inner_indices, (cx1, cy1, cx2, cy2) = get_outer_blocks(cols, rows, w, h, center_size=center_size)
             N_outer = len(outer_indices)
             C1, R1 = find_best_grid(N_outer, target_ratio=cols/rows)
+
+            # Source layout blocks for the outer region
             src_blocks_outer = get_blocks(w, h, C1, R1)
+
             shuffled_outer = seeded_shuffle(list(outer_indices), seed)
+
+            # Precise gapless dimensions for central image
             cw = cx2 - cx1
             ch = cy2 - cy1
+
+            # Calculate inner columns/rows for central image scrambling
             cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
             center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
+
+            # Setup central image tile scrambling
             dest_to_src_center = {idx: idx for idx in range(cols_inner * rows_inner)}
             shuffled_center = seeded_shuffle(list(range(cols_inner * rows_inner)), seed)
             if reverse:
@@ -289,20 +343,30 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             else:
                 for i, v in enumerate(shuffled_center):
                     dest_to_src_center[i] = v
+
             if reverse:
+                # Restore Image 1 (Background)
                 restored_img = np.zeros((h, w, 3), dtype=np.uint8)
                 if video_encrypt_mode in ['external', 'both']:
+                    # Unscramble outer background blocks
                     for j in range(N_outer):
+                        # Destination block in the original layout (by flat index)
                         idx = shuffled_outer[j]
                         dx1, dy1, dx2, dy2 = all_blocks[idx]
                         tile = img[dy1:dy2, dx1:dx2]
+
+                        # Source position in the packed source grid
                         x1, y1, x2, y2 = src_blocks_outer[j]
                         tile_resized = cv2.resize(tile, (x2 - x1, y2 - y1))
                         restored_img[y1:y2, x1:x2] = tile_resized
                 else:
+                    # Background is untouched, copy directly
                     restored_img = img.copy()
+
+                # Extract Image 2 (Center)
                 center_img = img[cy1:cy2, cx1:cx2]
                 if video_encrypt_mode in ['center', 'both']:
+                    # Unscramble center image using per-block coords
                     unscrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
                     for i in range(cols_inner * rows_inner):
                         t_idx = dest_to_src_center[i]
@@ -316,28 +380,38 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                     center_img_to_write = unscrambled_c
                 else:
                     center_img_to_write = center_img
+
                 save_image(output_path, restored_img)
                 base, ext = os.path.splitext(output_path)
                 save_image(f"{base}_center{ext}", center_img_to_write)
             else:
+                # Encrypt (Scramble Background into outer blocks)
                 new_img = np.zeros((h, w, 3), dtype=np.uint8)
                 if video_encrypt_mode in ['external', 'both']:
                     for j in range(N_outer):
+                        # Read from source packed grid
                         x1, y1, x2, y2 = src_blocks_outer[j]
                         tile = img[y1:y2, x1:x2]
+
+                        # Write to destination block in the shuffled outer layout
                         idx = shuffled_outer[j]
                         dx1, dy1, dx2, dy2 = all_blocks[idx]
                         tile_resized = cv2.resize(tile, (dx2 - dx1, dy2 - dy1))
                         new_img[dy1:dy2, dx1:dx2] = tile_resized
                 else:
+                    # Background is untouched, copy directly
                     for idx in outer_indices:
                         dx1, dy1, dx2, dy2 = all_blocks[idx]
                         new_img[dy1:dy2, dx1:dx2] = img[dy1:dy2, dx1:dx2]
+
+                # Write center media
                 if options.get('center_path') and os.path.exists(options['center_path']):
                     center_img = cv2.imread(options['center_path'])
                     if center_img is not None:
                         center_resized = cv2.resize(center_img, (cw, ch))
+
                         if video_encrypt_mode in ['center', 'both']:
+                            # Scramble center image frame using per-block coords
                             scrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
                             for i in range(cols_inner * rows_inner):
                                 t_idx = dest_to_src_center[i]
@@ -349,9 +423,11 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                                     tile = cv2.resize(tile, (dw_blk, dh_blk))
                                 scrambled_c[dy1:dy2, dx1:dx2] = tile
                             center_resized = scrambled_c
+
                         new_img[cy1:cy2, cx1:cx2] = center_resized
                 save_image(output_path, new_img)
         elif options.get('patch_roi') or (reverse and options.get('optical_markers')):
+            # If decrypting with optical markers and no explicit patch_roi was specified in the key:
             roi = options.get('patch_roi')
             if reverse and options.get('optical_markers') and not roi:
                 placement = options.get('marker_placement', 'outside')
@@ -368,11 +444,15 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                     LiveDebugger.log("MARKER_DETECT", f"Auto-detected optical markers in image! Reconstructed ROI: {roi}", level="SUCCESS", module="IMAGE")
                 else:
                     LiveDebugger.log("MARKER_DETECT", "Warning: Optical markers specified in key, but could not be detected in image.", level="WARNING", module="IMAGE")
+
             if not roi:
                 roi = [0.0, 0.0, 1.0, 1.0]
+
+            # Selective Spatial ROI scramble
             roi_invert = options.get('roi_invert', False)
             roi_blocks = get_roi_blocks(w, h, roi, cols, rows, invert=roi_invert)
             n_roi_blocks = len(roi_blocks)
+
             dest_to_src = {}
             if reverse:
                 fwd = seeded_shuffle(list(range(n_roi_blocks)), seed)
@@ -382,6 +462,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                 shuffled = seeded_shuffle(list(range(n_roi_blocks)), seed)
                 for i, v in enumerate(shuffled):
                     dest_to_src[i] = v
+
             new_img = img.copy()
             for i in range(n_roi_blocks):
                 t_idx = dest_to_src[i]
@@ -392,6 +473,10 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                 if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
                     tile = cv2.resize(tile, (dw_blk, dh_blk))
                 new_img[dy1:dy2, dx1:dx2] = tile
+
+            # Optical marker stamping on encrypt or restoration on decrypt.
+            # int(round()): stamp/inpaint pixel zone must equal the descramble
+            # grid zone (get_roi_blocks rounds) — truncation desyncs them.
             if not reverse and options.get('optical_markers'):
                 rx1, ry1, rx2, ry2 = roi
                 if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
@@ -408,8 +493,10 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                         rx1, ry1, rx2, ry2 = int(round(rx1 * w)), int(round(ry1 * h)), int(round(rx2 * w)), int(round(ry2 * h))
                     placement = options.get('marker_placement', 'outside')
                     new_img = inpaint_optical_markers(new_img, rx1, ry1, rx2, ry2, placement=placement)
+
             save_image(output_path, new_img)
         else:
+            # Simple full-frame scramble
             dest_to_src = {}
             if reverse:
                 fwd = seeded_shuffle(list(range(n_blocks)), seed)
@@ -419,6 +506,7 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
                 shuffled = seeded_shuffle(list(range(n_blocks)), seed)
                 for i, v in enumerate(shuffled):
                     dest_to_src[i] = v
+
             new_img = img.copy()
             for i in range(n_blocks):
                 t_idx = dest_to_src[i]
@@ -432,4 +520,5 @@ def process_image_file(input_path, output_path, options, progress_dict, task_id)
             save_image(output_path, new_img)
     else:
         save_image(output_path, img)
+        
     progress_dict[task_id] = 100

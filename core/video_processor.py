@@ -5,6 +5,7 @@ import sys
 import math
 import subprocess
 import imageio_ffmpeg
+
 creation_flags = 0
 if sys.platform == "win32":
     creation_flags = subprocess.CREATE_NO_WINDOW
@@ -15,11 +16,15 @@ from core.svg_generator import export_grid_to_svg, export_scrambled_grid_to_svg
 from core.svg_generator import export_zone_to_svg, export_scrambled_zone_to_svg
 from core.tempdir import get_temp_file_path
 from core.logger import LiveDebugger
+
 _AVAILABLE_HW_ENCODERS = None
+
 def get_available_hw_encoders():
+    """Detect available FFmpeg hardware-accelerated video encoders."""
     global _AVAILABLE_HW_ENCODERS
     if _AVAILABLE_HW_ENCODERS is not None:
         return _AVAILABLE_HW_ENCODERS
+
     encoders = set()
     try:
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
@@ -37,15 +42,21 @@ def get_available_hw_encoders():
                     encoders.add(parts[1].lower())
     except Exception as e:
         LiveDebugger.log("GPU_PROBE_WARN", f"Failed to probe FFmpeg encoders: {e}", level="WARNING", module="VIDEO")
+
     _AVAILABLE_HW_ENCODERS = encoders
     return _AVAILABLE_HW_ENCODERS
+
 def resolve_video_encoder(requested_codec, use_gpu=False):
+    """Resolve best video encoder and settings based on hardware acceleration availability."""
     if not use_gpu:
         return requested_codec, 'software', {}
+
     hw_encoders = get_available_hw_encoders()
     req = (requested_codec or '').lower()
+
     is_h264 = req in ['libx264', 'h264', 'auto', '']
     is_h265 = req in ['libx265', 'hevc', 'h265']
+
     candidate_chain = []
     if is_h264:
         candidate_chain = [
@@ -61,14 +72,22 @@ def resolve_video_encoder(requested_codec, use_gpu=False):
             ('hevc_qsv', 'Intel QuickSync'),
             ('hevc_amf', 'AMD AMF')
         ]
+
     for enc_name, hw_type in candidate_chain:
         if enc_name in hw_encoders:
             extra_args = {}
             if 'nvenc' in enc_name:
                 extra_args['preset'] = 'p4'
             return enc_name, hw_type, extra_args
+
     return requested_codec, 'software', {}
+
+
 def _adjust_audio_length(y, target_len, action='silence'):
+    """Crop or extend audio array y to target_len samples.
+    action='loop'    → tile/repeat the audio
+    action='silence' → pad with zeros
+    """
     if len(y) >= target_len:
         return y[:target_len]
     shortage = target_len - len(y)
@@ -84,7 +103,9 @@ def _adjust_audio_length(y, target_len, action='silence'):
             return np.pad(y, (0, shortage))
         else:
             return np.pad(y, ((0, shortage), (0, 0)))
+
 def _load_or_extract_audio_channel(file_path, target_sr, ffmpeg_exe, creation_flags):
+    """Extracts or loads mono audio from an audio or video file, resampled to target_sr."""
     if not file_path or not os.path.exists(file_path):
         return None
     import soundfile as sf
@@ -95,6 +116,9 @@ def _load_or_extract_audio_channel(file_path, target_sr, ffmpeg_exe, creation_fl
         if res.returncode == 0 and os.path.exists(temp_wav):
             data, sr = sf.read(temp_wav)
             if len(data.shape) > 1:
+                # Stereo (or more) custom/center source: proper mono downmix.
+                # Taking data[:, 0] (the old behavior) silently dropped every
+                # channel but left — a stereo custom track lost its right side.
                 data = data.mean(axis=1)
             return data
     except Exception as e:
@@ -106,7 +130,9 @@ def _load_or_extract_audio_channel(file_path, target_sr, ffmpeg_exe, creation_fl
             except Exception:
                 pass
     return None
+
 def _probe_audio_duration_sec(file_path):
+    """Best-effort media duration in seconds (0.0 when unknown)."""
     if not file_path or not os.path.exists(file_path):
         return 0.0
     try:
@@ -115,7 +141,13 @@ def _probe_audio_duration_sec(file_path):
         return float(dur) if dur else 0.0
     except Exception:
         return 0.0
+
 def _extract_center_mono(center_path, target_sr, ffmpeg_exe, creation_flags, target_len, vol=1.0, loop_action='silence'):
+    """Extract center-video audio as mono at target_sr, length-fitted.
+
+    Returns None when the center file has no usable audio (caller falls back
+    to silence) — never raises for missing/quiet sources.
+    """
     import soundfile as sf
     data = _load_or_extract_audio_channel(center_path, target_sr, ffmpeg_exe, creation_flags)
     if data is None:
@@ -124,6 +156,7 @@ def _extract_center_mono(center_path, target_sr, ffmpeg_exe, creation_flags, tar
     if vol != 1.0:
         data = data * vol
     return data
+
 def _close_ffmpeg_proc(p, name="FFmpeg"):
     if p is None:
         return
@@ -137,7 +170,13 @@ def _close_ffmpeg_proc(p, name="FFmpeg"):
     if p.returncode != 0 and stderr_bytes:
         err_text = stderr_bytes.decode('utf-8', errors='ignore')
         LiveDebugger.log("FFMPEG_ERROR", f"{name} encoding failed with returncode {p.returncode}: {err_text.strip()}", level="ERROR", module="VIDEO")
+
 def _parse_bitrate_envelope(envelope):
+    """Validate a 🌊 wave envelope -> (avg_kbps, max_kbps) or (None, None).
+
+    Envelope shape: {'points': [start, mid, end, ...], ...} in kbps.
+    Encoded as constrained VBR: average = target, peak = ceiling.
+    """
     try:
         if not isinstance(envelope, dict):
             return None, None
@@ -148,18 +187,42 @@ def _parse_bitrate_envelope(envelope):
         return max(100, int(round(sum(pts) / len(pts)))), max(pts)
     except Exception:
         return None, None
+
+
 def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode='off', rows=1, cols=1, extra_hw_args=None, envelope=None, scramble_tune=False):
+    """
+    Construct video encoding arguments for FFmpeg supporting spatial compression modes:
+      - 'off': Standard capped ABR (target = ceiling).
+      - 'priority': Zone Priority (Constrained VBR + AQ core; the actual zone
+        steering is in-frame background simplification via
+        _soften_outside_zones). 'zone' is accepted as a legacy alias.
+
+    envelope: optional 🌊 wave dict {'points': [...]}. In 'off' mode it turns
+    the fixed bitrate into constrained VBR (-b:v avg -maxrate max -bufsize
+    2*max); in 'zone'/'tiles' modes the peak becomes the maxrate ceiling.
+
+    scramble_tune: measured scramble preset (experiments/scramble_codec_study.py):
+      libx264 -> no-deblock + psy=0 + tune ssim + chromaoffset -2 (+3.6 dB);
+      libx265 -> no-deblock + tune ssim (+4.8 dB). VP9/AV1 showed no measurable
+      effect in 1-pass capped mode, so no flags are added for them.
+    """
     if extra_hw_args is None:
         extra_hw_args = {}
+
     args = ['-c:v', chosen_codec]
     env_avg, env_max = _parse_bitrate_envelope(envelope)
+    # 'zone' is a legacy alias of 'priority' (old UI/saved settings).
     _prio = spatial_mode in ('priority', 'zone')
     if env_avg and _prio:
+        # Ceiling semantics in this mode: the wave peak is the maxrate.
         b_val = f"{env_max}k"
     elif env_avg and spatial_mode == 'off':
+        # Constrained-VBR target; the ceiling is applied below.
         b_val = f"{env_avg}k"
     else:
         b_val = vid_bitrate or '3000k'
+
+    # Compute a safe buffer size (2x bitrate) for constrained VBV
     buf_val = '6000k'
     try:
         raw_num = int(''.join(filter(str.isdigit, str(b_val))))
@@ -167,6 +230,7 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
         buf_val = f"{raw_num * 2}{unit}"
     except Exception:
         buf_val = '6000k'
+
     codec_lower = (chosen_codec or '').lower()
     is_h264 = any(x in codec_lower for x in ['x264', 'h264'])
     is_h265 = any(x in codec_lower for x in ['x265', 'hevc', 'h265'])
@@ -176,7 +240,14 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
     is_vt = 'videotoolbox' in codec_lower
     is_amf = 'amf' in codec_lower
     is_prores = 'prores' in codec_lower
+
     if _prio:
+        # ── Mode 'priority': Zone Priority (Constrained VBR + AQ + steering)
+        # Rate-control core kept from the old Mode 1 (CRF with maxrate ceiling
+        # + variance AQ — the only part of it that ever worked). The actual
+        # zone bitrate steering happens in-frame via _soften_outside_zones
+        # (background simplification), not via codec options: spatial QP maps
+        # cannot be passed through the ffmpeg CLI.
         if is_nvenc:
             args.extend(['-rc', 'vbr', '-cq', '19', '-b:v', b_val, '-maxrate', b_val, '-bufsize', buf_val])
             args.extend(['-preset', extra_hw_args.get('preset', 'p4'), '-pix_fmt', 'yuv420p'])
@@ -196,7 +267,15 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
             args.extend(['-profile:v', '3'])
         else:
             args.extend(['-b:v', b_val, '-maxrate', b_val, '-bufsize', buf_val, '-preset', vid_preset, '-pix_fmt', 'yuv420p'])
+
     else:
+        # ── Mode 'off' / Capped ABR ────────────────────────────────────
+        # -b:v is the target AND the enforced ceiling (-maxrate/-bufsize).
+        # Without the cap x264 ABR overshoots freely on hard (scrambled)
+        # content (measured 2.7x over the slider) — the "Max" in the UI label
+        # would be a lie. With a 🌊 envelope this becomes constrained VBR:
+        # the wave average is the target, the wave peak is the ceiling
+        # (complex scenes may burst up to it, simple scenes save bits).
         if env_avg and env_max and not is_prores:
             args.extend(['-b:v', f'{env_avg}k', '-maxrate', f'{env_max}k', '-bufsize', f'{env_max * 2}k'])
         else:
@@ -217,14 +296,31 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
             args.extend(['-preset', vid_preset])
         if not is_prores and not is_qsv:
             args.extend(['-pix_fmt', 'yuv420p'])
+
     if scramble_tune:
+        # Software x264/x265 only (exact encoder match — never HW wrappers).
         if codec_lower == 'libx264':
             args.extend(['-x264-params', 'no-deblock=1', '-psy', '0',
                          '-tune', 'ssim', '-chromaoffset', '-2'])
         elif codec_lower == 'libx265':
             args.extend(['-x265-params', 'no-deblock=1', '-tune', 'ssim'])
+
     return args
+
+
 def _scramble_frame_ordinary(frame, cols, rows, seed, reverse=False):
+    """Treat `frame` as an ordinary standalone video frame and run it through
+    the standard full-frame block permutation (exactly the mapping used when
+    no center/zone options are active).
+
+    This is the shared primitive behind the Zone+Center pipeline: the zone is
+    a cropped "separate video" and the center media is encrypted "as always",
+    as an ordinary video, before being pasted into the zone (encrypt) or
+    cropped out of it (decrypt). Block geometry is derived from the frame
+    handed in, so callers must resize to the zone size BEFORE scrambling on
+    encrypt (mirroring the fixed-center pipeline) for the decrypt roundtrip
+    to line up exactly.
+    """
     h, w = frame.shape[:2]
     blocks = get_blocks(w, h, cols, rows)
     n = len(blocks)
@@ -248,7 +344,11 @@ def _scramble_frame_ordinary(frame, cols, rows, seed, reverse=False):
             tile = cv2.resize(tile, (dw_blk, dh_blk))
         out[dy1:dy2, dx1:dx2] = tile
     return out
+
+
 def _resolve_zone_pixels(s_roi, out_w, out_h):
+    """Normalize an ROI (relative 0..1 or absolute pixels) to integer pixels,
+    clamped to the frame bounds (callers skip the zone if px2<=px1)."""
     rx1, ry1, rx2, ry2 = s_roi
     if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
         px1, py1 = int(round(rx1 * out_w)), int(round(ry1 * out_h))
@@ -260,8 +360,25 @@ def _resolve_zone_pixels(s_roi, out_w, out_h):
     px2 = max(0, min(out_w, px2))
     py2 = max(0, min(out_h, py2))
     return px1, py1, px2, py2
+
+
 def _soften_outside_zones(frame, keep_rects=None, cut_rects=None,
                           marker_boxes=None, strength=0, feather=8):
+    """Blur everything EXCEPT the encrypt zones ("Zone Priority" steering).
+
+    The encoder's rate control spends bits on detail: a softened background
+    costs few bits, so the saved budget flows into the sharp scrambled zone.
+    Approximate (no exact ratio), encoder-agnostic, works on any codec/HW.
+
+    - frame: HxWx3 BGR uint8, modified in place and returned.
+    - keep_rects: [(x1,y1,x2,y2)] kept sharp (normal encrypt zones).
+    - cut_rects: subtracted from sharp area (inverted zones: the box interior
+      is background, everything around it is important).
+    - marker_boxes: [{x1,y1,x2,y2}] optical fiducials, always kept sharp so
+      the decryptor can still detect them.
+    - strength 0..100 → Gaussian sigma 0..6. 0 = no-op.
+    - feather: px width of the soft transition (no visible seam).
+    """
     if frame is None or strength <= 0:
         return frame
     h, w = frame.shape[:2]
@@ -271,7 +388,7 @@ def _soften_outside_zones(frame, keep_rects=None, cut_rects=None,
         return frame
     keep = np.zeros((h, w), dtype=np.float32)
     if not keep_rects and cut_rects:
-        keep[:] = 1.0                                                      
+        keep[:] = 1.0  # pure-invert: everything important except the boxes
     for (x1, y1, x2, y2) in keep_rects:
         try:
             keep[max(0, y1):min(h, y2), max(0, x1):min(w, x2)] = 1.0
@@ -289,11 +406,11 @@ def _soften_outside_zones(frame, keep_rects=None, cut_rects=None,
         except Exception:
             pass
     if keep.mean() >= 1.0:
-        return frame                                           
+        return frame  # whole frame important: nothing to steer
     if keep.mean() <= 0.0:
-        return frame                                                  
+        return frame  # nothing important (should not happen): be safe
     sigma = max(0.3, min(6.0, strength / 100.0 * 6.0))
-    k = max(3, int(sigma * 4) | 1)              
+    k = max(3, int(sigma * 4) | 1)  # odd kernel
     fw = max(3, int(feather) * 2 + 1)
     keep_soft = cv2.GaussianBlur(keep, (fw, fw), 0)
     blurred = cv2.GaussianBlur(frame, (k, k), sigma)
@@ -301,7 +418,10 @@ def _soften_outside_zones(frame, keep_rects=None, cut_rects=None,
     out = frame.astype(np.float32) * m + blurred.astype(np.float32) * (1.0 - m)
     np.copyto(frame, np.clip(out, 0, 255).astype(np.uint8))
     return frame
+
+
 def _sample_curve(pts, t):
+    """Linear sample of a wave curve at normalized time t (0..1)."""
     if not pts:
         return 0.0
     if len(pts) == 1:
@@ -312,13 +432,28 @@ def _sample_curve(pts, t):
     i1 = min(len(pts) - 1, i0 + 1)
     f = pos - i0
     return float(pts[i0]) * (1.0 - f) + float(pts[i1]) * f
+
+
 def _dynamic_steer_strength(rest_pts, zone_pts, t):
+    """Per-frame Zone Priority strength from the green/blue wave ratio.
+
+    When the zone curve runs above rest, steer proportionally (up to 85);
+    when at/below rest, no steering is needed there (0). Mirrors the
+    frontend auto-strength formula so preview and encode agree.
+    """
     r = _sample_curve(rest_pts, t)
     z = _sample_curve(zone_pts, t)
     if z <= 0 or r <= 0 or z <= r:
         return 0
     return max(0, min(85, int(round(70.0 * (1.0 - r / z)))))
+
+
 def _collect_priority_rects(active_segs, out_w, out_h, want_markers=False, placement='outside'):
+    """Split active encrypt-zone rects into keep/cut lists + marker boxes.
+
+    Returns (keep, cut, marks): keep = sharp zones, cut = inverted-zone
+    interiors (background), marks = optical fiducial boxes (always sharp).
+    """
     keep, cut, marks = [], [], []
     for seg in (active_segs or []):
         if not isinstance(seg, dict):
@@ -337,13 +472,23 @@ def _collect_priority_rects(active_segs, out_w, out_h, want_markers=False, place
         else:
             keep.append((qx1, qy1, qx2, qy2))
         if want_markers:
+            # _calculate_marker_boxes is imported at module top (core.crypto).
             try:
                 marks.extend(_calculate_marker_boxes(out_w, out_h, qx1, qy1, qx2, qy2,
                                                      placement=placement, size=18))
             except Exception:
                 pass
     return keep, cut, marks
+
+
 def _zone_nested_geometry(zw, zh, cols, rows, center_size, seed):
+    """Fixed-center layout *inside* a zone rect (zone = mini-frame).
+
+    Mirrors the regular center-video pipeline but with dimensions (zw, zh):
+    the zone background is packed into the outer ring (C1xR1 -> outer) and the
+    center video lives in the inner rect (cx1,cy1,cx2,cy2). Returns everything
+    encrypt/decrypt need so both sides agree exactly.
+    """
     outer_indices, inner_indices, (cx1, cy1, cx2, cy2) = get_outer_blocks(
         cols, rows, zw, zh, center_size=center_size)
     n_outer = len(outer_indices)
@@ -351,10 +496,12 @@ def _zone_nested_geometry(zw, zh, cols, rows, center_size, seed):
     all_blocks_zone = get_blocks(zw, zh, cols, rows)
     src_blocks_outer_zone = get_blocks(zw, zh, c1, r1)
     shuffled_outer = seeded_shuffle(list(outer_indices), seed)
+
     cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
     cw, ch = max(2, cx2 - cx1), max(2, cy2 - cy1)
     center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
     shuffled_center = seeded_shuffle(list(range(cols_inner * rows_inner)), seed)
+    # Encrypt mapping: dest i <- src shuffled_center[i]; decrypt is the inverse.
     dest_to_src_enc = {i: v for i, v in enumerate(shuffled_center)}
     dest_to_src_dec = {v: i for i, v in enumerate(shuffled_center)}
     return {
@@ -371,7 +518,16 @@ def _zone_nested_geometry(zw, zh, cols, rows, center_size, seed):
         "dest_to_src_enc": dest_to_src_enc,
         "dest_to_src_dec": dest_to_src_dec,
     }
+
+
 def _encrypt_zone_nested(zone_bg, center_frame, cols, rows, center_size, seed, video_encrypt_mode):
+    """Encrypt one zone with a regular center-video pipeline inside it.
+
+    - zone_bg: zh x zw BGR background content for this zone.
+    - center_frame: arbitrary-size BGR center video frame (or None).
+    Returns new_zone (zh x zw) with scrambled outer per external/both and
+    scrambled inner center per center/both, mirroring fixed-center semantics.
+    """
     zh, zw = zone_bg.shape[:2]
     g = _zone_nested_geometry(zw, zh, cols, rows, center_size, seed)
     new_zone = np.zeros((zh, zw, 3), dtype=np.uint8)
@@ -406,9 +562,19 @@ def _encrypt_zone_nested(zone_bg, center_frame, cols, rows, center_size, seed, v
             frame_c = scrambled
         new_zone[cy1:cy2, cx1:cx2] = frame_c
     else:
+        # No center frame available: keep the zone background inner as-is so we
+        # never punch a black hole into the output.
         new_zone[cy1:cy2, cx1:cx2] = zone_bg[cy1:cy2, cx1:cx2]
     return new_zone
+
+
 def _decrypt_zone_nested(zone_enc, cols, rows, center_size, seed, video_encrypt_mode):
+    """Inverse of _encrypt_zone_nested.
+
+    Returns (restored_zone_bg, clean_center_inner). restored_zone_bg is the
+    full zw x zh background with the center overlay deleted (outer descrambled
+    per external/both). clean_center_inner is the descrambled cw x ch center.
+    """
     zh, zw = zone_enc.shape[:2]
     g = _zone_nested_geometry(zw, zh, cols, rows, center_size, seed)
     cx1, cy1, cx2, cy2, cw, ch = g["cx1"], g["cy1"], g["cx2"], g["cy2"], g["cw"], g["ch"]
@@ -440,41 +606,57 @@ def _decrypt_zone_nested(zone_enc, cols, rows, center_size, seed, video_encrypt_
             tile_resized = cv2.resize(tile, (x2 - x1, y2 - y1))
             restored[y1:y2, x1:x2] = tile_resized
     else:
+        # Center-only: background was never packed, so the inner background is
+        # unrecoverable. Keep the outer as-is and show the descrambled center
+        # in place (mirrors fixed-center decrypt which keeps the overlay).
         restored = zone_enc.copy()
         restored[cy1:cy2, cx1:cx2] = clean_center
     return restored, clean_center
+
 @LiveDebugger.trace(module_name="VIDEO")
 def process_video_file(input_path, output_path, options, progress_dict, task_id):
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+
     proc_vid, proc_aud = options.get('process_video'), options.get('process_audio')
     reverse = options.get('reverse') or (options.get('action') == 'unscramble')
     cols, rows, seed = options.get('cols', 1), options.get('rows', 1), options.get('seed', 0)
     target_w, target_h = options.get('target_w'), options.get('target_h')
     no_scale = options.get('no_scale', False)
     carrier_freq = options.get('carrier_freq', 8000)
-    video_encrypt_mode = options.get('video_encrypt_mode', 'external')                               
-    patch_intervals = options.get('patch_intervals')                                      
+    video_encrypt_mode = options.get('video_encrypt_mode', 'external') # 'external', 'center', 'both'
+    patch_intervals = options.get('patch_intervals') # list of (start_sec, end_sec) tuples
+
     LiveDebugger.log("START_VIDEO", f"Processing video '{os.path.basename(input_path)}' | grid={cols}x{rows}, seed={seed}, mode={video_encrypt_mode}, patch_intervals={patch_intervals}, reverse={reverse}", level="INFO", module="VIDEO")
-    center_end_action = options.get('center_end_action', 'loop')                              
-    center_aud_action = options.get('center_aud_action', 'silence')                    
-    outer_end_action  = options.get('outer_end_action',  'stop')                                      
+
+
+    # End-action options (what happens when a video runs out of frames)
+    center_end_action = options.get('center_end_action', 'loop')   # 'loop', 'freeze', 'black'
+    center_aud_action = options.get('center_aud_action', 'silence') # 'silence', 'loop'
+    outer_end_action  = options.get('outer_end_action',  'stop')   # 'stop', 'freeze', 'black', 'loop'
+
     temp_aud = get_temp_file_path(os.path.basename(input_path) + "_aud.wav")
     temp_center_aud_out = get_temp_file_path(os.path.basename(input_path) + "_center_aud_out.wav")
     has_audio = subprocess.run([ffmpeg_exe, '-y', '-i', input_path, '-vn', temp_aud], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags).returncode == 0
     if has_audio and not os.path.exists(temp_aud):
         has_audio = False
+
     _custom_l_path = options.get('custom_audio_l')
     _custom_r_path = options.get('custom_audio_r')
     _has_custom_audio = bool(_custom_l_path or _custom_r_path)
     _wants_routed_audio = bool(
         options.get('track_l_source') in ('background', 'center', 'custom')
         or options.get('track_r_source') in ('background', 'center', 'custom'))
+
     if proc_aud and not reverse and not has_audio and (_has_custom_audio or (
             options.get('center') and options.get('center_path') and (
                 options.get('dual_track') or (
                     _wants_routed_audio and (
                         (options.get('track_l_source') or 'background') != 'background'
                         or (options.get('track_r_source') or 'background') != 'center'))))):
+        # Silent background but the mix needs audio (center/custom sources):
+        # synthesize a silent base track so center/custom audio still lands in
+        # the output instead of being dropped with '-an'. Length covers the
+        # longest source so looped tracks have room to breathe.
         _synth_dur = max(1.0, _probe_audio_duration_sec(input_path),
                          _probe_audio_duration_sec(options.get('center_path')),
                          _probe_audio_duration_sec(_custom_l_path),
@@ -486,35 +668,53 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             LiveDebugger.log("AUD_SYNTH_SILENCE", f"Background '{os.path.basename(input_path)}' has no audio; synthesized {_synth_dur:.2f}s silent base so center/custom tracks are preserved.", level="INFO", module="AUDIO")
         except Exception as e:
             LiveDebugger.log("AUD_SYNTH_ERR", f"Failed to synthesize silent audio base: {e}", level="WARNING", module="AUDIO")
+
     if has_audio and proc_aud:
         import soundfile as sf
+        # Probe main audio to find its sample rate
         main_sr = 48000
         try:
             info_main = sf.info(temp_aud)
             main_sr = info_main.samplerate
         except Exception as e:
             LiveDebugger.log("AUDIO_SR_WARN", f"Failed to read main audio sample rate: {e}", level="WARNING", module="VIDEO")
+
         has_custom_audio = bool(options.get('custom_audio_l') or options.get('custom_audio_r'))
         _tl0 = options.get('track_l_source')
         _tr0 = options.get('track_r_source')
         _explicit_routing = bool(
             _tl0 in ('background', 'center', 'custom')
             or _tr0 in ('background', 'center', 'custom'))
+        # Explicit default routing (L=background, R=center) stays on the legacy
+        # dual-track/standard paths so old jobs and keys are byte-identical;
+        # only custom files or non-default routing take the matrix assembly
+        # (which the |ca key tag then mirrors on decrypt).
         _nondefault_routing = bool(
             (_tl0 or 'background') != 'background' or (_tr0 or 'background') != 'center')
         if not reverse and (has_custom_audio or (_explicit_routing and _nondefault_routing)):
+            # Per-channel audio routing matrix (L/R tracks, used by the center
+            # video channel matrix): each channel resolves independently from
+            # 'background', 'center' video audio, or an uploaded 'custom' file,
+            # then is encrypted per its own toggle. Unset sources keep legacy
+            # semantics (custom file if given, else the main channel) so old
+            # jobs produce byte-identical output.
             main_data = None
             if os.path.exists(temp_aud):
                 try:
                     main_data, _ = sf.read(temp_aud)
                 except Exception:
                     main_data = None
+
+            # Output length from probed durations (the video pipe sets the
+            # frame-exact length; audio is fitted to cover the longest source).
             _dur = max(1.0, _probe_audio_duration_sec(input_path),
                        _probe_audio_duration_sec(options.get('center_path')),
                        _probe_audio_duration_sec(options.get('custom_audio_l')),
                        _probe_audio_duration_sec(options.get('custom_audio_r')))
             target_samples = int(round(_dur * main_sr))
+
             _center_path = options.get('center_path')
+
             def _eff_source(which, custom_path):
                 v = options.get(f'track_{which}_source')
                 if v in ('background', 'center', 'custom'):
@@ -522,8 +722,10 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 if custom_path and os.path.exists(custom_path):
                     return 'custom'
                 return 'background'
+
             src_l = _eff_source('l', options.get('custom_audio_l'))
             src_r = _eff_source('r', options.get('custom_audio_r'))
+
             center_mono = None
             if (src_l == 'center' or src_r == 'center') and _center_path and os.path.exists(_center_path):
                 center_mono = _extract_center_mono(
@@ -531,6 +733,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     target_samples, vol=1.0, loop_action=center_aud_action)
                 if center_mono is None:
                     LiveDebugger.log("AUD_CENTER_MISSING", f"Channel source 'center' selected but '{os.path.basename(_center_path)}' has no audio; using silence.", level="WARNING", module="AUDIO")
+
             def _resolve_channel(which, src, custom_path, main_idx, vol, length_action):
                 data = None
                 if src == 'custom' and custom_path and os.path.exists(custom_path):
@@ -550,6 +753,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 if vol != 1.0:
                     data = data * vol
                 return data
+
             vol_bg = options.get('vol_factor_bg', options.get('vol_factor', 1.0))
             vol_center = options.get('vol_factor_center', 1.0)
             vol_cus = options.get('vol_factor', 1.0)
@@ -558,12 +762,14 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                       _vol_for.get(src_l, 1.0), options.get('track_l_action', 'loop'))
             data_r = _resolve_channel('r', src_r, options.get('custom_audio_r'), 1,
                                       _vol_for.get(src_r, 1.0), options.get('track_r_action', 'loop'))
+
             enc_l = options.get('track_l_enc', options.get('custom_audio_l_enc', True))
             enc_r = options.get('track_r_enc', options.get('custom_audio_r_enc', True))
             if enc_l not in (True, False):
                 enc_l = str(enc_l).lower() not in ('false', '0', 'no', 'off')
             if enc_r not in (True, False):
                 enc_r = str(enc_r).lower() not in ('false', '0', 'no', 'off')
+
             def _enc_channel(data, tmp_name):
                 tmp_p = get_temp_file_path(tmp_name)
                 sf.write(tmp_p, data, main_sr)
@@ -580,15 +786,19 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     except Exception:
                         pass
                 return out
+
             if enc_l:
                 data_l = _enc_channel(data_l, "track_l_proc.wav")
             if enc_r:
                 data_r = _enc_channel(data_r, "track_r_proc.wav")
+
             stereo_data = np.vstack((data_l, data_r)).T
             sf.write(temp_aud, stereo_data, main_sr)
         elif not reverse and options.get('center') and options.get('dual_track'):
             vol_bg = options.get('vol_factor_bg', options.get('vol_factor', 1.0))
             vol_center = options.get('vol_factor_center', 1.0)
+            
+            # Dual Track Audio mode: Left = encrypted background, Right = center video audio
             process_audio_file(
                 temp_aud, temp_aud, is_decrypt=False,
                 method=options.get('aud_method', 'inversion'),
@@ -599,23 +809,34 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 aud_track=options.get('aud_track', 'both'),
                 patch_intervals=patch_intervals
             )
+            # Extract central video audio, resampling it to match main_sr exactly
             temp_center_aud = get_temp_file_path(os.path.basename(options['center_path']) + "_center_aud.wav")
             has_center_audio = subprocess.run([ffmpeg_exe, '-y', '-i', options['center_path'], '-vn', '-ar', str(main_sr), temp_center_aud], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=creation_flags).returncode == 0
+
+            # Load both and combine Left/Right
             main_data, main_sr = sf.read(temp_aud)
             if len(main_data.shape) > 1:
                 main_data = main_data[:, 0]
+
             center_data = None
             if has_center_audio and os.path.exists(temp_center_aud):
                 center_data, center_sr = sf.read(temp_center_aud)
                 if len(center_data.shape) > 1:
                     center_data = center_data[:, 0]
+                # Extend or trim center audio to match main audio length and apply center volume factor
                 center_data = _adjust_audio_length(center_data, len(main_data), center_aud_action) * vol_center
                 os.remove(temp_center_aud)
             else:
                 center_data = np.zeros_like(main_data)
+
             stereo_data = np.vstack((main_data, center_data)).T
             sf.write(temp_aud, stereo_data, main_sr)
         elif reverse and (options.get('dual_track') or options.get('has_custom_audio')):
+            # Decrypting routed/dual-track audio. Positional contract (same as
+            # legacy dual-track): Left -> main audio, Right -> center audio out.
+            # With a |ca key each channel is decrypted per its own flag
+            # (|cal0/|car0 mean "left in the clear"); legacy |dm keys always
+            # decrypt Left and pass Right through.
             if not os.path.exists(temp_aud):
                 LiveDebugger.log("AUD_DEC_MISSING", "Encrypted audio track missing; skipping audio decrypt.", level="WARNING", module="AUDIO")
             else:
@@ -626,6 +847,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 else:
                     left_data = stereo_data[:, 0] if len(stereo_data.shape) > 1 else stereo_data
                     right_data = None
+
                 use_custom = bool(options.get('has_custom_audio'))
                 dec_l = options.get('track_l_enc', True) if use_custom else True
                 dec_r = options.get('track_r_enc', True) if use_custom else False
@@ -633,6 +855,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     dec_l = str(dec_l).lower() not in ('false', '0', 'no', 'off')
                 if dec_r not in (True, False):
                     dec_r = str(dec_r).lower() not in ('false', '0', 'no', 'off')
+
                 def _dec_channel(data, tmp_name):
                     tmp_p = get_temp_file_path(tmp_name)
                     sf.write(tmp_p, data, sr)
@@ -655,25 +878,31 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                         except Exception:
                             pass
                     return out
+
                 if dec_l:
                     left_data = _dec_channel(left_data, "track_l_dec.wav")
                 sf.write(temp_aud, left_data, sr)
+
                 if right_data is not None:
                     if dec_r:
                         right_data = _dec_channel(right_data, "track_r_dec.wav")
                     _rc = right_data if len(right_data.shape) == 1 else right_data[:, 0]
                     sf.write(temp_center_aud_out, _rc, sr)
+
                 if not options.get('center'):
+                    # No center video: restore a plain stereo main track.
                     if right_data is not None:
                         _rd = right_data if len(right_data.shape) == 1 else right_data[:, 0]
                         _n = min(len(left_data), len(_rd))
                         sf.write(temp_aud, np.vstack((left_data[:_n], _rd[:_n])).T, sr)
                 else:
+                    # Duplicate decrypted mono to stereo for normalization.
                     dec_data, dec_sr = sf.read(temp_aud)
                     if len(dec_data.shape) == 1:
                         dec_stereo = np.vstack((dec_data, dec_data)).T
                         sf.write(temp_aud, dec_stereo, dec_sr)
         else:
+            # Standard audio mode
             if reverse and not os.path.exists(temp_aud):
                 LiveDebugger.log("AUD_DEC_MISSING", "Encrypted audio track missing; skipping audio decrypt.", level="WARNING", module="AUDIO")
             else:
@@ -687,6 +916,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     aud_track=options.get('aud_track', 'both'),
                     patch_intervals=patch_intervals
                 )
+
+    # ── Video capture setup ──────────────────────────────────────────
     cap = cv2.VideoCapture(input_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -698,21 +929,32 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             total_frames = int(dur_sec * fps)
         else:
             total_frames = 999999
+
     out_w = target_w if target_w else int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     out_h = target_h if target_h else int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    all_blocks = get_blocks(out_w, out_h, cols, rows)                             
-    n_blocks = len(all_blocks)                                          
+
+    # ── Block grid (lossless: last block absorbs edge pixels) ────────
+    all_blocks = get_blocks(out_w, out_h, cols, rows)  # exactly cols*rows entries
+    n_blocks = len(all_blocks)                          # == cols * rows
+
     dest_to_src = {idx: idx for idx in range(n_blocks)}
+
     center_size = options.get('center_size', '1/4')
     outer_indices, inner_indices, (cx1, cy1, cx2, cy2) = get_outer_blocks(cols, rows, out_w, out_h, center_size=center_size)
     N_outer = len(outer_indices)
     C1, R1 = find_best_grid(N_outer, target_ratio=cols/rows)
     src_blocks_outer = get_blocks(out_w, out_h, C1, R1)
     shuffled_outer = seeded_shuffle(list(outer_indices), seed)
+
+    # Precise gapless dimensions for central video
     cw = cx2 - cx1
     ch = cy2 - cy1
+
+    # Calculate inner columns/rows for central video scrambling
     cols_inner, rows_inner = center_inner_grid(cols, rows, center_size)
     center_blocks = get_blocks(cw, ch, cols_inner, rows_inner)
+
+    # Setup central video tile scrambling
     dest_to_src_center = {idx: idx for idx in range(cols_inner * rows_inner)}
     shuffled_center = seeded_shuffle(list(range(cols_inner * rows_inner)), seed)
     if reverse:
@@ -721,6 +963,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
     else:
         for i, v in enumerate(shuffled_center):
             dest_to_src_center[i] = v
+
     if proc_vid and not options.get('center'):
         if reverse:
             fwd = seeded_shuffle(list(range(n_blocks)), seed)
@@ -730,19 +973,40 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             shuffled = seeded_shuffle(list(range(n_blocks)), seed)
             for i, v in enumerate(shuffled):
                 dest_to_src[i] = v
+
+    # ── Spatial Patch per segment or global ROI setup ────────────────
     patch_segments_cfg = options.get('patch_segments')
     global_roi = options.get('patch_roi')
     global_invert = options.get('roi_invert', False)
     placement = options.get('marker_placement', 'outside')
-    if 'marker_inside_full' not in options and options.get('optical_markers')\
+
+    # Marker placement for every zone dict, marker box and ROI block built
+    # below (see effective_marker_placement in core.crypto): 'inside' is
+    # honored even for Zone+Center — the nested center overlay sits in the
+    # middle of the zone, corner markers survive on the scrambled ring, and
+    # decrypt erases them inpaint-first (|mif| rule).
+
+    # Full-layout inside markers (matches images): scramble the FULL roi and
+    # stamp markers inside the chaos (no unscrambled margin). job_manager sets
+    # the same flag pre-key and records |mif|; direct API calls land here.
+    # An explicit False preserves the legacy shrunk layout (old-file tests).
+    if 'marker_inside_full' not in options and options.get('optical_markers') \
             and placement == 'inside' and (patch_segments_cfg or global_roi):
         options['marker_inside_full'] = True
+
     discovered_zones = []
+
     def _get_effective_roi_blocks(r_roi, inv):
         if not r_roi:
             return None
         rx1, ry1, rx2, ry2 = r_roi
-        if options.get('optical_markers') and placement == 'inside'\
+        # Legacy shrunk layout (pre-|mif| files): inside markers lived in an
+        # 18px unscrambled margin around a smaller scrambled core, so they
+        # LOOKED outside the scrambled zone (unlike images, which always
+        # scramble the full ROI). New files stamp inside the chaos and set
+        # marker_inside_full (|mif| in the key); decrypt then inpaints the
+        # markers BEFORE descrambling the full ROI.
+        if options.get('optical_markers') and placement == 'inside' \
                 and not options.get('marker_inside_full'):
             if rx1 <= 1.0 and ry1 <= 1.0 and rx2 <= 1.0 and ry2 <= 1.0:
                 px1, py1 = int(math.floor(rx1 * out_w)), int(math.floor(ry1 * out_h))
@@ -759,6 +1023,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 inner_roi = [inner_px1 / out_w, inner_py1 / out_h, inner_px2 / out_w, inner_py2 / out_h]
                 return get_roi_blocks(out_w, out_h, inner_roi, cols, rows, invert=inv)
         return get_roi_blocks(out_w, out_h, r_roi, cols, rows, invert=inv)
+
     def _create_zone_dict(roi_norm):
         rx1, ry1, rx2, ry2 = roi_norm
         px1, py1 = int(math.floor(rx1 * out_w)), int(math.floor(ry1 * out_h))
@@ -781,6 +1046,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             "mapping": z_map,
             "invert": global_invert
         }
+
+    # Auto-detect optical markers in video if key indicates markers but no explicit ROI was in the key
     if reverse and options.get('optical_markers') and not global_roi and not patch_segments_cfg:
         LiveDebugger.log("MARKER_DETECT", f"Optical marker tag found in key (|opt_{placement[:3]}). Auto-scanning video for markers across timeline...", level="INFO", module="VIDEO")
         probe_cap = cv2.VideoCapture(input_path)
@@ -788,6 +1055,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             tot_p = int(probe_cap.get(cv2.CAP_PROP_FRAME_COUNT))
             sample_count = min(30, tot_p) if tot_p > 0 else 10
             step = max(1, tot_p // sample_count) if tot_p > 0 else 1
+
             def _scan_timeline(plc):
                 found = []
                 cur_idx = 0
@@ -811,8 +1079,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 finally:
                     cap.release()
                 return found
+
             for f_roi in _scan_timeline(placement):
                 discovered_zones.append(_create_zone_dict(f_roi))
+            # Rescue for pre-fix files: key says opt_ins but Zone+Center
+            # coercion stamped outside markers. One-directional (inside->
+            # outside only): the reverse direction cannot occur from our
+            # encoder, and cross-placement scans can false-positive.
             if not discovered_zones and placement == 'inside':
                 LiveDebugger.log("MARKER_DETECT", "No 'inside' markers found; retrying 'outside' (pre-fix Zone+Center files).", level="WARNING", module="VIDEO")
                 placement = 'outside'
@@ -820,18 +1093,22 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 for f_roi in _scan_timeline(placement):
                     discovered_zones.append(_create_zone_dict(f_roi))
             probe_cap.release()
+
         if discovered_zones:
             global_roi = list(discovered_zones[0]["roi"])
             options['patch_roi'] = global_roi
             LiveDebugger.log("MARKER_DETECT", f"Auto-detected {len(discovered_zones)} optical marker zone(s)! ROIs: {[z['roi'] for z in discovered_zones]}", level="SUCCESS", module="VIDEO")
         else:
             LiveDebugger.log("MARKER_DETECT", "Warning: Optical marker tag present in key, but markers could not be detected in probed video frames.", level="WARNING", module="VIDEO")
+
     elif options.get('optical_markers') and global_roi:
         norm_g_roi = list(global_roi)
         if norm_g_roi[0] > 1.0 or norm_g_roi[1] > 1.0 or norm_g_roi[2] > 1.0 or norm_g_roi[3] > 1.0:
             norm_g_roi = [norm_g_roi[0] / out_w, norm_g_roi[1] / out_h, norm_g_roi[2] / out_w, norm_g_roi[3] / out_h]
         discovered_zones.append(_create_zone_dict(norm_g_roi))
+
     marker_coords = discovered_zones[0]["marker_coords"] if discovered_zones else None
+
     segment_lookup = []
     if patch_segments_cfg and isinstance(patch_segments_cfg, list):
         for seg in patch_segments_cfg:
@@ -869,12 +1146,18 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             "start": 0.0, "end": 999999.0, "roi": global_roi, "invert": global_invert,
             "blocks": g_blocks, "mapping": g_mapping
         })
+
+    # Export grid SVGs during encryption
     if not reverse and options.get('export_svg', True):
         try:
             base, _ = os.path.splitext(output_path)
             export_grid_to_svg(f"{base}_grid.svg", out_w, out_h, cols, rows, has_center=options.get('center', False), center_size=center_size)
             export_scrambled_grid_to_svg(f"{base}_grid_original.svg", out_w, out_h, cols, rows, seed, has_center=options.get('center', False), center_size=center_size, prefix_original=True)
             export_scrambled_grid_to_svg(f"{base}_grid_scrambled.svg", out_w, out_h, cols, rows, seed, has_center=options.get('center', False), center_size=center_size, prefix_original=False)
+            # Zone+markers set (separate files): one per timed segment, or a
+            # single set for a global roi. Blocks are the EFFECTIVE shuffled
+            # blocks (full roi, or the shrunk inner core for legacy
+            # pre-|mif| inside-marker files); markers drawn black on top.
             _zone_jobs = []
             if segment_lookup and any(s.get('roi') and s.get('blocks') for s in segment_lookup):
                 for _i, _s in enumerate(segment_lookup):
@@ -903,6 +1186,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                         LiveDebugger.log("SVG_EXPORT_WARN", f"Failed to export zone SVG set {_zp}: {_ze}", level="WARNING", module="VIDEO")
         except Exception as e:
             LiveDebugger.log("SVG_EXPORT_WARN", f"Failed to export SVG grids: {e}", level="WARNING", module="VIDEO")
+
+    # Export machine-readable gridmap during encryption (opt-in; SVG stays legacy)
     if not reverse and options.get('export_map', False):
         try:
             from core.gridmap import build_gridmap, export_gridmap_json, export_gridmap_png
@@ -914,6 +1199,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             export_gridmap_png(f"{base}_gridmap.png", _gm)
         except Exception as e:
             LiveDebugger.log("GRIDMAP_EXPORT_WARN", f"Failed to export gridmap: {e}", level="WARNING", module="VIDEO")
+
+    # ── Center video capture + FPS step accumulation ─────────────────
+    # Opened for the fixed-center pipeline AND for the Zone+Center pipeline
+    # (a zone acts as a cropped "separate video" that the center media is
+    # pasted into, so the center capture is needed whenever zones are armed).
     cap_center = None
     fps_c = 30.0
     total_frames_c = 0
@@ -929,12 +1219,19 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             dur_sec_c = info_c.get('duration_sec')
             if dur_sec_c and dur_sec_c > 0:
                 total_frames_c = int(dur_sec_c * fps_c)
+        # How many center frames to advance per one outer frame
         frame_step_c = fps_c / fps
+
+    # Determine total output frames
     if cap_center and total_frames_c > 0 and outer_end_action != 'stop':
         center_frames_adapted = int(total_frames_c / frame_step_c)
         output_total_frames = max(total_frames, center_frames_adapted)
     else:
-        output_total_frames = total_frames                                
+        output_total_frames = total_frames  # main video determines length
+
+    # Encrypt timeline (optional .txt, ms precision): where the output video
+    # is scrambled vs passthrough. Encrypt-only; decrypt restores whatever
+    # this timeline scrambled.
     if not reverse and options.get('export_timeline', True):
         try:
             from core.timeline_txt import export_timeline_txt as _export_tl
@@ -944,10 +1241,16 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                        source_name=os.path.basename(output_path))
         except Exception as _te:
             LiveDebugger.log("TIMELINE_EXPORT_WARN", f"Failed to export encrypt timeline: {_te}", level="WARNING", module="VIDEO")
+
     vid_codec = options.get('vid_codec', 'libx264')
     vid_preset = options.get('vid_preset', 'medium')
     use_gpu = options.get('use_gpu', False)
     spatial_mode = options.get('spatial_compression_mode', 'off')
+
+    # Zone Priority steering strength (0..100, 0 = no background softening).
+    # Static fallback = slider. Dynamic = green/blue wave ratio over time
+    # (needs zone_points + duration in the envelope; slider ignored then).
+    # Active only on encrypt with spatial_mode 'priority' (legacy 'zone').
     _steer_strength = 0
     try:
         _steer_strength = max(0, min(100, int(options.get('zone_priority_strength', 40))))
@@ -960,7 +1263,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         _zp = _env_s.get('zone_points')
         _rp = _env_s.get('points')
         _dur = float(_env_s.get('duration')) if _env_s.get('duration') else 0
-        if isinstance(_zp, list) and len(_zp) >= 2 and isinstance(_rp, list)\
+        if isinstance(_zp, list) and len(_zp) >= 2 and isinstance(_rp, list) \
                 and len(_rp) >= 2 and _dur > 0:
             _steer_dyn = ([max(100.0, min(25000.0, float(v))) for v in _rp],
                           [max(100.0, min(25000.0, float(v))) for v in _zp],
@@ -969,6 +1272,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         _steer_dyn = None
     _steer_now = _steer_strength
     _steer_active = bool(_steer_base_on and _steer_now > 0)
+
     chosen_codec, hw_type, extra_hw_args = resolve_video_encoder(vid_codec, use_gpu=use_gpu)
     if hw_type != 'software':
         LiveDebugger.log("GPU_ACCEL", f"Hardware acceleration enabled: using {chosen_codec} ({hw_type})", level="INFO", module="VIDEO")
@@ -979,10 +1283,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             LiveDebugger.log("ZONE_PRIORITY", f"Zone Priority DYNAMIC steering (green/blue wave ratio over time, #{len(_steer_dyn[0])} pts, { _steer_dyn[2]:.1f}s)", level="INFO", module="VIDEO")
         else:
             LiveDebugger.log("ZONE_PRIORITY", f"Zone Priority steering ON (strength={_steer_strength}): background outside encrypt zones is softened so rate control feeds the zones", level="INFO", module="VIDEO")
+
+    # ── FFmpeg output writers ────────────────────────────────────────
     cmd = [ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
            '-s', f'{out_w}x{out_h}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
     if has_audio:
         cmd.extend(['-i', temp_aud])
+
     enc_args = build_video_encoder_args(
         chosen_codec,
         options.get('vid_bitrate', '3000k'),
@@ -999,6 +1306,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         if _ea and _em:
             LiveDebugger.log("WAVE_BR", f"Wave envelope active: target={_ea}k ceiling={_em}k (constrained VBR)", level="INFO", module="VIDEO")
     cmd.extend(enc_args)
+
     if has_audio:
         aud_c = options.get('aud_codec', 'aac')
         aud_sr = str(options.get('aud_sr', '48000'))
@@ -1012,12 +1320,17 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         cmd.extend(['-an'])
     cmd.append(output_path)
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=creation_flags)
+
+    # Optional Center writer for Decryption
     proc_center = None
     center_w, center_h = cw, ch
     if reverse and options.get('center'):
         base, ext = os.path.splitext(output_path)
         output_path_center = f"{base}_center{ext}"
         has_center_aud_out = os.path.exists(temp_center_aud_out)
+
+        # In Zone+Center mode, the center file holds the nested inner center
+        # (regular center-video pipeline inside the zone), not the full zone.
         if options.get('center_in_zone', True) and (segment_lookup or global_roi or discovered_zones):
             target_roi = None
             if segment_lookup and segment_lookup[0].get('roi'):
@@ -1038,10 +1351,12 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 if _cw_v % 2 != 0: _cw_v += 1
                 if _ch_v % 2 != 0: _ch_v += 1
                 center_w, center_h = _cw_v, _ch_v
+
         cmd_center = [ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
                       '-s', f'{center_w}x{center_h}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
         if has_center_aud_out:
             cmd_center.extend(['-i', temp_center_aud_out])
+
         enc_args_center = build_video_encoder_args(
             chosen_codec,
             options.get('vid_bitrate', '3000k'),
@@ -1054,6 +1369,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             scramble_tune=options.get('scramble_tune') == 'on'
         )
         cmd_center.extend(enc_args_center)
+
         if has_center_aud_out:
             aud_c = options.get('aud_codec', 'aac')
             aud_sr = str(options.get('aud_sr', '48000'))
@@ -1066,6 +1382,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             cmd_center.extend(['-an'])
         cmd_center.append(output_path_center)
         proc_center = subprocess.Popen(cmd_center, stdin=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=creation_flags)
+
     def write_pipe_frame(p, data):
         try:
             p.stdin.write(data)
@@ -1081,14 +1398,24 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             except Exception:
                 pass
             raise RuntimeError(f"FFmpeg process ended unexpectedly: {stderr_msg.strip() or str(err)}") from err
+
     try:
+        # ── Main frame loop ──────────────────────────────────────────────
         frame_count = 0
-        last_outer_frame = None                                       
-        last_center_frame = None                                       
+        last_outer_frame = None     # for freeze action on outer video
+        last_center_frame = None    # for freeze action on center video
         outer_exhausted = False
         center_exhausted = False
         zone_miss_counts = {}
+
         def _run_zone_forensic(zone):
+            """±1s frame-by-frame refinement on a freshly lost optical zone.
+
+            Opens a SEPARATE probe capture so the sequential main cap is
+            never disturbed. Pinpoints the exact loss/recovery second and
+            detects moves (mirrors the web studio forensicWindowScan).
+            Runs at most once per loss episode (see _was_active flags).
+            """
             try:
                 fcap = cv2.VideoCapture(input_path)
                 if not fcap.isOpened():
@@ -1101,6 +1428,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     except Exception:
                         center_sec = 0.0
                     center_idx = int(round(center_sec * probe_fps))
+
                     def _get_frame(i):
                         if i < 0 or (total_p > 0 and i >= total_p):
                             return None
@@ -1108,6 +1436,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                         ok, fr = fcap.read()
                         if not ok or fr is None:
                             return None
+                        # Shape exactly like the main loop checks presence
+                        # (resized output dims; no_scale centers on canvas).
                         if out_w != fr.shape[1] or out_h != fr.shape[0]:
                             if no_scale:
                                 canvas = np.zeros((out_h, out_w, 3), dtype=np.uint8)
@@ -1120,6 +1450,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             else:
                                 fr = cv2.resize(fr, (out_w, out_h))
                         return fr
+
                     res = forensic_marker_window(
                         _get_frame, probe_fps, center_idx,
                         zone["marker_coords"], zone["roi"],
@@ -1138,9 +1469,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                         pass
             except Exception as e:
                 LiveDebugger.log("FORENSIC_ERR", f"Forensic scan failed: {e}", level="WARNING", module="VIDEO")
-        accumulated_c = 0.0                                        
-        center_read_cursor = 0                                                               
+
+        # Center FPS accumulator
+        accumulated_c = 0.0         # fractional center-frame index
+        center_read_cursor = 0      # how many frames we've sequentially read from cap_center
+
         while frame_count < output_total_frames:
+            # ── Read outer frame ─────────────────────────────────────────
             ret, frame = cap.read()
             if not ret:
                 outer_exhausted = True
@@ -1148,15 +1483,18 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     ret, frame = cap.read()
                     if not ret:
-                        break                     
+                        break  # truly empty video
                 elif outer_end_action == 'freeze' and last_outer_frame is not None:
                     frame = last_outer_frame.copy()
                 elif outer_end_action == 'black' and last_outer_frame is not None:
                     frame = np.zeros_like(last_outer_frame)
                 else:
-                    break                            
+                    break  # 'stop' or no prior frame
+
             if frame is not None:
                 last_outer_frame = frame
+
+            # ── Resize outer frame if needed ─────────────────────────────
             if frame is not None and (out_w != frame.shape[1] or out_h != frame.shape[0]):
                 if no_scale:
                     canvas = np.zeros((out_h, out_w, 3), dtype=np.uint8)
@@ -1168,10 +1506,15 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     frame = canvas
                 else:
                     frame = cv2.resize(frame, (out_w, out_h))
+
+            # Determine if current frame timestamp falls in a patch segment
             current_sec = frame_count / fps
             is_in_patch = True
             if patch_intervals is not None:
                 is_in_patch = any(start_s <= current_sec <= end_s for start_s, end_s in patch_intervals)
+
+            # Per-frame steering strength: dynamic green/blue wave ratio when
+            # available, else the static slider fallback.
             _steer_now = _steer_strength
             if _steer_dyn is not None and _steer_base_on:
                 try:
@@ -1180,8 +1523,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 except Exception:
                     _steer_now = _steer_strength
             _steer_active = bool(_steer_base_on and _steer_now > 0)
+
+            # In optical marker decrypt mode, presence is checked per-zone inside the frame processor
             if reverse and options.get('optical_markers'):
                 is_in_patch = True
+
             if proc_vid and is_in_patch:
                 if options.get('center'):
                     _zc_dec = bool(reverse and options.get('center_in_zone', True)
@@ -1189,6 +1535,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     _zc_enc = bool(not reverse and options.get('center_in_zone', True)
                                    and segment_lookup and cap_center)
                     if _zc_dec:
+                        # Zone+Center decrypt with a regular center-video pipeline
+                        # INSIDE each zone: delete the nested center overlay and
+                        # descramble the nested outer ring per external/both, so
+                        # the main output shows the clean zone background and the
+                        # _center file receives the clean nested center.
+                        # Markers are detected first (inside markers are erased
+                        # inpaint-first below, before the nested descramble).
                         zc_rects = []
                         if options.get('optical_markers'):
                             for z in discovered_zones:
@@ -1229,6 +1582,9 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                     continue
                                 if patch.shape[1] != zw or patch.shape[0] != zh:
                                     patch = cv2.resize(patch, (zw, zh))
+                                # Inside markers sit ON the scrambled ring: erase
+                                # them BEFORE the nested descramble (|mif/
+                                # full-layout rule), not after.
                                 _in_first = bool(options.get('optical_markers') and placement == 'inside')
                                 if _in_first:
                                     patch = inpaint_optical_markers(patch, 0, 0, zw, zh, placement='inside')
@@ -1238,6 +1594,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                 if options.get('optical_markers') and not _in_first:
                                     new_frame = inpaint_optical_markers(new_frame, px1, py1, px2, py2, placement=placement)
                                 if proc_center and z_i == 0:
+                                    # One center frame per outer frame; extra zones stay in main output.
                                     center_out = cv2.resize(clean_center, (center_w, center_h))
                                     write_pipe_frame(proc_center, center_out.tobytes())
                             write_pipe_frame(proc, new_frame.tobytes())
@@ -1246,6 +1603,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             if proc_center:
                                 write_pipe_frame(proc_center, np.zeros((center_h, center_w, 3), dtype=np.uint8).tobytes())
                     elif _zc_enc:
+                        # Zone+Center encryption with a regular center-video
+                        # pipeline INSIDE each active zone: the zone background
+                        # is scrambled per external/both and the center video is
+                        # overlaid into the nested inner rect per center/both.
+                        # Optical markers stamped outside afterwards.
                         active_segs = [s for s in segment_lookup if s["start"] <= current_sec <= s["end"]]
                         if active_segs:
                             target_c_idx = int(accumulated_c)
@@ -1267,8 +1629,10 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                     center_read_cursor = 1
                             elif center_exhausted and center_end_action == 'black':
                                 last_center_frame = np.zeros((2, 2, 3), dtype=np.uint8)
+
                             center_patch = last_center_frame
                             accumulated_c += frame_step_c
+
                             new_frame = frame.copy()
                             for seg in active_segs:
                                 s_roi = seg.get("roi")
@@ -1281,6 +1645,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                 zone_bg = frame[py1:py2, px1:px2]
                                 if zone_bg.shape[1] != zw or zone_bg.shape[0] != zh:
                                     zone_bg = cv2.resize(zone_bg, (zw, zh))
+
                                 if center_patch is not None:
                                     new_zone = _encrypt_zone_nested(
                                         zone_bg, center_patch, cols, rows,
@@ -1299,8 +1664,10 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                             if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
                                                 tile = cv2.resize(tile, (dw_blk, dh_blk))
                                             new_frame[dy1:dy2, dx1:dx2] = tile
+
                                 if options.get('optical_markers'):
                                     new_frame, _ = stamp_optical_markers(new_frame, px1, py1, px2, py2, placement=placement)
+
                             if _steer_active and active_segs:
                                 _k, _c, _m = _collect_priority_rects(
                                     active_segs, out_w, out_h,
@@ -1313,6 +1680,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                         else:
                             write_pipe_frame(proc, frame.tobytes())
                     elif reverse:
+                        # ── Decrypt / restore outer background ───────────
                         restored_frame = np.zeros((out_h, out_w, 3), dtype=np.uint8)
                         if video_encrypt_mode in ['external', 'both']:
                             for j in range(N_outer):
@@ -1324,6 +1692,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                 restored_frame[y1:y2, x1:x2] = tile_resized
                         else:
                             restored_frame = frame.copy()
+
+                        # ── Decrypt / restore center video frame ─────────
                         center_frame = frame[cy1:cy2, cx1:cx2]
                         if video_encrypt_mode in ['center', 'both']:
                             unscrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
@@ -1339,11 +1709,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             center_frame_to_write = unscrambled_c
                         else:
                             center_frame_to_write = center_frame
+
                         write_pipe_frame(proc, restored_frame.tobytes())
                         if proc_center:
                             center_out = cv2.resize(center_frame_to_write, (cw, ch))
                             write_pipe_frame(proc_center, center_out.tobytes())
                     else:
+                        # ── Encrypt outer background ──────────────────────
                         new_frame = np.zeros((out_h, out_w, 3), dtype=np.uint8)
                         if video_encrypt_mode in ['external', 'both']:
                             for j in range(N_outer):
@@ -1357,8 +1729,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             for idx in outer_indices:
                                 dx1, dy1, dx2, dy2 = all_blocks[idx]
                                 new_frame[dy1:dy2, dx1:dx2] = frame[dy1:dy2, dx1:dx2]
+
+                        # ── Read center video frame (FPS step accumulation) ─
                         if cap_center:
                             target_c_idx = int(accumulated_c)
+
                             while center_read_cursor <= target_c_idx:
                                 rc, fc = cap_center.read()
                                 if not rc:
@@ -1366,6 +1741,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                     break
                                 last_center_frame = fc
                                 center_read_cursor += 1
+
                             if center_exhausted:
                                 if center_end_action == 'loop':
                                     cap_center.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -1378,10 +1754,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                         center_read_cursor = 1
                                 elif center_end_action == 'black':
                                     last_center_frame = np.zeros((ch, cw, 3), dtype=np.uint8)
+
                             frame_c = last_center_frame
                             accumulated_c += frame_step_c
+
                             if frame_c is not None:
                                 frame_c_resized = cv2.resize(frame_c, (cw, ch))
+
                                 if video_encrypt_mode in ['center', 'both']:
                                     scrambled_c = np.zeros((ch, cw, 3), dtype=np.uint8)
                                     for i in range(cols_inner * rows_inner):
@@ -1394,11 +1773,15 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                             tile = cv2.resize(tile, (dw_blk, dh_blk))
                                         scrambled_c[dy1:dy2, dx1:dx2] = tile
                                     frame_c_resized = scrambled_c
+
                                 new_frame[cy1:cy2, cx1:cx2] = frame_c_resized
+
                         write_pipe_frame(proc, new_frame.tobytes())
                 else:
+                    # ── Simple full-frame or Selective Spatial ROI scramble (no center) ────────────
                     matched_seg = None
                     if reverse and options.get('optical_markers'):
+                        # Multi-Zone Optical Marker Decryption
                         active_marker_zones = []
                         for z in discovered_zones:
                             z_id = id(z)
@@ -1406,8 +1789,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                 zone_miss_counts[z_id] = 0
                                 active_marker_zones.append(z)
                             elif zone_miss_counts.get(z_id, 99) < 2:
+                                # Temporal hysteresis: allow up to 2 frames of momentary compression drop
                                 zone_miss_counts[z_id] += 1
                                 active_marker_zones.append(z)
+
+                        # Dynamic discovery for bursts or timestamps not caught during initial probe (throttled to 5 frames when searching, 30 when locked)
                         scan_interval = 5 if not active_marker_zones else 30
                         if (frame_count % scan_interval == 0) or (frame_count < 10 and not discovered_zones):
                             found_rois = detect_all_optical_markers(frame, placement=placement)
@@ -1424,6 +1810,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                     if check_marker_presence(frame, new_z["marker_coords"], marker_size=18):
                                         if new_z not in active_marker_zones:
                                             active_marker_zones.append(new_z)
+
+                        # Forensic ±1s refinement on freshly lost zones (once
+                        # per episode): pinpoint the exact loss/recovery
+                        # second + detect moves. Re-arms when the zone
+                        # recovers (miss counter back to 0 while active).
                         for z in discovered_zones:
                             z_id = id(z)
                             _is_active = any(zz is z for zz in active_marker_zones)
@@ -1436,6 +1827,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                 if not z.get("_forensic_done"):
                                     z["_forensic_done"] = True
                                     _run_zone_forensic(z)
+
                         if active_marker_zones:
                             new_frame = frame.copy()
                             for z in active_marker_zones:
@@ -1451,12 +1843,20 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                     if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
                                         tile = cv2.resize(tile, (dw_blk, dh_blk))
                                     new_frame[dy1:dy2, dx1:dx2] = tile
+
                                 px1, py1, px2, py2 = z["pixel_roi"]
                                 new_frame = inpaint_optical_markers(new_frame, px1, py1, px2, py2, placement=placement)
                             write_pipe_frame(proc, new_frame.tobytes())
                         else:
                             write_pipe_frame(proc, frame.tobytes())
+
                     elif not reverse and segment_lookup:
+                        # Zone+Center / Multi-Zone Timeline Segment Encryption.
+                        # Combined mode (center media + active zone): a regular
+                        # center-video pipeline runs INSIDE each active zone
+                        # (nested outer ring + inner center per video_encrypt_mode).
+                        # Background outside the zone stays untouched; optical
+                        # markers are stamped afterwards (forced 'outside').
                         active_segs = [s for s in segment_lookup if s["start"] <= current_sec <= s["end"]]
                         if active_segs:
                             use_zone_center = bool(cap_center and options.get('center_in_zone', True))
@@ -1481,8 +1881,10 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                         center_read_cursor = 1
                                 elif center_exhausted and center_end_action == 'black':
                                     last_center_frame = np.zeros((2, 2, 3), dtype=np.uint8)
+                                # 'freeze' (or unknown): keep last_center_frame as-is.
                                 center_patch = last_center_frame
                                 accumulated_c += frame_step_c
+
                             new_frame = frame.copy()
                             for seg in active_segs:
                                 s_roi = seg["roi"]
@@ -1492,6 +1894,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                 if px2 <= px1 or py2 <= py1:
                                     continue
                                 zw, zh = max(2, px2 - px1), max(2, py2 - py1)
+
                                 if use_zone_center and center_patch is not None:
                                     zone_bg = frame[py1:py2, px1:px2]
                                     if zone_bg.shape[1] != zw or zone_bg.shape[0] != zh:
@@ -1501,6 +1904,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                         center_size, seed, video_encrypt_mode)
                                     new_frame[py1:py2, px1:px2] = new_zone
                                 else:
+                                    # Standard zone scramble (scrambling background inside zone)
                                     s_blocks = seg["blocks"]
                                     s_mapping = seg["mapping"]
                                     for i in range(len(s_blocks)):
@@ -1512,8 +1916,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                         if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
                                             tile = cv2.resize(tile, (dw_blk, dh_blk))
                                         new_frame[dy1:dy2, dx1:dx2] = tile
+
+                                # Stamp corner optical markers if configured
                                 if options.get('optical_markers'):
                                     new_frame, _ = stamp_optical_markers(new_frame, px1, py1, px2, py2, placement=placement)
+
                             if _steer_active and active_segs:
                                 _k, _c, _m = _collect_priority_rects(
                                     active_segs, out_w, out_h,
@@ -1525,7 +1932,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             write_pipe_frame(proc, new_frame.tobytes())
                         else:
                             write_pipe_frame(proc, frame.tobytes())
+
                     elif reverse and segment_lookup:
+                        # Timed-segment decrypt (legacy shrunk-inside layout and
+                        # new full-inside |mif| layout alike: blocks were built
+                        # per the effective layout via _get_effective_roi_blocks).
                         matched_seg = None
                         for s_info in segment_lookup:
                             if s_info["start"] <= current_sec <= s_info["end"]:
@@ -1535,8 +1946,11 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             s_blocks = matched_seg["blocks"]
                             s_mapping = matched_seg["mapping"]
                             n_s_blocks = len(s_blocks)
+                            # Full-layout inside markers sit ON the scrambled
+                            # payload: erase them BEFORE descrambling, or their
+                            # pixels permute into the restored zone.
                             src_img = frame
-                            if options.get('optical_markers') and options.get('marker_inside_full')\
+                            if options.get('optical_markers') and options.get('marker_inside_full') \
                                     and options.get('marker_placement', 'outside') == 'inside':
                                 s_roi2 = matched_seg.get("roi")
                                 if s_roi2:
@@ -1559,7 +1973,9 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             write_pipe_frame(proc, new_frame.tobytes())
                         else:
                             write_pipe_frame(proc, frame.tobytes())
+
                     elif matched_seg and matched_seg["blocks"]:
+                        # ROI Scramble
                         s_blocks = matched_seg["blocks"]
                         s_mapping = matched_seg["mapping"]
                         n_s_blocks = len(s_blocks)
@@ -1573,6 +1989,9 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                             if tile.shape[1] != dw_blk or tile.shape[0] != dh_blk:
                                 tile = cv2.resize(tile, (dw_blk, dh_blk))
                             new_frame[dy1:dy2, dx1:dx2] = tile
+
+                        # Optical markers (int(round()): stamp/inpaint zone must
+                        # equal the descramble grid zone — see image_processor).
                         if not reverse and options.get('optical_markers'):
                             s_roi = matched_seg["roi"]
                             rx1, ry1, rx2, ry2 = s_roi
@@ -1593,6 +2012,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                         rx1, ry1, rx2, ry2 = int(round(rx1 * out_w)), int(round(ry1 * out_h)), int(round(rx2 * out_w)), int(round(ry2 * out_h))
                                     placement = options.get('marker_placement', 'outside')
                                     new_frame = inpaint_optical_markers(new_frame, rx1, ry1, rx2, ry2, placement=placement)
+
                         write_pipe_frame(proc, new_frame.tobytes())
                     else:
                         new_frame = frame.copy()
@@ -1606,23 +2026,28 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                                 tile = cv2.resize(tile, (dw_blk, dh_blk))
                             new_frame[dy1:dy2, dx1:dx2] = tile
                         write_pipe_frame(proc, new_frame.tobytes())
+
             else:
                 write_pipe_frame(proc, frame.tobytes())
                 if reverse and proc_center:
                     center_blank = np.zeros((center_h, center_w, 3), dtype=np.uint8)
                     write_pipe_frame(proc_center, center_blank.tobytes())
+
             frame_count += 1
             if frame_count % 3 == 0:
                 is_cancelled_cb = options.get('is_cancelled')
                 if is_cancelled_cb and is_cancelled_cb():
                     LiveDebugger.log("CANCEL", f"Video processing cancelled by user at frame {frame_count}/{max(output_total_frames, 1)}", level="WARNING", module="VIDEO")
                     raise RuntimeError("Processing cancelled by user")
+
             if total_frames > 0 and frame_count % 5 == 0:
                 progress_dict[task_id] = int((frame_count / max(output_total_frames, 1)) * 100)
+
     finally:
         _close_ffmpeg_proc(proc, name="FFmpeg Main")
         if proc_center:
             _close_ffmpeg_proc(proc_center, name="FFmpeg Center")
+
         cap.release()
         if cap_center:
             cap_center.release()
@@ -1636,6 +2061,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 os.remove(temp_center_aud_out)
             except Exception:
                 pass
+
+        # Only delete output if cancelled by user
         is_cancelled_cb = options.get('is_cancelled')
         if is_cancelled_cb and is_cancelled_cb():
             if os.path.exists(output_path):
@@ -1648,4 +2075,6 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     os.remove(output_path_center)
                 except Exception:
                     pass
+
     progress_dict[task_id] = 100
+

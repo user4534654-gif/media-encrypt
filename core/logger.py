@@ -4,11 +4,21 @@ import time
 import datetime
 import traceback
 import functools
+
 class LiveDebugger:
+    """
+    GDB-Style Real-Time Console Debugger & Automated Diagnostic Engine.
+    Prints live execution events directly to system terminal stdout and performs
+    deep stack-frame root cause diagnostics when errors occur.
+    """
     logs = []
     last_diagnostic = None
+
     @classmethod
     def log(cls, action, details, level="INFO", module=None, extra=None):
+        """
+        Emits a GDB-style real-time log directly to terminal stdout.
+        """
         if isinstance(level, (list, tuple, set)):
             mod_items = [str(x) for x in level]
             if not module:
@@ -16,30 +26,40 @@ class LiveDebugger:
             level = "INFO"
         elif not isinstance(level, str):
             level = str(level)
+
         level_str = level.upper() if level else "INFO"
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         mod_str = f"[{module}] " if module else ""
         extra_str = f" | {extra}" if extra else ""
         msg = f"[{timestamp}] [GDB-DBGR] [{level_str:<5}] {mod_str}{action.upper()} - {details}{extra_str}"
+        
         cls.logs.append(msg)
         print(msg)
         sys.stdout.flush()
+
     @classmethod
     def trace(cls, module_name="APP"):
+        """
+        Decorator to log function entry, exit execution time, parameters, and catch exceptions.
+        """
         def decorator(func):
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 fn_name = func.__name__
+                # Filter out heavy binary/large args for clean log output
                 clean_args = []
                 for a in args:
                     if isinstance(a, (bytes, bytearray)) and len(a) > 64:
                         clean_args.append(f"<bytes len={len(a)}>")
                     else:
                         clean_args.append(repr(a))
+                
                 clean_kwargs = {k: (f"<bytes len={len(v)}>" if isinstance(v, (bytes, bytearray)) and len(v) > 64 else repr(v)) for k, v in kwargs.items()}
                 arg_str = ", ".join(clean_args + [f"{k}={v}" for k, v in clean_kwargs.items()])
+                
                 cls.log("ENTER", f"-> {fn_name}({arg_str})", level="TRACE", module=module_name)
                 start_time = time.time()
+                
                 try:
                     result = func(*args, **kwargs)
                     elapsed = time.time() - start_time
@@ -52,23 +72,35 @@ class LiveDebugger:
                     raise
             return wrapper
         return decorator
+
     @classmethod
     def analyze_exception(cls, e, module_name=None, func_name=None):
+        """
+        Analyzes a Python exception by inspecting stack frames, local variables,
+        and code context to output a GDB-style crash diagnostic report.
+        """
         exc_type = type(e).__name__
         exc_msg = str(e)
         raw_tb = traceback.format_exc()
+        
         tb_list = traceback.extract_tb(e.__traceback__)
+        
+        # Locate failing frame (prefer non-standard-library frames)
         failing_frame_info = None
         failing_py_frame = None
+        
         curr_tb = e.__traceback__
         while curr_tb:
             frame = curr_tb.tb_frame
             filename = frame.f_code.co_filename
+            # Filter for project files if possible
             if "site-packages" not in filename and "lib\\" not in filename and "lib/" not in filename:
                 failing_py_frame = frame
             curr_tb = curr_tb.tb_next
+            
         if not failing_py_frame and e.__traceback__:
             failing_py_frame = e.__traceback__.tb_frame
+
         if tb_list:
             last_entry = tb_list[-1]
             file_path = os.path.basename(last_entry.filename)
@@ -80,6 +112,8 @@ class LiveDebugger:
             line_no = 0
             func_in_tb = func_name or "Unknown"
             code_line = "N/A"
+
+        # Capture local variables safely from the failing frame
         local_vars = {}
         if failing_py_frame:
             for k, v in failing_py_frame.f_locals.items():
@@ -92,7 +126,11 @@ class LiveDebugger:
                     local_vars[k] = str_v
                 except Exception:
                     local_vars[k] = "<unrepresentable>"
+
+        # Determine plain-English Root Cause
         root_cause, suggestion = cls._diagnose_root_cause(exc_type, exc_msg, local_vars, code_line)
+
+        # Build GDB Crash Diagnostic Output
         divider = "=" * 80
         report_lines = [
             divider,
@@ -104,15 +142,19 @@ class LiveDebugger:
             f"Fix Hint:   {suggestion}",
             "Local Variables Snapshot:"
         ]
+        
         if local_vars:
             for k, v in local_vars.items():
                 report_lines.append(f"  * {k} = {v}")
         else:
             report_lines.append("  (No local variables captured)")
+            
         report_lines.append(divider)
+        
         formatted_report = "\n".join(report_lines)
         print("\n" + formatted_report + "\n")
         sys.stdout.flush()
+
         cls.last_diagnostic = {
             "error_type": exc_type,
             "error_message": exc_msg,
@@ -125,11 +167,14 @@ class LiveDebugger:
             "local_vars": local_vars,
             "traceback": raw_tb
         }
+        
         cls.logs.append(formatted_report)
         return cls.last_diagnostic
+
     @classmethod
     def _diagnose_root_cause(cls, exc_type, exc_msg, local_vars, code_line):
         msg_lower = exc_msg.lower()
+        
         if "ffmpeg" in msg_lower or "ffprobe" in msg_lower:
             return (
                 "FFmpeg binary execution error or missing dependency.",
@@ -170,16 +215,23 @@ class LiveDebugger:
                 f"Unhandled {exc_type} during execution step.",
                 "Inspect local variables snapshot and stack traceback details above."
             )
+
     @classmethod
     def save_to_file(cls):
+        """
+        Saves all GDB debug logs and diagnostic reports to file.
+        """
         try:
             filename = "media_encrypt_debug_log.txt"
             downloads = os.path.join(os.path.expanduser("~"), "Downloads")
             filepath = os.path.join(downloads, filename) if os.path.exists(downloads) else os.path.abspath(filename)
+                
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write("\n".join(cls.logs))
+            
             cls.log("SAVE_LOG", f"Saved debug log file to: {filepath}", level="INFO", module="LOGGER")
             return filepath
         except Exception as e:
             print(f"Error saving debug log: {e}")
             return None
+

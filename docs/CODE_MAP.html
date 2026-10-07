@@ -22,6 +22,7 @@
             --yellow-accent: #dcdcaa;
             --red-accent: #f44747;
         }
+
         body {
             background-color: var(--bg-main);
             color: var(--text-main);
@@ -30,10 +31,12 @@
             padding: 30px 20px;
             line-height: 1.5;
         }
+
         .obsidian-container {
             max-width: 1100px;
             margin: 0 auto;
         }
+
         /* Obsidian Header */
         .header-title {
             font-size: 28px;
@@ -46,6 +49,7 @@
             align-items: center;
             gap: 10px;
         }
+
         /* Maintenance Callout Notice */
         .callout-maintenance {
             background: rgba(168, 130, 255, 0.08);
@@ -56,6 +60,7 @@
             margin-bottom: 30px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
+
         .callout-title {
             font-weight: 800;
             font-size: 14px;
@@ -67,11 +72,13 @@
             align-items: center;
             gap: 8px;
         }
+
         .callout-body {
             font-size: 13px;
             color: var(--text-main);
             margin: 0;
         }
+
         .callout-body code {
             background: var(--bg-code);
             color: var(--green-accent);
@@ -79,6 +86,7 @@
             border-radius: 4px;
             font-family: monospace;
         }
+
         /* Section Titles */
         h2 {
             font-size: 20px;
@@ -88,12 +96,14 @@
             border-bottom: 1px dashed var(--border-color);
             padding-bottom: 6px;
         }
+
         h3 {
             font-size: 16px;
             color: var(--yellow-accent);
             margin-top: 20px;
             margin-bottom: 10px;
         }
+
         /* ASCII & Graph Canvas Blocks */
         .diagram-card {
             background: var(--bg-code);
@@ -104,6 +114,7 @@
             margin-bottom: 25px;
             box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
         }
+
         pre.ascii-tree {
             font-family: "Cascadia Code", "Fira Code", "Courier New", monospace;
             font-size: 13px;
@@ -111,6 +122,7 @@
             margin: 0;
             line-height: 1.4;
         }
+
         /* Obsidian Tags */
         .tag {
             display: inline-block;
@@ -122,6 +134,7 @@
             border-radius: 12px;
             margin-right: 6px;
         }
+
         /* Function Cards Grid */
         .grid-cards {
             display: grid;
@@ -129,6 +142,7 @@
             gap: 16px;
             margin-bottom: 30px;
         }
+
         .card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -136,10 +150,12 @@
             padding: 14px;
             transition: transform 0.15s ease, border-color 0.15s ease;
         }
+
         .card:hover {
             border-color: var(--purple-accent);
             background: var(--bg-card-hover);
         }
+
         .card-header {
             font-weight: 700;
             font-size: 14px;
@@ -150,6 +166,7 @@
             justify-content: space-between;
             align-items: center;
         }
+
         .conn-line {
             font-size: 12px;
             color: var(--text-main);
@@ -158,20 +175,24 @@
             align-items: flex-start;
             gap: 6px;
         }
+
         .conn-arrow {
             color: var(--purple-accent);
             font-weight: bold;
         }
+
         .func-name {
             color: var(--blue-accent);
             font-family: monospace;
         }
+
         .func-desc {
             font-size: 11px;
             color: var(--text-muted);
             margin-top: 6px;
             font-style: italic;
         }
+
         /* Tables for quick reference */
         table {
             width: 100%;
@@ -179,25 +200,33 @@
             margin-bottom: 25px;
             font-size: 13px;
         }
+
         th, td {
             border: 1px solid var(--border-color);
             padding: 8px 12px;
             text-align: left;
         }
+
         th {
             background: var(--bg-card);
             color: var(--purple-accent);
         }
+
         tr:nth-child(even) {
             background: rgba(255, 255, 255, 0.02);
         }
     </style>
 </head>
 <body>
+
 <div class="obsidian-container">
+
+    <!-- Header -->
     <div class="header-title">
         <span>🧠</span> Media-Encrypt Studio — Code Base & Connection Map
     </div>
+
+    <!-- AI / Developer Maintenance Rule Callout -->
     <div class="callout-maintenance">
         <div class="callout-title">
             <span>⚠️</span> Knowledge Base Update Rule (For AI Chat & Developers)
@@ -206,6 +235,8 @@
             <b>MANDATORY NOTE FOR FUTURE EDITS:</b> Whenever adding, modifying, renaming, or deleting any function, module, or route in this codebase, you <b>MUST update this <code>CODE_MAP.html</code> file</b> to reflect the structural changes. Keep descriptions minimal, update directional caller/callee links, and keep diagrams accurate.
         </p>
     </div>
+
+    <!-- Executive System Diagram -->
     <h2>1. Executive Request & Media Flow Map</h2>
     <div class="diagram-card">
         <pre class="ascii-tree">
@@ -234,7 +265,11 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
                                            (Frequency Swap)
         </pre>
     </div>
+
+    <!-- Detailed Module Maps -->
     <h2>2. Module Architecture & Call Graph</h2>
+
+    <!-- Module 1: HTTP / Entry Point -->
     <h3>🌐 Entry & Dispatcher (`main.py` & `core/pipeline.py`)</h3>
     <div class="grid-cards">
         <div class="card">
@@ -247,6 +282,7 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_media()</span></div>
             <div class="func-desc">Handles uploaded file, parses key options, triggers pipeline.</div>
         </div>
+
         <div class="card">
             <div class="card-header">
                 resolve_auto_quality() <span class="tag">main.py</span>
@@ -255,6 +291,7 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">probe_media_file()</span></div>
             <div class="func-desc">Auto-detects optimal codecs, formats, bitrates if set to 'auto'.</div>
         </div>
+
         <div class="card">
             <div class="card-header">
                 process_media() <span class="tag">pipeline.py</span>
@@ -266,6 +303,8 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="func-desc">Master router delegating processing to appropriate handler.</div>
         </div>
     </div>
+
+    <!-- Module 2: Video Processing -->
     <h3>🎬 Video Engine (`core/video_processor.py`)</h3>
     <div class="grid-cards">
         <div class="card">
@@ -280,6 +319,7 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="conn-line"><span class="conn-arrow">OUT:</span> FFmpeg subprocess (stdin rawvideo piping)</div>
             <div class="func-desc">Executes normal & center video block scrambling and audio extraction.</div>
         </div>
+
         <div class="card">
             <div class="card-header">
                 _adjust_audio_length() <span class="tag">video_processor.py</span>
@@ -289,6 +329,8 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="func-desc">Crops, loops, or pads audio array to fit target frame duration.</div>
         </div>
     </div>
+
+    <!-- Module 3: Image Processing -->
     <h3>🖼️ Image Engine (`core/image_processor.py`)</h3>
     <div class="grid-cards">
         <div class="card">
@@ -301,6 +343,7 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">save_image()</span></div>
             <div class="func-desc">Performs matrix block shuffling for single frame images.</div>
         </div>
+
         <div class="card">
             <div class="card-header">
                 save_image() <span class="tag">image_processor.py</span>
@@ -310,6 +353,8 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="func-desc">High-quality image exporter for JPG, PNG, AVIF, WEBP.</div>
         </div>
     </div>
+
+    <!-- Module 4: Audio Processing -->
     <h3>🎵 Audio DSP Engine (`core/audio.py`)</h3>
     <div class="grid-cards">
         <div class="card">
@@ -322,6 +367,7 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">process_inversion()</span></div>
             <div class="func-desc">Main audio track dispatcher (supports multichannel & selective track).</div>
         </div>
+
         <div class="card">
             <div class="card-header">
                 process_band_scramble() <span class="tag">audio.py</span>
@@ -330,6 +376,7 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="conn-line"><span class="conn-arrow">OUT:</span> FFT spectrum split and band permuted array</div>
             <div class="func-desc">Splits frequency spectrum into N bands and scrambles them.</div>
         </div>
+
         <div class="card">
             <div class="card-header">
                 process_combined() <span class="tag">audio.py</span>
@@ -338,6 +385,7 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">get_permutation()</span>, <span class="func-name">numpy_lowpass_filter()</span></div>
             <div class="func-desc">Combines carrier modulation with block FFT band scrambling.</div>
         </div>
+
         <div class="card">
             <div class="card-header">
                 process_inversion() <span class="tag">audio.py</span>
@@ -346,6 +394,7 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="conn-line"><span class="conn-arrow">OUT:</span> <span class="func-name">numpy_lowpass_filter()</span></div>
             <div class="func-desc">Traditional time-domain cosine ring modulation / frequency inversion.</div>
         </div>
+
         <div class="card">
             <div class="card-header">
                 numpy_lowpass_filter() <span class="tag">audio.py</span>
@@ -354,6 +403,7 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="conn-line"><span class="conn-arrow">OUT:</span> FFT irfft audio signal</div>
             <div class="func-desc">Hann-smoothed FFT lowpass filter eliminating carrier harmonics.</div>
         </div>
+
         <div class="card">
             <div class="card-header">
                 mulberry32() / get_permutation() <span class="tag">audio.py</span>
@@ -363,6 +413,8 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             <div class="func-desc">Deterministic PRNG and array permutation generator.</div>
         </div>
     </div>
+
+    <!-- Module 5: Core Utilities -->
     <h3>🛠️ Core Support Utilities</h3>
     <table>
         <thead>
@@ -442,6 +494,8 @@ Normal Image      Center Image           AUDIO DSP ALGORITHM        Normal Video
             </tr>
         </tbody>
     </table>
+
 </div>
+
 </body>
 </html>

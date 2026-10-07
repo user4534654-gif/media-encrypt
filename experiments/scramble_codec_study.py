@@ -1,4 +1,21 @@
-                      
+#!/usr/bin/env python3
+"""Scramble-codec study: does codec tuning / grid alignment reduce artifacts?
+
+End-to-end, using the REAL pipeline math:
+  synthetic frames -> core.video_processor._scramble_frame_ordinary
+  -> ffmpeg encode (project-style capped ABR, rawvideo bgr24 pipe)
+  -> ffmpeg decode -> descramble (reverse=True)
+  -> metrics vs original: PSNR + seam-line energy ratio.
+
+Usage:
+  python experiments/scramble_codec_study.py --only x264          # one codec
+  python experiments/scramble_codec_study.py --only grids_x264
+  python experiments/scramble_codec_study.py                      # everything
+  python experiments/scramble_codec_study.py --list               # show plan
+
+Results accumulate in experiments/results.json (reruns skip done cases
+unless --redo). Artifacts go to --out (default: system temp).
+"""
 import argparse
 import json
 import math
@@ -7,30 +24,41 @@ import subprocess
 import sys
 import tempfile
 import time
+
 import cv2
 import numpy as np
+
 PROJ = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, PROJ)
-from core.grid_utils import get_blocks              
-from core.video_processor import _scramble_frame_ordinary              
+from core.grid_utils import get_blocks  # noqa: E402
+from core.video_processor import _scramble_frame_ordinary  # noqa: E402
+
 W, H, FPS, NFRAMES = 1280, 720, 30, 60
 SEED = 777
 BITRATE = "2500k"
 BUF = "5000k"
+
 GRIDS = {
-    "G10": (10, 10),                                                
-    "G20": (20, 15),                                       
-    "G21": (21, 16),                                                                  
-    "G40": (40, 30),                                
-    "G100": (100, 100),                                                    
+    "G10": (10, 10),     # tiles 128x72  (16-aligned H, 8-aligned V)
+    "G20": (20, 15),     # tiles 64x48   (fully 16-aligned)
+    "G21": (21, 16),     # tiles 60.95x45 (fractional, misaligned ~ same count as G20)
+    "G40": (40, 30),     # tiles 32x24   (8-aligned)
+    "G100": (100, 100),  # tiles 12.8x7.2 (today's 100x100 disease, scaled)
 }
+
+# Line-shuffle modes (full-width horizontal strips, Colab-style):
+# key -> strip height in px. Integer-divides H, so no resize damage.
 LINES = {
-    "L2": 2,                                           
-    "L8": 8,                           
+    "L2": 2,   # 360 strips, like the user's Colab cell
+    "L8": 8,   # 90 strips, 8px-aligned
 }
+
+
 def line_perm(n, seed):
     rng = np.random.RandomState(seed)
     return rng.permutation(n)
+
+
 def line_shuffle_frame(frame, lh, seed, reverse=False):
     n = H // lh
     perm = line_perm(n, seed)
@@ -40,9 +68,15 @@ def line_shuffle_frame(frame, lh, seed, reverse=False):
     out = frame.copy()
     out[:n * lh] = blocks[perm].reshape(n * lh, W, 3)
     return out
+
+
 def build_content():
+    """Deterministic mixed content: gradients + chroma halves + checker +
+    lines + one moving square (temporal axis for inter prediction)."""
     frames = []
     yy, xx = np.mgrid[0:H, 0:W]
+    # Full-frame fine checker (scrambled -> uniform high-entropy noise),
+    # tinted per channel so chroma planes also work hard.
     base_chk = ((xx // 16 + yy // 16) % 2 * 255).astype(np.uint8)
     for f in range(NFRAMES):
         img = np.zeros((H, W, 3), dtype=np.uint8)
@@ -50,17 +84,19 @@ def build_content():
         img[:, :, 1] = 255 - base_chk
         img[:, :, 2] = ((xx // 16 + yy // 32) % 2 * 255).astype(np.uint8)
         img[:, :, 0] = (img[:, :, 0].astype(np.uint16)
-                        + (xx * 60 / W)).astype(np.uint8)                          
+                        + (xx * 60 / W)).astype(np.uint8)       # luma/chroma ramps
         img[:, :, 2] = (img[:, :, 2].astype(np.uint16)
                         + (yy * 60 / H)).astype(np.uint8)
-        img[::4, :, :] = img[::4, :, :] // 2 + 40                           
+        img[::4, :, :] = img[::4, :, :] // 2 + 40               # thin lines
         sq, mv = 120, int(f * (W - 160) / (NFRAMES - 1))
-        img[300:300 + sq, 20 + mv:20 + mv + sq, :] = 255                       
+        img[300:300 + sq, 20 + mv:20 + mv + sq, :] = 255        # mover (white)
         img[300:300 + sq, 20 + mv:20 + mv + sq, 1] = 0
         sq2, mv2 = 90, int((NFRAMES - 1 - f) * (W - 130) / (NFRAMES - 1))
-        img[100:100 + sq2, 20 + mv2:20 + mv2 + sq2, 0] = 255                    
+        img[100:100 + sq2, 20 + mv2:20 + mv2 + sq2, 0] = 255    # mover 2 (blue)
         frames.append(img)
     return frames
+
+
 def seam_edges(cols, rows):
     xs, ys = set(), set()
     for (x1, y1, x2, y2) in get_blocks(W, H, cols, rows):
@@ -68,6 +104,8 @@ def seam_edges(cols, rows):
     xs = sorted(x for x in xs if 0 < x < W)
     ys = sorted(y for y in ys if 0 < y < H)
     return xs, ys
+
+
 def run_ffmpeg(args, data_in=None):
     p = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y"]
                        + args, input=data_in,
@@ -75,30 +113,45 @@ def run_ffmpeg(args, data_in=None):
     if p.returncode != 0:
         raise RuntimeError(f"ffmpeg failed: {p.stderr.decode()[:500]}")
     return p.stdout
+
+
 def decode_frames(path):
     raw = run_ffmpeg(["-i", path, "-f", "rawvideo", "-pix_fmt", "bgr24", "-"])
     n = len(raw) // (W * H * 3)
     arr = np.frombuffer(raw, dtype=np.uint8)[:n * W * H * 3]
     return [arr[i * W * H * 3:(i + 1) * W * H * 3].reshape(H, W, 3)
             for i in range(n)]
+
+
 def psnr(a, b):
     mse = float(np.mean((a.astype(np.float64) - b.astype(np.float64)) ** 2))
     return 99.0 if mse <= 0 else 10.0 * math.log10(255.0 ** 2 / mse)
+
+
 def gray(f):
     return (0.299 * f[:, :, 2] + 0.587 * f[:, :, 1]
             + 0.114 * f[:, :, 0])
+
+
 def psnr_chroma(a, b):
+    """PSNR over Cb+Cr only (cv2 YCrCb): isolates chroma-subsampling damage."""
     ca = cv2.cvtColor(a, cv2.COLOR_BGR2YCrCb)[:, :, 1:].astype(np.float64)
     cb = cv2.cvtColor(b, cv2.COLOR_BGR2YCrCb)[:, :, 1:].astype(np.float64)
     mse = float(np.mean((ca - cb) ** 2))
     return 99.0 if mse <= 0 else 10.0 * math.log10(255.0 ** 2 / mse)
+
+
 def lossless_roundtrip(cols, rows):
+    """Scramble->descramble with NO codec: pure pipeline damage
+    (fractional tiles go through cv2.resize and never come back exactly)."""
     ps = []
     for i in [0, 30, 59]:
         s = _scramble_frame_ordinary(CONTENT[i], cols, rows, SEED)
         b = _scramble_frame_ordinary(s, cols, rows, SEED, reverse=True)
         ps.append(psnr(CONTENT[i], b))
     return round(float(np.mean(ps)), 3)
+
+
 def lossless_line_roundtrip(lh):
     ps = []
     for i in [0, 30, 59]:
@@ -106,22 +159,30 @@ def lossless_line_roundtrip(lh):
         b = line_shuffle_frame(s, lh, SEED, reverse=True)
         ps.append(psnr(CONTENT[i], b))
     return round(float(np.mean(ps)), 3)
+
+
 def scramble_fwd(frame, grid):
     if grid in LINES:
         return line_shuffle_frame(frame, LINES[grid], SEED)
     cols, rows = GRIDS[grid]
     return _scramble_frame_ordinary(frame, cols, rows, SEED)
+
+
 def descramble_rev(frame, grid):
     if grid in LINES:
         return line_shuffle_frame(frame, LINES[grid], SEED, reverse=True)
     cols, rows = GRIDS[grid]
     return _scramble_frame_ordinary(frame, cols, rows, SEED, reverse=True)
+
+
 def edges_for(grid):
     if grid in LINES:
         lh = LINES[grid]
         return [], [k * lh for k in range(1, H // lh)]
     cols, rows = GRIDS[grid]
     return seam_edges(cols, rows)
+
+
 def seam_stats(frame, xs, ys):
     g = gray(frame.astype(np.float64))
     gx = np.abs(np.diff(g, axis=1))
@@ -135,10 +196,16 @@ def seam_stats(frame, xs, ys):
     seam_e = np.concatenate([gx[mx], gy[my]]).mean()
     bg_e = np.concatenate([gx[~mx], gy[~my]]).mean()
     return seam_e, (seam_e / bg_e if bg_e > 0 else 0.0)
+
+
 CASES = []
+
+
 def case(name, codec, extra, grid="G20", group="flags", bitrate=BITRATE):
     CASES.append({"name": name, "codec": codec, "extra": extra,
                   "grid": grid, "group": group, "bitrate": bitrate})
+
+
 def define_cases():
     x264_base = ["-preset", "medium"]
     x264_combo = x264_base + ["-x264-params", "no-deblock=1",
@@ -152,16 +219,19 @@ def define_cases():
     case("x264/G20/base@8M", "libx264", x264_base, bitrate="8000k", group="bitrate")
     case("x264/G20/combo@8M", "libx264", x264_combo, bitrate="8000k", group="bitrate")
     case("x264/G100/combo", "libx264", x264_combo, grid="G100", group="grids")
+
     x265_base = ["-preset", "medium"]
     case("x265/G20/base", "libx265", x265_base)
     case("x265/G20/nodeblock", "libx265", x265_base + ["-x265-params", "no-deblock=1"])
     case("x265/G20/tune", "libx265", x265_base + ["-tune", "ssim"])
     case("x265/G20/combo", "libx265",
          x265_base + ["-x265-params", "no-deblock=1", "-tune", "ssim"])
+
     vp9_base = ["-deadline", "good", "-cpu-used", "2"]
     case("vp9/G20/base", "libvpx-vp9", vp9_base)
     case("vp9/G20/screen", "libvpx-vp9", vp9_base + ["-tune-content", "1"])
     case("vp9/G20/arnr0", "libvpx-vp9", vp9_base + ["-arnr-strength", "0"])
+
     av1_base = ["-cpu-used", "6"]
     case("av1/G20/base", "libaom-av1", av1_base)
     case("av1/G20/nosmooth", "libaom-av1",
@@ -169,6 +239,7 @@ def define_cases():
     case("av1/G20/combo", "libaom-av1",
          av1_base + ["-tune", "1", "-enable-cdef", "0",
                      "-enable-restoration", "0"])
+
     for g in ["G10", "G21", "G40", "G100"]:
         case(f"x264/{g}/base", "libx264", x264_base, grid=g, group="grids")
     for g in ["G10", "G21", "G40", "G100"]:
@@ -177,15 +248,22 @@ def define_cases():
         case(f"vp9/{g}/base", "libvpx-vp9", vp9_base, grid=g, group="grids")
     case("av1/G10/base", "libaom-av1", av1_base, grid="G10", group="grids")
     case("av1/G100/base", "libaom-av1", av1_base, grid="G100", group="grids")
+
     case("x264/G20/444", "libx264",
          ["-preset", "medium", "-pix_fmt", "yuv444p", "-profile:v", "high444"],
          group="pixfmt")
     case("x265/G20/444", "libx265",
          ["-preset", "medium", "-pix_fmt", "yuv444p"], group="pixfmt")
+
     case("x264/G20/combo@2M", "libx264", x264_combo, bitrate="2000k",
          group="bitrate")
+
+    # No-codec controls: pure pipeline damage per grid (fractional tiles
+    # go through cv2.resize inside the shuffle itself).
     for g in ["G10", "G20", "G21", "G40", "G100", "L2", "L8"]:
         case(f"lossless/{g}", "none", [], grid=g, group="lossless")
+
+    # Line-shuffle (Colab-style full-width strips) vs block grids.
     case("x264/L2/base", "libx264", x264_base, grid="L2", group="lines")
     case("x264/L2/combo", "libx264", x264_combo, grid="L2", group="lines")
     case("x264/L8/base", "libx264", x264_base, grid="L8", group="lines")
@@ -193,10 +271,14 @@ def define_cases():
     case("x265/L2/combo", "libx265",
          x265_base + ["-x265-params", "no-deblock=1", "-tune", "ssim"],
          grid="L2", group="lines")
+
+    # 10-bit depth at the same bitrate cap (8-bit content upconverted).
     case("x264/G20/10bit", "libx264",
          ["-preset", "medium", "-pix_fmt", "yuv420p10le"], group="depth")
     case("x265/G20/10bit", "libx265",
          ["-preset", "medium", "-pix_fmt", "yuv420p10le"], group="depth")
+
+
 def run_case(c, frames_by_grid, out_dir):
     key = c["grid"]
     if key not in frames_by_grid:
@@ -206,6 +288,9 @@ def run_case(c, frames_by_grid, out_dir):
     bitrate = c.get("bitrate", BITRATE)
     buf = f"{int(bitrate.rstrip('k')) * 2}k"
     cmd_extra = [a.replace(BITRATE, bitrate) for a in c["extra"]]
+    # 10-bit outputs need a true deep source: feeding 8-bit bgr24 into a
+    # 10-bit pix_fmt shifts levels (full->limited mishandled) and fakes a
+    # -18 dB collapse. 16-bit bgr48le converts correctly on both paths.
     deep = any("10le" in a for a in cmd_extra)
     if deep:
         frames = [(f.astype(np.uint16) * 257) for f in frames_by_grid[key]]
@@ -242,7 +327,11 @@ def run_case(c, frames_by_grid, out_dir):
             "seam_abs": round(float(np.mean(seams)), 3),
             "seam_ratio": round(float(np.mean(ratios)), 3),
             "enc_seconds": round(enc_s, 1)}
+
+
 CONTENT = None
+
+
 def main():
     global CONTENT
     ap = argparse.ArgumentParser()
@@ -273,6 +362,7 @@ def main():
     print(f"cases: {len(todo)} (out={out_dir})", flush=True)
     CONTENT = build_content()
     frames_by_grid = {}
+    # Never drop previous results: redo only replaces the cases it runs.
     redo_names = {c["name"] for c in todo}
     results = [r for r in done.values() if r["name"] not in redo_names]
     for i, c in enumerate(todo):
@@ -296,5 +386,7 @@ def main():
         json.dump(results, open(res_path, "w"), indent=1)
         print(f"  -> {r}", flush=True)
     print(f"results -> {res_path}")
+
+
 if __name__ == "__main__":
     main()

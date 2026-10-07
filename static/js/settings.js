@@ -1,4 +1,6 @@
 const SETTINGS_KEY = 'media_encrypt_settings_v20';
+
+// Global state variables
 let origRatio = 1;
 let activeFolder = 'input';
 let encryptionMode = 'normal';
@@ -6,6 +8,8 @@ let imgEncryptionMode = 'normal';
 let activeMainTab = 'encrypt';
 let activeMediaType = 'video';
 let activeImageFormat = 'auto';
+
+
 function collectSettings() {
     const bitSlider = document.getElementById('v_bit_slider');
     const freqSlider = document.getElementById('carrier_freq_slider');
@@ -13,6 +17,7 @@ function collectSettings() {
     const encAudio = document.getElementById('encAudio');
     const val = (id, def) => { const el = document.getElementById(id); return el ? el.value : def; };
     const chk = (id, def) => { const el = document.getElementById(id); return el ? el.checked : def; };
+
     return {
         _preset: 'media-encrypt-settings',
         _version: 1,
@@ -78,6 +83,7 @@ function collectSettings() {
         saveKeyFile: chk('saveKeyFile', true),
         imgSaveKeyFile: chk('imgSaveKeyFile', true),
         audSaveKeyFile: chk('audSaveKeyFile', true),
+        // Selective Spatial Zones & optical markers (video + image tabs)
         enableSpatialZones: chk('enableSpatialZones', false),
         patchRoiInvert: chk('patchRoiInvert', false),
         patchOpticalMarkers: chk('patchOpticalMarkers', false),
@@ -96,9 +102,11 @@ function collectSettings() {
         imgCoordY2: val('imgCoordY2', '')
     };
 }
+
 function saveAllSettings() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(collectSettings()));
 }
+
 function loadAllSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return;
@@ -108,6 +116,10 @@ function loadAllSettings() {
         console.error("Error loading settings:", e);
     }
 }
+
+// Download the current settings as a .json preset file, or restore settings
+// from one. The file carries the exact same object the auto-save persists,
+// so presets round-trip losslessly across machines and sessions.
 function exportSettingsToJson() {
     try {
         const settings = collectSettings();
@@ -124,6 +136,7 @@ function exportSettingsToJson() {
         alert('Could not export settings: ' + e.message);
     }
 }
+
 function importSettingsFromJsonFile(file) {
     if (!file) return;
     const reader = new FileReader();
@@ -143,6 +156,7 @@ function importSettingsFromJsonFile(file) {
     };
     reader.readAsText(file);
 }
+
 function applySettingsObject(settings) {
     try {
         if (settings.theme !== undefined) {
@@ -154,13 +168,16 @@ function applySettingsObject(settings) {
         if (settings.imgEncryptionMode) setImageEncryptionMode(settings.imgEncryptionMode);
         if (settings.activeImageFormat) setImageFormat(settings.activeImageFormat);
         if (settings.activeMediaType) setMediaTypeTab(settings.activeMediaType);
+        
         const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
         const setChecked = (id, checked) => { const el = document.getElementById(id); if (el) el.checked = checked; };
+        
         setChecked('encVideo', settings.encVideo);
         setChecked('encAudio', settings.encAudio);
         setVal('v_fmt', settings.v_fmt);
         setVal('v_codec', settings.v_codec);
         setVal('v_preset', settings.v_preset);
+        // Migrate legacy spatial modes: 'zone' -> 'priority', 'tiles'/other -> 'off'.
         let _sm = settings.v_spatial_mode || 'off';
         if (_sm === 'zone') _sm = 'priority';
         else if (_sm !== 'priority') _sm = 'off';
@@ -171,6 +188,7 @@ function applySettingsObject(settings) {
             const _zpv = document.getElementById('zone_priority_val');
             if (_zpv) _zpv.innerText = settings.zone_priority_strength;
         }
+        
         const bitSlider = document.getElementById('v_bit_slider');
         const bitVal = document.getElementById('v_bit_val');
         const bitLabel = document.getElementById('v_bit_label');
@@ -179,10 +197,12 @@ function applySettingsObject(settings) {
             if (bitVal) bitVal.innerText = settings.v_bit + 'k';
             if (bitLabel) bitLabel.innerText = 'Max Dynamic Bitrate: ' + settings.v_bit + 'k';
         }
+        
         if (settings.autoVidBitrate !== undefined) {
             setChecked('autoVidBitrate', settings.autoVidBitrate);
             toggleVidBitrateAuto(settings.autoVidBitrate);
         }
+        
         const aSrSliderEl = document.getElementById('a_sr_slider');
         if (aSrSliderEl) {
             aSrSliderEl.value = settings.a_sr_slider || (settings.a_sr && settings.a_sr !== 'auto' ? settings.a_sr : '48000');
@@ -190,6 +210,7 @@ function applySettingsObject(settings) {
         if (settings.a_sr_auto !== undefined) setChecked('a_sr_auto', settings.a_sr_auto);
         syncAudioSrLabel('video');
         if (typeof toggleAudioSrAuto === 'function') toggleAudioSrAuto(document.getElementById('a_sr_auto') ? document.getElementById('a_sr_auto').checked : true, 'video');
+
         setVal('a_codec', settings.a_codec);
         if (typeof onAudioCodecChanged === 'function') onAudioCodecChanged('video');
         const aBitSliderEl = document.getElementById('a_bit_slider');
@@ -202,16 +223,20 @@ function applySettingsObject(settings) {
         } else {
             if (typeof syncAudioBitLabel === 'function') syncAudioBitLabel('video');
         }
+        
         setVal('cols', settings.cols);
         setVal('rows', settings.rows);
         setVal('sid', settings.sid);
+        
         setChecked('aspectLock', settings.aspectLock);
         setChecked('noScale', settings.noScale);
         setVal('resW', settings.resW);
         setVal('resH', settings.resH);
+        
         setVal('img_cols', settings.img_cols);
         setVal('img_rows', settings.img_rows);
         setVal('img_sid', settings.img_sid);
+        
         const freqSlider = document.getElementById('carrier_freq_slider');
         const freqVal = document.getElementById('carrier_freq_val');
         const freqLabel = document.getElementById('carrier_freq_label');
@@ -241,9 +266,11 @@ function applySettingsObject(settings) {
         }
         setVal('audio_fmt', settings.audio_fmt);
         setVal('decKey', settings.decKey);
+        
         setVal('aud_method', settings.aud_method || 'inversion');
         setVal('aud_splits', settings.aud_splits || '10');
         setVal('aud_seed', settings.aud_seed || '');
+        
         const audVolSlider = document.getElementById('aud_vol_factor_slider');
         const audVolVal = document.getElementById('aud_vol_factor_val');
         const audVolLabel = document.getElementById('aud_vol_factor_label');
@@ -252,9 +279,11 @@ function applySettingsObject(settings) {
             if (audVolVal) audVolVal.innerText = settings.aud_vol_factor + '%';
             if (audVolLabel) audVolLabel.innerText = 'Encrypted Audio Volume: ' + settings.aud_vol_factor + '%';
         }
+        
         const vAudMethod = document.getElementById('v_aud_method');
         if (vAudMethod && settings.v_aud_method) vAudMethod.value = settings.v_aud_method;
         setVal('v_aud_splits', settings.v_aud_splits || '10');
+        
         const volSlider = document.getElementById('vol_factor_slider');
         const volVal = document.getElementById('vol_factor_val');
         const volLabel = document.getElementById('vol_factor_label');
@@ -263,6 +292,7 @@ function applySettingsObject(settings) {
             if (volVal) volVal.innerText = settings.vol_factor + '%';
             if (volLabel) volLabel.innerText = 'Volume Factor: ' + settings.vol_factor + '%';
         }
+        
         setChecked('dual_track', settings.dual_track || false);
         if (settings.track_l_source) setVal('trackLSourceSelect', settings.track_l_source);
         if (settings.track_r_source) setVal('trackRSourceSelect', settings.track_r_source);
@@ -287,6 +317,8 @@ function applySettingsObject(settings) {
         setChecked('saveKeyFile', settings.saveKeyFile !== false);
         setChecked('imgSaveKeyFile', settings.imgSaveKeyFile !== false);
         setChecked('audSaveKeyFile', settings.audSaveKeyFile !== false);
+
+        // Selective Spatial Zones & optical markers (video + image tabs).
         if (settings.enableSpatialZones !== undefined) {
             setChecked('enableSpatialZones', settings.enableSpatialZones);
             if (typeof onEnableSpatialZonesToggle === 'function') onEnableSpatialZonesToggle(!!settings.enableSpatialZones);
@@ -321,6 +353,7 @@ function applySettingsObject(settings) {
             setVal('imgCoordY2', settings.imgCoordY2);
             if (typeof onManualImgCoordInput === 'function') onManualImgCoordInput();
         }
+
         updateVisibility();
         if (typeof toggleAudioMethodFields === 'function') toggleAudioMethodFields();
         if (typeof toggleVideoAudioMethodFields === 'function') toggleVideoAudioMethodFields();
@@ -328,6 +361,7 @@ function applySettingsObject(settings) {
         console.error("Error loading settings:", e);
     }
 }
+
 function initAutoSave() {
     const inputs = [
         'themeToggle', 'encVideo', 'encAudio', 'v_fmt', 'v_codec', 'v_preset', 'v_bit_slider', 'autoVidBitrate',
@@ -348,6 +382,7 @@ function initAutoSave() {
         }
     });
 }
+
 function toggleVidBitrateAuto(isAuto) {
     const sliderContainer = document.getElementById('vidBitrateSliderContainer');
     if (sliderContainer) {
@@ -355,6 +390,7 @@ function toggleVidBitrateAuto(isAuto) {
     }
     saveAllSettings();
 }
+
 function toggleZonePriority(mode) {
     const row = document.getElementById('zonePriorityRow');
     if (row) {
