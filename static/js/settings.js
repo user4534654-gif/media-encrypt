@@ -35,7 +35,8 @@ function collectSettings() {
         v_bit: bitSlider ? bitSlider.value : '3000',
         v_spatial_mode: val('v_spatial_mode', 'off'),
         zone_priority_strength: val('zone_priority_strength', '40'),
-        autoVidBitrate: chk('autoVidBitrate', true),
+        autoQuality: chk('autoQualityToggle', true),
+        autoQualityPct: val('autoQualityPct', '0'),
         a_sr_auto: chk('a_sr_auto', true),
         a_sr_slider: val('a_sr_slider', '48000'),
         a_codec: val('a_codec', 'auto'),
@@ -104,8 +105,14 @@ function collectSettings() {
 }
 
 function saveAllSettings() {
+    // While a stored preset is being applied the DOM is half-updated:
+    // persisting that state would overwrite the settings that have not
+    // been applied yet.
+    if (settingsApplyInProgress) return;
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(collectSettings()));
 }
+
+let settingsApplyInProgress = false;
 
 function loadAllSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -158,6 +165,7 @@ function importSettingsFromJsonFile(file) {
 }
 
 function applySettingsObject(settings) {
+    settingsApplyInProgress = true;
     try {
         if (settings.theme !== undefined) {
             const toggle = document.getElementById('themeToggle');
@@ -191,16 +199,25 @@ function applySettingsObject(settings) {
         
         const bitSlider = document.getElementById('v_bit_slider');
         const bitVal = document.getElementById('v_bit_val');
-        const bitLabel = document.getElementById('v_bit_label');
+        const bitLabel = document.getElementById('v_bit_label_text');
         if (settings.v_bit && bitSlider) {
             bitSlider.value = settings.v_bit;
             if (bitVal) bitVal.innerText = settings.v_bit + 'k';
-            if (bitLabel) bitLabel.innerText = 'Max Dynamic Bitrate: ' + settings.v_bit + 'k';
+            if (bitLabel) bitLabel.textContent = 'Max Dynamic Bitrate: ' + settings.v_bit + 'k';
         }
         
-        if (settings.autoVidBitrate !== undefined) {
-            setChecked('autoVidBitrate', settings.autoVidBitrate);
-            toggleVidBitrateAuto(settings.autoVidBitrate);
+        // Auto Quality (size target). Older presets stored the bitrate
+        // "Auto" checkbox instead: migrate it to the new switch.
+        if (settings.autoQuality !== undefined) {
+            setChecked('autoQualityToggle', settings.autoQuality);
+            if (typeof setAutoQualityEnabled === 'function') setAutoQualityEnabled(settings.autoQuality, true);
+        } else if (settings.autoVidBitrate !== undefined) {
+            setChecked('autoQualityToggle', settings.autoVidBitrate !== false);
+            if (typeof setAutoQualityEnabled === 'function') setAutoQualityEnabled(settings.autoVidBitrate !== false, true);
+        }
+        if (settings.autoQualityPct !== undefined) {
+            setVal('autoQualityPct', settings.autoQualityPct);
+            if (typeof onAutoQualityPct === 'function') onAutoQualityPct(settings.autoQualityPct, true);
         }
         
         const aSrSliderEl = document.getElementById('a_sr_slider');
@@ -359,12 +376,14 @@ function applySettingsObject(settings) {
         if (typeof toggleVideoAudioMethodFields === 'function') toggleVideoAudioMethodFields();
     } catch (e) {
         console.error("Error loading settings:", e);
+    } finally {
+        settingsApplyInProgress = false;
     }
 }
 
 function initAutoSave() {
     const inputs = [
-        'themeToggle', 'encVideo', 'encAudio', 'v_fmt', 'v_codec', 'v_preset', 'v_bit_slider', 'autoVidBitrate',
+        'themeToggle', 'encVideo', 'encAudio', 'v_fmt', 'v_codec', 'v_preset', 'v_bit_slider', 'autoQualityToggle', 'autoQualityPct',
         'a_sr_slider', 'a_sr_auto', 'a_codec', 'a_bit_slider', 'a_bit_auto', 'cols', 'rows', 'sid', 'aspectLock', 'noScale', 'resW', 'resH',
         'img_cols', 'img_rows', 'img_sid', 'carrier_freq_slider', 'audio_sr_slider', 'audio_sr_auto', 'audio_codec',
         'audio_bit_slider', 'audio_bit_auto', 'audio_fmt', 'decKey', 'aud_method', 'aud_splits', 'aud_seed', 'aud_vol_factor_slider',
@@ -383,12 +402,12 @@ function initAutoSave() {
     });
 }
 
+// Legacy alias: the bitrate "Auto" checkbox is now the Auto Quality
+// switch (the target size replaces "match the input bitrate").
 function toggleVidBitrateAuto(isAuto) {
-    const sliderContainer = document.getElementById('vidBitrateSliderContainer');
-    if (sliderContainer) {
-        sliderContainer.style.display = isAuto ? 'none' : 'flex';
+    if (typeof setAutoQualityEnabled === 'function') {
+        setAutoQualityEnabled(!!isAuto);
     }
-    saveAllSettings();
 }
 
 function toggleZonePriority(mode) {

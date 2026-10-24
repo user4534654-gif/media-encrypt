@@ -12,6 +12,11 @@ yt-dlp
 requests
 qrcode
 
+# NOTE (pywebview): the standalone app window is Windows-only. On Linux the
+# app serves HTTP and opens the system browser, so pywebview is skipped
+# there — otherwise pip would pull in PyGObject, which needs GTK development
+# headers to build. See build_linux.sh and .github/workflows/build_linux.yml.
+
 # ── Build / packaging dependencies ────────────────────────────────────────────
 # These are only needed when building the Windows .exe with PyInstaller.
 # Install them manually before building locally:

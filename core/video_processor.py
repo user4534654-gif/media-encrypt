@@ -189,7 +189,7 @@ def _parse_bitrate_envelope(envelope):
         return None, None
 
 
-def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode='off', rows=1, cols=1, extra_hw_args=None, envelope=None, scramble_tune=False):
+def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode='off', rows=1, cols=1, extra_hw_args=None, envelope=None, scramble_tune=False, size_target=False):
     """
     Construct video encoding arguments for FFmpeg supporting spatial compression modes:
       - 'off': Standard capped ABR (target = ceiling).
@@ -200,6 +200,13 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
     envelope: optional 🌊 wave dict {'points': [...]}. In 'off' mode it turns
     the fixed bitrate into constrained VBR (-b:v avg -maxrate max -bufsize
     2*max); in 'zone'/'tiles' modes the peak becomes the maxrate ceiling.
+
+    size_target: the bitrate comes from an Auto Quality size target, so the
+    budget must be SPENT, not treated as a ceiling. Plain ABR undershoots
+    badly on scrambled content (measured: 219k spent for a 330k request),
+    which would make the file smaller than the requested target. The capped
+    ABR is therefore switched to CBR (x264/x265 get their CBR HRD mode,
+    every other encoder gets the -minrate floor).
 
     scramble_tune: measured scramble preset (experiments/scramble_codec_study.py):
       libx264 -> no-deblock + psy=0 + tune ssim + chromaoffset -2 (+3.6 dB);
@@ -241,6 +248,11 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
     is_amf = 'amf' in codec_lower
     is_prores = 'prores' in codec_lower
 
+    # CBR is only meaningful for the capped-ABR path: a wave carries its
+    # own avg/max (constrained VBR) and Zone Priority is quality-driven
+    # (CRF), so neither can spend an exact size budget.
+    _cbr = bool(size_target and not _prio and not env_avg and not is_prores)
+
     if _prio:
         # ── Mode 'priority': Zone Priority (Constrained VBR + AQ + steering)
         # Rate-control core kept from the old Mode 1 (CRF with maxrate ceiling
@@ -278,6 +290,10 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
         # (complex scenes may burst up to it, simple scenes save bits).
         if env_avg and env_max and not is_prores:
             args.extend(['-b:v', f'{env_avg}k', '-maxrate', f'{env_max}k', '-bufsize', f'{env_max * 2}k'])
+        elif _cbr:
+            # Size target: CBR (min = max = budget) so the encoder really
+            # spends the bits. Plain ABR would undershoot the target.
+            args.extend(['-b:v', b_val, '-minrate', b_val, '-maxrate', b_val, '-bufsize', buf_val])
         else:
             args.extend(['-b:v', b_val])
             if not is_prores:
@@ -297,13 +313,28 @@ def build_video_encoder_args(chosen_codec, vid_bitrate, vid_preset, spatial_mode
         if not is_prores and not is_qsv:
             args.extend(['-pix_fmt', 'yuv420p'])
 
-    if scramble_tune:
+    if scramble_tune or _cbr:
         # Software x264/x265 only (exact encoder match — never HW wrappers).
+        # The CBR HRD mode is merged into the same -x264-params/-x265-params
+        # value: ffmpeg keeps only the last occurrence of those options.
         if codec_lower == 'libx264':
-            args.extend(['-x264-params', 'no-deblock=1', '-psy', '0',
-                         '-tune', 'ssim', '-chromaoffset', '-2'])
+            x264_params = []
+            if _cbr:
+                x264_params.append('nal-hrd=cbr')
+            if scramble_tune:
+                x264_params.append('no-deblock=1')
+            args.extend(['-x264-params', ':'.join(x264_params)])
+            if scramble_tune:
+                args.extend(['-psy', '0', '-tune', 'ssim', '-chromaoffset', '-2'])
         elif codec_lower == 'libx265':
-            args.extend(['-x265-params', 'no-deblock=1', '-tune', 'ssim'])
+            x265_params = []
+            if _cbr:
+                x265_params.append('hrd=cbr')
+            if scramble_tune:
+                x265_params.append('no-deblock=1')
+            args.extend(['-x265-params', ':'.join(x265_params)])
+            if scramble_tune:
+                args.extend(['-tune', 'ssim'])
 
     return args
 
@@ -1299,12 +1330,24 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         cols=cols,
         extra_hw_args=extra_hw_args,
         envelope=options.get('vid_bitrate_envelope'),
-        scramble_tune=options.get('scramble_tune') == 'on'
+        scramble_tune=options.get('scramble_tune') == 'on',
+        size_target=bool(options.get('auto_quality_plan'))
     )
     if options.get('vid_bitrate_envelope'):
         _ea, _em = _parse_bitrate_envelope(options.get('vid_bitrate_envelope'))
         if _ea and _em:
             LiveDebugger.log("WAVE_BR", f"Wave envelope active: target={_ea}k ceiling={_em}k (constrained VBR)", level="INFO", module="VIDEO")
+    if options.get('auto_quality_plan'):
+        # The size target only holds when the encoder actually spends the
+        # budget: Zone Priority (CRF) and ProRes (fixed profile) size the
+        # file themselves, so the target degrades to a ceiling there.
+        _plan = options.get('auto_quality_plan') or {}
+        if spatial_mode in ('priority', 'zone'):
+            LiveDebugger.log("AUTO_QUALITY", f"Zone Priority is quality-driven (CRF): the size target ({_plan.get('pct', 0):+d}%) acts as a ceiling", level="WARNING", module="VIDEO")
+        elif 'prores' in (chosen_codec or '').lower():
+            LiveDebugger.log("AUTO_QUALITY", "ProRes ignores the bitrate (fixed profile): the size target cannot be met exactly", level="WARNING", module="VIDEO")
+        else:
+            LiveDebugger.log("AUTO_QUALITY", f"Size target rate control: CBR {options.get('vid_bitrate')} (the budget is spent, not capped)", level="INFO", module="VIDEO")
     cmd.extend(enc_args)
 
     if has_audio:
@@ -1366,7 +1409,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             cols=cols_inner if options.get('center') else cols,
             extra_hw_args=extra_hw_args,
             envelope=options.get('vid_bitrate_envelope'),
-            scramble_tune=options.get('scramble_tune') == 'on'
+            scramble_tune=options.get('scramble_tune') == 'on',
+            size_target=bool(options.get('auto_quality_plan'))
         )
         cmd_center.extend(enc_args_center)
 

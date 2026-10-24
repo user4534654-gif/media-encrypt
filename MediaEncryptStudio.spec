@@ -22,6 +22,13 @@ from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 build_mode = os.environ.get("BUILD_MODE", "onedir").strip().lower()
 one_file   = (build_mode == "onefile")
 
+# ── Platform ─────────────────────────────────────────────────────────────────
+# PyInstaller does not cross-compile: a Linux binary must be built on Linux
+# (WSL included) and a Windows binary on Windows. The spec adapts itself to
+# the host platform.
+IS_WINDOWS = sys.platform.startswith("win")
+IS_LINUX = sys.platform.startswith("linux")
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 spec_dir = os.path.abspath(SPECPATH)          # directory containing this .spec
 
@@ -29,12 +36,8 @@ spec_dir = os.path.abspath(SPECPATH)          # directory containing this .spec
 hidden = [
     # Flask internals
     "flask",
-    "webview",
     "jinja2",
     "click",
-    # pywebview (Windows GUI shell)
-    "webview",
-    "webview.platforms.winforms",
     # Media / audio
     "imageio_ffmpeg",
     "soundfile",
@@ -45,6 +48,16 @@ hidden = [
     # Core subpackage
     *collect_submodules("core"),
 ]
+
+if IS_WINDOWS:
+    # pywebview (Windows GUI shell) — the only platform that starts the
+    # standalone window (see main.py).
+    hidden += ["webview", "webview.platforms.winforms"]
+# Linux/other: the app serves HTTP and opens the system browser, so the GUI
+# toolkit stack (PyGObject / WebKit2GTK) is not needed. pywebview is not
+# installed there at all (see build_linux.sh) and is excluded below, so
+# bundling it would only drag in PyGObject — which needs GTK development
+# headers to build.
 
 # ── Data files (non-Python assets bundled into the exe) ───────────────────────
 datas = [
@@ -73,7 +86,7 @@ a = Analysis(
         "matplotlib",
         "tkinter",
         "unittest",
-    ],
+    ] + ([] if IS_WINDOWS else ["webview"]),
     noarchive=False,
 )
 
@@ -81,9 +94,13 @@ a = Analysis(
 pyz = PYZ(a.pure, a.zipped_data)
 
 # ── Target Definitions ────────────────────────────────────────────────────────
+# The icon is a Windows-only bootloader resource; Linux uses the desktop
+# entry point / icon theme instead.
+icon_arg = os.path.join(spec_dir, "icon.png") if IS_WINDOWS else None
+
 if one_file:
-    # 1. ONEFILE mode (Single self-contained .exe)
-    # Bundle everything (binaries, zipfiles, datas) directly into the EXE file.
+    # 1. ONEFILE mode (Single self-contained executable)
+    # Bundle everything (binaries, zipfiles, datas) directly into the binary.
     exe = EXE(
         pyz,
         a.scripts,
@@ -103,12 +120,12 @@ if one_file:
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon=os.path.join(spec_dir, "icon.png"),
+        icon=icon_arg,
         onefile=True,
     )
 else:
-    # 2. ONEDIR mode (Folder with .exe + DLLs)
-    # Exclude binaries/zipfiles/datas from the EXE itself, collect them in the directory.
+    # 2. ONEDIR mode (Folder with the binary + its dependencies)
+    # Exclude binaries/zipfiles/datas from the binary itself, collect them in the directory.
     exe = EXE(
         pyz,
         a.scripts,
@@ -126,7 +143,7 @@ else:
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon=os.path.join(spec_dir, "icon.png"),
+        icon=icon_arg,
         onefile=False,
     )
     coll = COLLECT(

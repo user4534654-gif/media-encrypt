@@ -142,8 +142,16 @@ async function startBatch(action) {
             fd.append('sid', document.getElementById('sid').value); 
             fd.append('vid_codec', document.getElementById('v_codec').value);
             
-            const isAutoBitrate = document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : true;
+            // Auto Quality: the bitrate is computed from the target output
+            // size (percent of the input file size). 'auto' tells the
+            // backend to resolve it; the percentage drives the plan.
+            const aq = (typeof getAutoQualityState === 'function') ? getAutoQualityState() : { enabled: false, pct: 0 };
+            const isAutoBitrate = aq.enabled
+                || (document.getElementById('autoVidBitrate') ? document.getElementById('autoVidBitrate').checked : false);
             fd.append('vid_bitrate', isAutoBitrate ? 'auto' : document.getElementById('v_bit_slider').value + 'k');
+            if (aq.enabled) {
+                fd.append('auto_quality_pct', String(aq.pct));
+            }
             // Shaped dynamic wave (🌊 editor): {points:[start,mid,end],avg,max}.
             // Sent alongside vid_bitrate; the backend encodes constrained VBR
             // (target=avg, ceiling=max). Cleared with 🧹 in the wave modal.

@@ -284,6 +284,40 @@
         
         <div class="collapse-content hidden" id="vidCollapseContent">
             <div class="ios-group-container" id="vidSettings" style="border-bottom: 1px solid #c8c7cc;">
+
+                <!-- ⚡ Auto Quality: one slider drives the whole encode -->
+                <div class="auto-quality-card" id="autoQualityCard">
+                    <div class="auto-quality-head">
+                        <div class="auto-quality-headings">
+                            <div class="auto-quality-title">⚡ Auto Quality</div>
+                            <div class="auto-quality-sub">Pick the output size; the bitrate is computed for you.</div>
+                        </div>
+                        <label class="ios-switch-label">
+                            <input type="checkbox" id="autoQualityToggle" checked onchange="setAutoQualityEnabled(this.checked)">
+                        </label>
+                    </div>
+                    <div class="auto-quality-body" id="autoQualityBody">
+                        <div class="auto-quality-slider-head">
+                            <label class="ios-label" style="margin-bottom: 0;">Target size vs input <span id="autoQualityPctVal" class="auto-quality-pct">+0%</span><span class="help-tip">❔<span class="tooltip-text">How big the finished video should be compared to the source file.<br><br>0% = the same size as the input, +20% = 20% bigger, −50% = half the size.<br><br>The size budget is split between video and audio. In Center mode the pasted video sets a quality floor, so the result can come out bigger than the target. Targets the encoders cannot reach are clamped and reported.</span></span></label>
+                            <span id="autoQualityTargetVal" class="auto-quality-target">—</span>
+                        </div>
+                        <div class="auto-quality-slider">
+                            <span class="auto-quality-end">−50%</span>
+                            <input type="range" id="autoQualityPct" min="-50" max="100" step="5" value="0" style="flex: 1; accent-color: #007aff;" oninput="onAutoQualityPct(this.value)">
+                            <span class="auto-quality-end">+100%</span>
+                        </div>
+                        <div id="autoQualityReadout" class="auto-quality-readout">Select a video to see the size target.</div>
+                    </div>
+                </div>
+
+                <!-- Basic / Extended sub-tabs -->
+                <div class="segmented-control vid-quality-tabs" id="vidQualityTabs">
+                    <button type="button" id="vidQualityTabBasic" class="segment-btn active" onclick="switchVidQualityTab('basic')">Basic</button>
+                    <button type="button" id="vidQualityTabExtended" class="segment-btn" onclick="switchVidQualityTab('extended')">Extended</button>
+                </div>
+
+                <!-- BASIC PANE -->
+                <div id="vidQualityPaneBasic">
                 <div class="ios-group-row-grid">
                     <div>
                         <label class="ios-label">Format<span class="help-tip">❔<span class="tooltip-text">The file container type for the exported video or image.</span></span></label>
@@ -327,59 +361,14 @@
                         </select>
                     </div>
                 </div>
-                <!-- Bitrate Slider -->
+                <!-- Manual Bitrate Slider (used when Auto Quality is off) -->
                 <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
                     <div class="flex-row" style="justify-content: space-between; display: flex; align-items: center; margin-bottom: 5px;">
-                        <label class="ios-label" id="v_bit_label" style="margin-bottom: 0;">Max Dynamic Bitrate: 3000k<span class="help-tip">❔<span class="tooltip-text">Upper ceiling for dynamic video bitrate (Constrained VBR). Bitrate scales down on simple scenes and up to this limit on complex scenes.</span></span></label>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <button type="button" class="ios-btn-small" id="bitrateWaveBtn" onclick="openBitrateWave()" title="Shape the dynamic bitrate as a wave: drag timeline points, shift everything with the master slider">🌊 Wave</button>
-                            <label class="ios-switch-label" style="font-size: 11px; margin-bottom: 0;"><input type="checkbox" id="autoVidBitrate" checked onchange="toggleVidBitrateAuto(this.checked)"> Auto</label>
-                        </div>
+                        <label class="ios-label" id="v_bit_label" style="margin-bottom: 0;"><span id="v_bit_label_text">Max Dynamic Bitrate: 3000k</span><span class="help-tip">❔<span class="tooltip-text">Upper ceiling for dynamic video bitrate (Constrained VBR). Bitrate scales down on simple scenes and up to this limit on complex scenes. Turn Auto Quality on to let the target size pick this for you.</span></span></label>
                     </div>
                     <div id="vidBitrateSliderContainer" style="display: none; align-items: center; gap: 12px;">
                         <input type="range" id="v_bit_slider" min="500" max="25000" step="500" value="3000" style="flex: 1; accent-color: #007aff;">
                         <span id="v_bit_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">3000k</span>
-                    </div>
-                    <div id="vidBitrateWaveInfo" style="display: none; margin-top: 6px; font-size: 12px; color: #2e7d32; font-weight: 600;"></div>
-                    <input type="hidden" id="vid_bitrate_envelope" value="">
-                </div>
-                <!-- Dynamic Bitrate Wave Editor Modal -->
-                <div id="bitrateWaveModal" style="position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 16px;">
-                    <div class="wave-modal-card" style="border-radius: 14px; max-width: 600px; width: 100%; padding: 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.35);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <div style="font-weight: 700; font-size: 15px;">🌊 Dynamic Bitrate Wave</div>
-                            <button type="button" class="ios-btn-small" onclick="closeBitrateWave()">✕</button>
-                        </div>
-                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Drag the timeline points up / down to shape bitrate over time (start → middle → end). The master slider shifts the whole wave. Encoded as constrained VBR: average = target, peak = ceiling.</div>
-                        <canvas id="bitrateWaveCanvas" width="560" height="220" style="width: 100%; height: auto; border-radius: 10px; touch-action: none; cursor: grab;"></canvas>
-                        <div id="bitrateWaveReadout" style="font-size: 12px; color: #333; margin-top: 8px; font-family: monospace;">start — · mid — · end —</div>
-                        <div style="display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
-                            <div class="segmented-control" style="display: flex; gap: 0;">
-                                <button type="button" id="waveCurveRest" class="segment-btn active" onclick="switchWaveCurve('rest')" style="border-color: #007aff; color: #007aff;">🌊 Rest (blue)</button>
-                                <button type="button" id="waveCurveZone" class="segment-btn" onclick="switchWaveCurve('zone')" style="border-color: #22c55e; color: #22c55e;">🟩 Zone (green)</button>
-                            </div>
-                            <div>
-                                <label class="ios-label" style="margin-bottom: 2px;">Points (2–100)<span class="help-tip">❔<span class="tooltip-text">How many timeline points each wave has. More points = finer shape for long videos.</span></span></label>
-                                <input type="number" id="bitrateWaveCount" min="2" max="100" step="1" value="3" class="ios-input" style="width: 70px;" onchange="onBitrateWaveCount(this.value)">
-                            </div>
-                        </div>
-                        <div style="font-size: 11px; color: #666; margin-top: 4px;">Blue drives the encode (target/ceiling). Green = encrypt zones over time: the per-frame green/blue ratio steers Zone Priority strength along the timeline (needs video duration; falls back to the Strength slider). First switch to green copies blue as a starting point.</div>
-                        <div style="margin-top: 12px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                <label class="ios-label" id="bitrateWaveGainLabel" style="margin-bottom: 0;">Master shift: +0 kbps (whole wave up / down)</label>
-                                <span id="bitrateWaveGainVal" style="font-size: 13px; font-weight: bold;">+0</span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-size: 11px; color: #888;">−2000</span>
-                                <input type="range" id="bitrateWaveGain" min="-2000" max="4000" step="100" value="0" style="flex: 1; accent-color: #007aff;" oninput="onBitrateWaveGain(this.value)">
-                                <span style="font-size: 11px; color: #888;">+4000</span>
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end;">
-                            <button type="button" class="ios-btn-small" onclick="resetBitrateWave()">↺ Reset</button>
-                            <button type="button" class="ios-btn-small" onclick="clearBitrateWave()">🧹 Clear</button>
-                            <button type="button" class="ios-btn-small" onclick="closeBitrateWave()" style="background: #007aff; color: #fff; border-color: #007aff; font-weight: 700;">✅ Apply Wave</button>
-                        </div>
                     </div>
                 </div>
                 <!-- Spatial Compression Mode -->
@@ -420,6 +409,61 @@
                     <label class="ios-switch-label">
                         <input type="checkbox" id="scrambleTune" checked>
                     </label>
+                </div>
+                </div><!-- /BASIC PANE -->
+
+                <!-- EXTENDED PANE -->
+                <div id="vidQualityPaneExtended" class="hidden">
+                    <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                        <label class="ios-label">Dynamic Bitrate Wave<span class="help-tip">❔<span class="tooltip-text">Shape the bitrate over time: drag the timeline points up/down (start → middle → end). The master slider shifts the whole wave. Encoded as constrained VBR: average = target, peak = ceiling.<br><br>Green curve = encrypt zones over time (steers Zone Priority strength along the timeline).<br><br>A wave replaces the Auto Quality size target — switch Auto Quality off to shape a wave.</span></span></label>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+                            <button type="button" class="ios-btn-small" id="bitrateWaveBtn" onclick="openBitrateWave()" title="Shape the dynamic bitrate as a wave: drag timeline points, shift everything with the master slider">🌊 Open Wave Editor</button>
+                            <span id="autoQualityWaveHint" class="auto-quality-hint"></span>
+                        </div>
+                        <div id="vidBitrateWaveInfo" style="display: none; margin-top: 6px; font-size: 12px; color: #2e7d32; font-weight: 600;"></div>
+                    </div>
+                </div><!-- /EXTENDED PANE -->
+
+                <input type="hidden" id="vid_bitrate_envelope" value="">
+                <!-- Dynamic Bitrate Wave Editor Modal (kept outside the panes: a
+                     display:none ancestor would hide the fixed-position modal) -->
+                <div id="bitrateWaveModal" style="position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 16px;">
+                    <div class="wave-modal-card" style="border-radius: 14px; max-width: 600px; width: 100%; padding: 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.35);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <div style="font-weight: 700; font-size: 15px;">🌊 Dynamic Bitrate Wave</div>
+                            <button type="button" class="ios-btn-small" onclick="closeBitrateWave()">✕</button>
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Drag the timeline points up / down to shape bitrate over time (start → middle → end). The master slider shifts the whole wave. Encoded as constrained VBR: average = target, peak = ceiling.</div>
+                        <canvas id="bitrateWaveCanvas" width="560" height="220" style="width: 100%; height: auto; border-radius: 10px; touch-action: none; cursor: grab;"></canvas>
+                        <div id="bitrateWaveReadout" style="font-size: 12px; color: #333; margin-top: 8px; font-family: monospace;">start — · mid — · end —</div>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap;">
+                            <div class="segmented-control" style="display: flex; gap: 0;">
+                                <button type="button" id="waveCurveRest" class="segment-btn active" onclick="switchWaveCurve('rest')" style="border-color: #007aff; color: #007aff;">🌊 Rest (blue)</button>
+                                <button type="button" id="waveCurveZone" class="segment-btn" onclick="switchWaveCurve('zone')" style="border-color: #22c55e; color: #22c55e;">🟩 Zone (green)</button>
+                            </div>
+                            <div>
+                                <label class="ios-label" style="margin-bottom: 2px;">Points (2–100)<span class="help-tip">❔<span class="tooltip-text">How many timeline points each wave has. More points = finer shape for long videos.</span></span></label>
+                                <input type="number" id="bitrateWaveCount" min="2" max="100" step="1" value="3" class="ios-input" style="width: 70px;" onchange="onBitrateWaveCount(this.value)">
+                            </div>
+                        </div>
+                        <div style="font-size: 11px; color: #666; margin-top: 4px;">Blue drives the encode (target/ceiling). Green = encrypt zones over time: the per-frame green/blue ratio steers Zone Priority strength along the timeline (needs video duration; falls back to the Strength slider). First switch to green copies blue as a starting point.</div>
+                        <div style="margin-top: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label class="ios-label" id="bitrateWaveGainLabel" style="margin-bottom: 0;">Master shift: +0 kbps (whole wave up / down)</label>
+                                <span id="bitrateWaveGainVal" style="font-size: 13px; font-weight: bold;">+0</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 11px; color: #888;">−2000</span>
+                                <input type="range" id="bitrateWaveGain" min="-2000" max="4000" step="100" value="0" style="flex: 1; accent-color: #007aff;" oninput="onBitrateWaveGain(this.value)">
+                                <span style="font-size: 11px; color: #888;">+4000</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end;">
+                            <button type="button" class="ios-btn-small" onclick="resetBitrateWave()">↺ Reset</button>
+                            <button type="button" class="ios-btn-small" onclick="clearBitrateWave()">🧹 Clear</button>
+                            <button type="button" class="ios-btn-small" onclick="closeBitrateWave()" style="background: #007aff; color: #fff; border-color: #007aff; font-weight: 700;">✅ Apply Wave</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

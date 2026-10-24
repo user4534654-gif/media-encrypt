@@ -202,6 +202,21 @@ let customTrackRFile = null;
 let customTrackLVault = null; // {name, folder} when picked from vault
 let customTrackRVault = null;
 
+function switchTrackSourceToCustom(channel) {
+    // A picked file/vault entry is only sent to the backend while the
+    // channel source is 'custom' (see getCustomAudioFiles) — silently
+    // dropping it otherwise was the "uploaded audio does nothing" bug.
+    // So selecting a file auto-switches the dropdown, which also reveals
+    // the custom row, repaints the badge and syncs dual-track.
+    const selectElem = document.getElementById(`track${channel}SourceSelect`);
+    if (selectElem && selectElem.value !== 'custom') {
+        selectElem.value = 'custom';
+    }
+    if (typeof updateTrackRouting === 'function') {
+        updateTrackRouting(channel, 'custom');
+    }
+}
+
 function onCustomTrackFileSelected(channel, file) {
     if (!file) return;
     if (channel === 'L') {
@@ -215,6 +230,7 @@ function onCustomTrackFileSelected(channel, file) {
         const nameElem = document.getElementById('trackRCustomName');
         if (nameElem) nameElem.innerText = `(${file.name})`;
     }
+    switchTrackSourceToCustom(channel);
     probeFileDuration(file, function(d) {
         if (d > 0) {
             updateTimelineVisualization();
@@ -236,6 +252,7 @@ function setCustomTrackVault(channel, filename, folder) {
         if (fileInput) fileInput.value = '';
     }
     if (nameElem) nameElem.innerText = `📁 Vault [${folder || 'input'}]: ${filename}`;
+    switchTrackSourceToCustom(channel);
     updateTimelineVisualization();
 }
 

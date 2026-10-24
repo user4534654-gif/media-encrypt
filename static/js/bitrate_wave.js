@@ -175,9 +175,10 @@ function clearBitrateWave() {
     if (hidden) hidden.value = '';
     const info = document.getElementById('vidBitrateWaveInfo');
     if (info) { info.style.display = 'none'; info.innerHTML = ''; }
-    const label = document.getElementById('v_bit_label');
+    const label = document.getElementById('v_bit_label_text');
     const slider = document.getElementById('v_bit_slider');
-    if (label && slider) label.innerHTML = 'Max Dynamic Bitrate: ' + slider.value + 'k';
+    if (label && slider) label.textContent = 'Max Dynamic Bitrate: ' + slider.value + 'k';
+    if (typeof updateAutoQualityWaveState === 'function') updateAutoQualityWaveState();
     closeBitrateWaveModalOnly();
 }
 
@@ -249,14 +250,19 @@ function applyBitrateWave() {
     }
     const hidden = document.getElementById('vid_bitrate_envelope');
     if (hidden) hidden.value = JSON.stringify(env);
-    // A shaped wave is an explicit (non-auto) choice: switch Auto off and
-    // park the plain slider on the wave average so legacy paths stay sane.
-    const auto = document.getElementById('autoVidBitrate');
-    if (auto && auto.checked) {
-        auto.checked = false;
-        try { toggleVidBitrateAuto(false); } catch (e) {
-            const c = document.getElementById('vidBitrateSliderContainer');
-            if (c) c.style.display = 'flex';
+    // A shaped wave is an explicit (non-auto) choice: switch Auto Quality
+    // off and park the plain slider on the wave average so legacy paths
+    // stay sane.
+    if (typeof setAutoQualityEnabled === 'function') {
+        setAutoQualityEnabled(false);
+    } else {
+        const auto = document.getElementById('autoVidBitrate');
+        if (auto && auto.checked) {
+            auto.checked = false;
+            try { toggleVidBitrateAuto(false); } catch (e) {
+                const c = document.getElementById('vidBitrateSliderContainer');
+                if (c) c.style.display = 'flex';
+            }
         }
     }
     const slider = document.getElementById('v_bit_slider');
@@ -265,8 +271,8 @@ function applyBitrateWave() {
         slider.value = String(Math.max(500, Math.min(25000, Math.round(avg / 500) * 500)));
         if (sval) sval.innerText = slider.value + 'k';
     }
-    const label = document.getElementById('v_bit_label');
-    if (label) label.innerHTML = `Dynamic avg ${avg}k / peak ${max}k`;
+    const label = document.getElementById('v_bit_label_text');
+    if (label) label.textContent = `Dynamic avg ${avg}k / peak ${max}k`;
     const info = document.getElementById('vidBitrateWaveInfo');
     if (info) {
         info.style.display = 'block';

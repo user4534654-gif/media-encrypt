@@ -1404,6 +1404,10 @@ body.ios-dark-theme .vault-picker-footer {
     border-radius: 6px;
     overflow: hidden;
     cursor: crosshair;
+    /* Touch: horizontal drags scrub (pointermove), vertical pans scroll
+       the page. Without this the browser hijacks the gesture and the
+       playhead jumps instead of following the finger. */
+    touch-action: pan-y;
 }
 
 .ve-ruler {
@@ -1849,6 +1853,71 @@ body.layout-mobile #bitrateWaveModal .wave-modal-card {
     padding: 12px;
 }
 
+/* Touch ergonomics: timeline scrub targets sized for fingers, not mice. */
+body.layout-mobile .ve-tracks {
+    height: 84px;
+}
+
+body.layout-mobile .ve-ruler {
+    height: 32px;
+}
+
+body.layout-mobile .ve-trim-handle {
+    width: 18px;
+}
+
+body.layout-mobile .ve-clip {
+    min-width: 24px;
+}
+
+body.layout-mobile .ve-time-input {
+    width: 96px;
+    font-size: 14px;
+    padding: 6px 8px;
+}
+
+body.layout-mobile .ve-timeline-header .ve-btn {
+    font-size: 12px;
+}
+
+/* Range sliders ("ползунки"): 44px tall hit area + 28px thumb. */
+body.layout-mobile input[type="range"] {
+    min-height: 44px;
+}
+
+body.layout-mobile input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #007aff;
+    border: none;
+}
+
+body.layout-mobile input[type="range"]::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #007aff;
+    border: none;
+}
+
+/* Audio channel routing controls: tappable selects + checkboxes. */
+body.layout-mobile .track-source-select {
+    font-size: 14px;
+    padding: 8px 10px;
+}
+
+body.layout-mobile .track-enc-checkbox {
+    padding: 8px 4px;
+}
+
+body.layout-mobile #trackLCustomRow,
+body.layout-mobile #trackRCustomRow {
+    flex-wrap: wrap;
+}
+
 /* NOTE: every selector below is prefixed with `body` on purpose —
    preview.css loads AFTER this file, so a bare tie (0,1,0) would lose
    the cascade to it. `body .x` (0,1,1) always wins. */
@@ -1985,4 +2054,194 @@ body.layout-mobile #bitrateWaveModal .wave-modal-card {
     body #bitrateWaveModal .wave-modal-card {
         padding: 12px;
     }
+
+    /* Touch ergonomics: timeline scrub targets sized for fingers, not mice. */
+    body .ve-tracks {
+        height: 84px;
+    }
+
+    body .ve-ruler {
+        height: 32px;
+    }
+
+    body .ve-trim-handle {
+        width: 18px;
+    }
+
+    body .ve-clip {
+        min-width: 24px;
+    }
+
+    body .ve-time-input {
+        width: 96px;
+        font-size: 14px;
+        padding: 6px 8px;
+    }
+
+    body .ve-timeline-header .ve-btn {
+        font-size: 12px;
+    }
+
+    /* Range sliders ("ползунки"): 44px tall hit area + 28px thumb. */
+    body input[type="range"] {
+        min-height: 44px;
+    }
+
+    body input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #007aff;
+        border: none;
+    }
+
+    body input[type="range"]::-moz-range-thumb {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #007aff;
+        border: none;
+    }
+
+    /* Audio channel routing controls: tappable selects + checkboxes. */
+    body .track-source-select {
+        font-size: 14px;
+        padding: 8px 10px;
+    }
+
+    body .track-enc-checkbox {
+        padding: 8px 4px;
+    }
+
+    body #trackLCustomRow,
+    body #trackRCustomRow {
+        flex-wrap: wrap;
+    }
+}
+
+/* -- Auto Quality (target output size) -------------------------------------- */
+.auto-quality-card {
+    margin: 10px 12px 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(0,122,255,0.10) 0%, rgba(0,122,255,0.04) 100%);
+    border: 1px solid rgba(0,122,255,0.30);
+}
+
+.auto-quality-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.auto-quality-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0a58ca;
+}
+
+.auto-quality-sub {
+    font-size: 11px;
+    color: #5a6472;
+    margin-top: 1px;
+}
+
+.auto-quality-body {
+    margin-top: 10px;
+}
+
+.auto-quality-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.auto-quality-slider-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.auto-quality-pct {
+    font-weight: 700;
+    color: #007aff;
+    margin-left: 4px;
+}
+
+.auto-quality-target {
+    font-size: 12px;
+    font-weight: 700;
+    color: #2e7d32;
+    white-space: nowrap;
+}
+
+.auto-quality-slider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.auto-quality-end {
+    font-size: 11px;
+    color: #888;
+    white-space: nowrap;
+}
+
+.auto-quality-readout {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #334155;
+    line-height: 1.35;
+}
+
+.auto-quality-readout.auto-quality-warn,
+.auto-quality-hint.auto-quality-warn {
+    color: #b45309;
+}
+
+.auto-quality-hint {
+    font-size: 11px;
+    color: #5a6472;
+}
+
+/* Video quality sub-tabs (Basic / Extended) */
+.vid-quality-tabs {
+    margin: 12px 12px 0;
+    width: calc(100% - 24px);
+}
+
+.vid-quality-tabs .segment-btn {
+    font-size: 12px;
+    padding: 7px 10px;
+}
+
+body.ios-dark-theme .auto-quality-card {
+    background: linear-gradient(180deg, rgba(10,88,202,0.22) 0%, rgba(10,88,202,0.08) 100%);
+    border-color: rgba(60,130,246,0.35);
+}
+
+body.ios-dark-theme .auto-quality-title {
+    color: #7cb0f5;
+}
+
+body.ios-dark-theme .auto-quality-sub,
+body.ios-dark-theme .auto-quality-hint {
+    color: #9aa4b2;
+}
+
+body.ios-dark-theme .auto-quality-readout {
+    color: #cbd5e1;
+}
+
+body.ios-dark-theme .auto-quality-target {
+    color: #7fd18c;
+}
+
+body.ios-dark-theme .auto-quality-readout.auto-quality-warn,
+body.ios-dark-theme .auto-quality-hint.auto-quality-warn {
+    color: #fbbf24;
 }

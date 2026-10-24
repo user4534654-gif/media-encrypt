@@ -328,10 +328,12 @@ async function refreshUploadBitrateInfo() {
     const rows = [];
     let best = 0;
     let bgBest = 0, centerBest = 0, durationSec = null;
+    let sizeBytes = 0;
     for (const file of mainFiles) {
         const probe = await probeFileKbps(file);
         const kbps = probe ? probe.kbps : null;
         if (probe && probe.duration && durationSec === null) durationSec = probe.duration;
+        if (!sizeBytes && file.size) sizeBytes = file.size;
         if (kbps) {
             best = Math.max(best, kbps);
             bgBest = Math.max(bgBest, kbps);
@@ -350,7 +352,11 @@ async function refreshUploadBitrateInfo() {
     // Remember the probed sources so the Wave editor can seed
     // left = background, right = center video out of the box, and map
     // wave points to seconds for time-varying Zone Priority steering.
-    try { window._lastBitrates = { bg: bgBest, center: centerBest, max: best, durationSec: durationSec }; } catch (e) {}
+    // sizeBytes feeds the Auto Quality size target estimate.
+    try { window._lastBitrates = { bg: bgBest, center: centerBest, max: best, durationSec: durationSec, sizeBytes: sizeBytes }; } catch (e) {}
+    if (typeof updateAutoQualityReadout === 'function') {
+        try { updateAutoQualityReadout(); } catch (e) {}
+    }
     if (best > 0 && (mainFiles.length + centerFiles.length) > 1) {
         rows.push(`<div style="font-size: 12px; font-weight: 700; color: #2e7d32;">⚡ Auto will encode at max = ${best} kbps (covers the sharper source)</div>`);
     } else if (best > 0 && centerFiles.length > 0) {
@@ -406,11 +412,11 @@ if (decryptUpload) {
 
 const bitSlider = document.getElementById('v_bit_slider');
 const bitVal = document.getElementById('v_bit_val');
-const bitLabel = document.getElementById('v_bit_label');
+const bitLabel = document.getElementById('v_bit_label_text');
 if (bitSlider && bitVal && bitLabel) {
     bitSlider.addEventListener('input', function() {
         bitVal.innerText = this.value + 'k';
-        bitLabel.innerText = 'Max Dynamic Bitrate: ' + this.value + 'k';
+        bitLabel.textContent = 'Max Dynamic Bitrate: ' + this.value + 'k';
     });
 }
 

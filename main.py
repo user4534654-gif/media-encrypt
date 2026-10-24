@@ -84,9 +84,35 @@ INPUT_FOLDER = os.path.join(VAULT_FOLDER, 'input')
 ENCRYPTED_FOLDER = os.path.join(VAULT_FOLDER, 'encrypted')
 DECRYPTED_FOLDER = os.path.join(VAULT_FOLDER, 'decrypted')
 
-for folder in [INPUT_FOLDER, ENCRYPTED_FOLDER, DECRYPTED_FOLDER]:
-    if not os.path.exists(folder):
-        os.makedirs(folder)
+def _create_vault_tree(base_dir):
+    """Create the vault folders, falling back to the user home directory.
+
+    The vault lives next to the executable, which is the writable spot on
+    Windows. On Linux the binary may sit in a system location
+    (/usr/local/bin, /opt/...) that the user cannot write to, so the
+    fallback keeps the app usable instead of crashing at import time.
+    """
+    folders = [os.path.join(base_dir, 'input'),
+               os.path.join(base_dir, 'encrypted'),
+               os.path.join(base_dir, 'decrypted')]
+    try:
+        for folder in folders:
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+        return base_dir
+    except OSError:
+        fallback = os.path.join(os.path.expanduser('~'), '.media-encrypt-studio', 'media_encrypt_vault')
+        for folder in (os.path.join(fallback, 'input'),
+                       os.path.join(fallback, 'encrypted'),
+                       os.path.join(fallback, 'decrypted')):
+            os.makedirs(folder, exist_ok=True)
+        print(f"[Vault] '{base_dir}' is not writable — using '{fallback}' instead.")
+        return fallback
+
+VAULT_FOLDER = _create_vault_tree(VAULT_FOLDER)
+INPUT_FOLDER = os.path.join(VAULT_FOLDER, 'input')
+ENCRYPTED_FOLDER = os.path.join(VAULT_FOLDER, 'encrypted')
+DECRYPTED_FOLDER = os.path.join(VAULT_FOLDER, 'decrypted')
 
 def save_key_file(filename, key):
     """Write the encryption key to a .key.txt file next to the encrypted media."""
@@ -188,6 +214,48 @@ def is_colab():
     except (ImportError, NameError):
         return False
 
+def _build_size_target_plan(file_path, info, options):
+    """Build the Auto Quality bitrate plan for one source file.
+
+    The plan turns the requested output-size delta into a bitrate: the
+    target size's budget is split between video and audio, the container
+    overhead is subtracted, and a pasted center video sets a floor so it
+    is never starved. Returns None when the size or the duration is
+    unknown (the caller then keeps its legacy bitrate path).
+    """
+    from core.auto_quality import plan_size_target, estimate_audio_kbps
+    from core.metadata_prober import parse_bitrate_kbps
+
+    try:
+        in_bytes = os.path.getsize(file_path) if file_path and os.path.exists(file_path) else 0
+    except OSError:
+        in_bytes = 0
+    duration = info.get('duration_sec') or 0
+
+    # Audio only takes part of the budget when the source really carries an
+    # audio stream (the encoder always carries the input audio over).
+    has_audio = bool(info.get('audio_codec'))
+    audio_kbps = estimate_audio_kbps(
+        options.get('aud_bitrate'), options.get('aud_sr'), options.get('aud_codec')
+    ) if has_audio else 0
+
+    # Floor: the pasted center video is part of the composited frame, so
+    # encoding it below its own source bitrate would visibly ruin it.
+    floor_kbps = 0
+    center_path = options.get('center_path')
+    if center_path and os.path.exists(center_path):
+        try:
+            center_br = parse_bitrate_kbps(probe_media_file(center_path).get('video_bitrate'))
+            floor_kbps = center_br or 0
+        except Exception as e:
+            LiveDebugger.log("AUTO_QUALITY_WARN", f"Center probe failed, no center bitrate floor: {e}", level="WARNING", module="HTTP")
+
+    return plan_size_target(
+        in_bytes, duration, options.get('auto_quality_pct'),
+        audio_kbps=audio_kbps, floor_kbps=floor_kbps
+    )
+
+
 def resolve_auto_quality(file_path, options):
     is_auto = any(val == 'auto' for val in options.values())
     if not is_auto:
@@ -222,58 +290,13 @@ def resolve_auto_quality(file_path, options):
                 options['vid_codec'] = 'prores'
             else:
                 options['vid_codec'] = 'libx264'
-                
-    # 3. Video Bitrate Auto Resolution
-    # The composited output carries BOTH sources (background + pasted center
-    # video), so the ceiling must cover the most demanding one -> max().
-    # Probing only the background systematically under-encodes jobs whose
-    # center video is sharper (the classic "center looks bad on auto" bug).
-    # An explicit 🌊 wave envelope always wins: it already carries its own
-    # avg/max, so 'auto' + envelope resolves to the wave average.
-    _env = options.get('vid_bitrate_envelope')
-    _env_avg = None
-    if isinstance(_env, dict) and _env.get('points'):
-        try:
-            _env_avg = max(100, int(round(sum(_env['points']) / len(_env['points']))))
-        except Exception:
-            _env_avg = None
-    if options.get('vid_bitrate') == 'auto' and _env_avg:
-        options['vid_bitrate'] = f"{_env_avg}k"
-        LiveDebugger.log("AUTO_BR", f"Auto bitrate overridden by wave envelope (avg={_env_avg}k, max={_env.get('max')}k)", level="INFO", module="HTTP")
-    elif options.get('vid_bitrate') == 'auto':
-        from core.metadata_prober import pick_max_video_bitrate
-        bg_br = info.get('video_bitrate')
-        center_br = None
-        center_path = options.get('center_path')
-        if center_path and os.path.exists(center_path):
-            try:
-                center_br = probe_media_file(center_path).get('video_bitrate')
-            except Exception as e:
-                LiveDebugger.log("AUTO_BR_WARN", f"Center probe failed, using background bitrate: {e}", level="WARNING", module="HTTP")
-        # Match-original-weight: derive bitrate from container size so the
-        # encrypted output weighs ~like the input (Colab parity). Audio
-        # reserve 128k, floor 500k. max() with probed streams keeps the
-        # center-paste fix: the ceiling must cover the sharpest source.
-        weight_br = None
-        try:
-            dur = info.get('duration_sec') or 0
-            fsize = os.path.getsize(file_path) if file_path and os.path.exists(file_path) else 0
-            if dur > 0 and fsize > 0:
-                weight_br = f"{max(int((fsize * 8) / dur / 1000) - 128, 500)}k"
-        except Exception as e:
-            LiveDebugger.log("AUTO_BR_WARN", f"Weight-derived bitrate failed: {e}", level="WARNING", module="HTTP")
-        options['vid_bitrate'] = pick_max_video_bitrate(bg_br, center_br, weight_br)
-        LiveDebugger.log("AUTO_BR", f"Auto bitrate: background={bg_br or 'unknown'} center={center_br or 'unknown'} weight={weight_br or 'unknown'} -> picked {options['vid_bitrate']} (max)", level="INFO", module="HTTP")
-        
-    # 4. Preset
-    if options.get('vid_preset') == 'auto':
-        options['vid_preset'] = 'medium'
-        
-    # 5. Audio Hz
+
+    # 3. Audio (resolved BEFORE the video bitrate: the Auto Quality size
+    # target splits its budget between the video and the audio stream, so
+    # the reserved audio bitrate has to be known first).
     if options.get('aud_sr') == 'auto':
         options['aud_sr'] = info.get('audio_sr') or '48000'
-        
-    # 6. Audio Codec
+
     if options.get('aud_codec') == 'auto':
         fmt = options.get('vid_format', '.mp4')
         if fmt == '.webm':
@@ -290,14 +313,79 @@ def resolve_auto_quality(file_path, options):
                 options['aud_codec'] = 'flac'
             else:
                 options['aud_codec'] = 'aac'
-                
-    # 7. Audio Bitrate
+
     if options.get('aud_bitrate') == 'auto':
         options['aud_bitrate'] = info.get('audio_bitrate') or '320k'
     from core.metadata_prober import sanitize_audio_bitrate
     options['aud_bitrate'] = sanitize_audio_bitrate(options.get('aud_bitrate', '320k'), options.get('aud_codec', 'aac')) or '320k'
+
+    # 4. Video Bitrate Auto Resolution
+    # Three sources, in priority order:
+    #   a) An explicit 🌊 wave envelope always wins: it already carries its
+    #      own avg/max, so 'auto' + envelope resolves to the wave average.
+    #   b) Auto Quality: the size target (input size x (1 + N%)) decides the
+    #      bitrate; see core/auto_quality.py.
+    #   c) Legacy auto: max() of the probed sources. The composited output
+    #      carries BOTH sources (background + pasted center video), so the
+    #      ceiling must cover the most demanding one -> max(). Probing only
+    #      the background systematically under-encodes jobs whose center
+    #      video is sharper (the classic "center looks bad on auto" bug).
+    _env = options.get('vid_bitrate_envelope')
+    _env_avg = None
+    if isinstance(_env, dict) and _env.get('points'):
+        try:
+            _env_avg = max(100, int(round(sum(_env['points']) / len(_env['points']))))
+        except Exception:
+            _env_avg = None
+    if options.get('vid_bitrate') == 'auto':
+        if _env_avg:
+            options['vid_bitrate'] = f"{_env_avg}k"
+            LiveDebugger.log("AUTO_BR", f"Auto bitrate overridden by wave envelope (avg={_env_avg}k, max={_env.get('max')}k)", level="INFO", module="HTTP")
+        else:
+            plan = None
+            if options.get('auto_quality_pct') is not None:
+                try:
+                    plan = _build_size_target_plan(file_path, info, options)
+                except Exception as e:
+                    LiveDebugger.log("AUTO_QUALITY_WARN", f"Auto Quality plan failed: {e}", level="WARNING", module="HTTP")
+                    plan = None
+                if plan:
+                    from core.auto_quality import format_plan
+                    options['vid_bitrate'] = f"{plan['video_kbps']}k"
+                    options['auto_quality_plan'] = plan
+                    LiveDebugger.log("AUTO_QUALITY", f"Auto Quality: {format_plan(plan)}", level="INFO", module="HTTP")
+                else:
+                    LiveDebugger.log("AUTO_QUALITY_WARN", "Auto Quality: size or duration unknown, falling back to the probed bitrate", level="WARNING", module="HTTP")
+            if not plan:
+                from core.metadata_prober import pick_max_video_bitrate
+                bg_br = info.get('video_bitrate')
+                center_br = None
+                center_path = options.get('center_path')
+                if center_path and os.path.exists(center_path):
+                    try:
+                        center_br = probe_media_file(center_path).get('video_bitrate')
+                    except Exception as e:
+                        LiveDebugger.log("AUTO_BR_WARN", f"Center probe failed, using background bitrate: {e}", level="WARNING", module="HTTP")
+                # Match-original-weight: derive bitrate from container size so the
+                # encrypted output weighs ~like the input (Colab parity). Audio
+                # reserve 128k, floor 500k. max() with probed streams keeps the
+                # center-paste fix: the ceiling must cover the sharpest source.
+                weight_br = None
+                try:
+                    dur = info.get('duration_sec') or 0
+                    fsize = os.path.getsize(file_path) if file_path and os.path.exists(file_path) else 0
+                    if dur > 0 and fsize > 0:
+                        weight_br = f"{max(int((fsize * 8) / dur / 1000) - 128, 500)}k"
+                except Exception as e:
+                    LiveDebugger.log("AUTO_BR_WARN", f"Weight-derived bitrate failed: {e}", level="WARNING", module="HTTP")
+                options['vid_bitrate'] = pick_max_video_bitrate(bg_br, center_br, weight_br)
+                LiveDebugger.log("AUTO_BR", f"Auto bitrate: background={bg_br or 'unknown'} center={center_br or 'unknown'} weight={weight_br or 'unknown'} -> picked {options['vid_bitrate']} (max)", level="INFO", module="HTTP")
         
-    # 8. Audio Method, Splits, and Volume Factor
+    # 5. Preset
+    if options.get('vid_preset') == 'auto':
+        options['vid_preset'] = 'medium'
+        
+    # 6. Audio Method, Splits, and Volume Factor
     if options.get('aud_method') == 'auto':
         options['aud_method'] = 'inversion'
     if options.get('aud_splits') == 'auto':
@@ -307,6 +395,24 @@ def resolve_auto_quality(file_path, options):
         
     options['aud_sr'] = sanitize_audio_sr(options.get('aud_sr', '48000'), options.get('aud_codec', 'aac'))
     return options
+
+
+def report_auto_quality(out_path, options, module_name='HTTP'):
+    """Log the encoded size against the Auto Quality size target."""
+    plan = options.get('auto_quality_plan') if isinstance(options, dict) else None
+    if not plan or not out_path or not os.path.exists(out_path):
+        return
+    try:
+        actual = os.path.getsize(out_path)
+        target = plan.get('target_bytes') or 0
+        delta = ((actual - target) / target * 100.0) if target else 0.0
+        LiveDebugger.log(
+            "AUTO_QUALITY",
+            f"Encoded size {actual / 1048576:.1f} MB vs target {target / 1048576:.1f} MB ({delta:+.1f}%)",
+            level="INFO", module=module_name
+        )
+    except Exception as e:
+        LiveDebugger.log("AUTO_QUALITY_WARN", f"Size report failed: {e}", level="WARNING", module=module_name)
 
 job_manager = JobManager(
     INPUT_FOLDER, ENCRYPTED_FOLDER, DECRYPTED_FOLDER,
@@ -654,6 +760,14 @@ def process_api():
             'outer_end_action': request.form.get('outer_end_action', 'stop'),
             'spatial_compression_mode': request.form.get('spatial_compression_mode', 'off'),
         }
+        # Auto Quality: the requested output-size delta (percent of the
+        # input file size). Only meaningful while the bitrate is 'auto' —
+        # see resolve_auto_quality().
+        if request.form.get('auto_quality_pct') is not None:
+            try:
+                options['auto_quality_pct'] = int(request.form.get('auto_quality_pct'))
+            except (TypeError, ValueError):
+                options['auto_quality_pct'] = 0
         # Normalize spatial mode ('zone' = legacy alias of 'priority').
         if options['spatial_compression_mode'] == 'zone':
             options['spatial_compression_mode'] = 'priority'
@@ -820,6 +934,7 @@ def process_api():
             out_path = os.path.join(ENCRYPTED_FOLDER, f"locked_{base_name}{out_ext}")
             LiveDebugger.log("Start Process", f"Encrypting '{filename}' -> '{out_path}' | Key: '{key}'", level="INFO", module="HTTP", extra="Modules: Flask, core.pipeline")
             process_media(path, out_path, options, task_progress, task_id)
+            report_auto_quality(out_path, options, module_name='HTTP')
             LiveDebugger.log("Process Complete", f"Successfully encrypted and saved output file: '{out_path}'", level="INFO", module="HTTP", extra="Modules: Flask, core.pipeline, os")
 
             # Auto-save the key next to the encrypted media file

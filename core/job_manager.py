@@ -152,6 +152,23 @@ class JobManager:
                 "end_time": self.end_time
             }
 
+    def _report_auto_quality(self, out_path, options):
+        """Log the encoded size against the Auto Quality size target."""
+        plan = options.get('auto_quality_plan') if isinstance(options, dict) else None
+        if not plan or not out_path or not os.path.exists(out_path):
+            return
+        try:
+            actual = os.path.getsize(out_path)
+            target = plan.get('target_bytes') or 0
+            delta = ((actual - target) / target * 100.0) if target else 0.0
+            LiveDebugger.log(
+                "AUTO_QUALITY",
+                f"Encoded size {actual / 1048576:.1f} MB vs target {target / 1048576:.1f} MB ({delta:+.1f}%)",
+                level="INFO", module="JOB"
+            )
+        except Exception as e:
+            LiveDebugger.log("AUTO_QUALITY_WARN", f"Size report failed: {e}", level="WARNING", module="JOB")
+
     def _run_job(self, job_id, action, files_info, form_data):
         LiveDebugger.log("Job Manager", f"Starting batch job '{job_id}' ({action}) with {len(files_info)} file(s)", level="INFO", module="JOB")
 
@@ -262,6 +279,15 @@ class JobManager:
                 _parsed_env = parse_wave_envelope(form_data.get('vid_bitrate_envelope'))
                 if _parsed_env:
                     options['vid_bitrate_envelope'] = _parsed_env
+
+                # Auto Quality: the requested output-size delta in percent of
+                # the input file size. Only meaningful while the bitrate is
+                # 'auto' — see resolve_quality_fn.
+                if form_data.get('auto_quality_pct') is not None:
+                    try:
+                        options['auto_quality_pct'] = int(form_data.get('auto_quality_pct'))
+                    except (TypeError, ValueError):
+                        options['auto_quality_pct'] = 0
 
                 options = self.resolve_quality_fn(file_path, options)
 
@@ -500,6 +526,7 @@ class JobManager:
                     out_path = os.path.join(self.encrypted_folder, f"locked_{base_name}{out_ext}")
                     LiveDebugger.log("Start Process", f"Encrypting '{display_name}' -> '{out_path}' | Key: '{key}'", level="INFO", module="JOB")
                     process_media(file_path, out_path, options, p_dict, task_id)
+                    self._report_auto_quality(out_path, options)
 
                     if self.cancel_event.is_set():
                         if os.path.exists(out_path):

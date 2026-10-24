@@ -119,6 +119,23 @@
         );
     }
 
+    // Publish the probed size/duration of the picked video so the Auto
+    // Quality slider can show its size target (the background file is the
+    // reference; the center video is not).
+    function publishAutoQualitySource(info, sizeBytes) {
+        info = info || {};
+        var size = sizeBytes != null ? sizeBytes
+            : (info.file_size_mb != null ? Math.round(info.file_size_mb * 1024 * 1024) : 0);
+        var dur = info.duration_sec || 0;
+        try {
+            window._lastVaultMediaSize = size || 0;
+            window._lastVaultMediaDuration = dur || 0;
+        } catch (e) {}
+        if (typeof updateAutoQualityReadout === 'function') {
+            try { updateAutoQualityReadout(); } catch (e) {}
+        }
+    }
+
     function playerFor(url, kind, filename) {
         if (kind === 'image') {
             return '<img src="' + esc(url) + '" alt="' + esc(filename || '') + '">';
@@ -132,6 +149,7 @@
     // ── API expected by vault.js ──────────────────────────────────────────────
     window.loadVideoPreview = function (fileUrl, filename, serverInfo) {
         function done(info, sizeBytes) {
+            publishAutoQualitySource(info, sizeBytes);
             renderInspector('videoInspector', {
                 title: '👁 Video preview before processing',
                 filename: filename,

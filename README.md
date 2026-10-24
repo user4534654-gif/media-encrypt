@@ -6,6 +6,17 @@
 
 Welcome to **Media-Encrypt Studio**! This tool uses visual matrix scrambling and audio ring-modulation to completely encrypt your videos, images, and audio files locally. Features include custom grid size scrambling, center media overlay, advanced audio scramblers, and auto-generated SVG sequence numbered grids.
 
+### ⚡ Auto Quality (target output size)
+
+The **Video Quality & Format Settings** panel opens with an **Auto Quality** switch and a single slider: how much bigger (or smaller) the finished video should be than the source file (`-50% … +100%`, `0%` = the same size, `+20%` = 20% bigger). Everything else is derived from it:
+
+- the size budget is split between the video and the audio stream,
+- the bitrate is spent as CBR, so the encoded file really lands on the target (the measured size is reported after every job),
+- out-of-range targets are clamped to the encoder limits and flagged,
+- in Center mode the pasted video sets a quality floor, so the result can come out larger than the target.
+
+Turn the switch off to drive the bitrate by hand. The 🌊 Dynamic Bitrate Wave (and the other encoder-level knobs) live in the **Extended** tab.
+
 ---
 
 # 🚀 QUICK START: DOWNLOAD THE READY-TO-USE WINDOWS .EXE!
