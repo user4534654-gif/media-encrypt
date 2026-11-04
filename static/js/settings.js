@@ -21,6 +21,7 @@ function collectSettings() {
     return {
         _preset: 'media-encrypt-settings',
         _version: 1,
+        _volDefault5: true,
         _savedAt: new Date().toISOString(),
         encryptionMode: encryptionMode,
         imgEncryptionMode: imgEncryptionMode,
@@ -63,11 +64,10 @@ function collectSettings() {
         aud_method: val('aud_method', 'inversion'),
         aud_splits: val('aud_splits', '10'),
         aud_seed: val('aud_seed', ''),
-        aud_vol_factor: val('aud_vol_factor_slider', '100'),
+        aud_vol_factor: val('aud_vol_factor_slider', '5'),
         v_aud_method: val('v_aud_method', 'inversion'),
         v_aud_splits: val('v_aud_splits', '10'),
-        vol_factor: val('vol_factor_slider', '100'),
-        dual_track: chk('dual_track', false),
+        vol_factor: val('vol_factor_slider', '5'),
         track_l_source: val('trackLSourceSelect', 'background'),
         track_r_source: val('trackRSourceSelect', 'center'),
         track_l_enc: chk('trackLEncCheckbox', true),
@@ -167,6 +167,14 @@ function importSettingsFromJsonFile(file) {
 function applySettingsObject(settings) {
     settingsApplyInProgress = true;
     try {
+        // Encrypted Audio Volume now defaults to 5% (the encrypted track is
+        // meant to sound silent). Settings saved or exported before that
+        // change carry the old loud 100% and would otherwise pin it forever.
+        if (settings._volDefault5 !== true) {
+            settings.vol_factor = '5';
+            settings.aud_vol_factor = '5';
+            settings._volDefault5 = true;
+        }
         if (settings.theme !== undefined) {
             const toggle = document.getElementById('themeToggle');
             if (toggle) toggle.checked = settings.theme;
@@ -307,10 +315,9 @@ function applySettingsObject(settings) {
         if (settings.vol_factor && volSlider) {
             volSlider.value = settings.vol_factor;
             if (volVal) volVal.innerText = settings.vol_factor + '%';
-            if (volLabel) volLabel.innerText = 'Volume Factor: ' + settings.vol_factor + '%';
+            if (volLabel) volLabel.innerText = 'Encrypted Audio Volume: ' + settings.vol_factor + '%';
         }
         
-        setChecked('dual_track', settings.dual_track || false);
         if (settings.track_l_source) setVal('trackLSourceSelect', settings.track_l_source);
         if (settings.track_r_source) setVal('trackRSourceSelect', settings.track_r_source);
         if (settings.track_l_enc !== undefined) setChecked('trackLEncCheckbox', settings.track_l_enc);
@@ -387,7 +394,7 @@ function initAutoSave() {
         'a_sr_slider', 'a_sr_auto', 'a_codec', 'a_bit_slider', 'a_bit_auto', 'cols', 'rows', 'sid', 'aspectLock', 'noScale', 'resW', 'resH',
         'img_cols', 'img_rows', 'img_sid', 'carrier_freq_slider', 'audio_sr_slider', 'audio_sr_auto', 'audio_codec',
         'audio_bit_slider', 'audio_bit_auto', 'audio_fmt', 'decKey', 'aud_method', 'aud_splits', 'aud_seed', 'aud_vol_factor_slider',
-        'v_aud_method', 'v_aud_splits', 'vol_factor_slider', 'dual_track', 'trackLSourceSelect', 'trackRSourceSelect', 'trackLEncCheckbox', 'trackREncCheckbox', 'center_size', 'img_center_size',
+        'v_aud_method', 'v_aud_splits', 'vol_factor_slider', 'trackLSourceSelect', 'trackRSourceSelect', 'trackLEncCheckbox', 'trackREncCheckbox', 'center_size', 'img_center_size',
         'outer_end_action', 'center_end_action', 'center_aud_action', 'exportSvg', 'imgExportSvg', 'useGpu', 'scrambleTune', 'saveKeyFile', 'imgSaveKeyFile', 'audSaveKeyFile',
         'enableSpatialZones', 'patchRoiInvert', 'patchOpticalMarkers', 'patchMarkerPlacement', 'patchCoordX1', 'patchCoordY1', 'patchCoordX2', 'patchCoordY2',
         'imgEnableSpatialZones', 'imgRoiInvert', 'imgOpticalMarkers', 'imgMarkerPlacement', 'imgCoordX1', 'imgCoordY1', 'imgCoordX2', 'imgCoordY2',

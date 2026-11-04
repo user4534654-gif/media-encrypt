@@ -197,7 +197,9 @@ async function startBatch(action) {
             fd.append('vol_factor', volBgVal);
             fd.append('vol_factor_bg', volBgVal);
             fd.append('vol_factor_center', volCenterVal);
-            const isDualTrack = document.getElementById('dual_track') ? document.getElementById('dual_track').checked : (document.getElementById('dualTrackPreviewToggle') ? document.getElementById('dualTrackPreviewToggle').checked : false);
+            // Dual-track is no longer a checkbox: it follows from the timeline
+            // L/R routing (different sources = two-track job).
+            const isDualTrack = typeof getDualTrackState === 'function' ? getDualTrackState() : false;
             fd.append('dual_track', isDualTrack);
             fd.append('center_size', document.getElementById('center_size').value);
             fd.append('video_encrypt_mode', document.getElementById('video_encrypt_mode').value);

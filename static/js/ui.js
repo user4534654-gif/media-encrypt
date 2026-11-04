@@ -68,15 +68,9 @@ function setEncryptionMode(mode) {
         else centerSection.classList.add('hidden');
     }
     
-    const dualTrackRow = document.getElementById('dualTrackRow');
-    if (dualTrackRow) {
-        if (mode === 'center') dualTrackRow.classList.remove('hidden');
-        else {
-            dualTrackRow.classList.add('hidden');
-            const dualTrackCheck = document.getElementById('dual_track');
-            if (dualTrackCheck) dualTrackCheck.checked = false;
-        }
-    }
+    // The volume control lives in the timeline in Center mode and in the Audio
+    // section otherwise; it must follow the mode switch.
+    if (typeof relocateVolumeControl === 'function') relocateVolumeControl();
     saveAllSettings();
 }
 

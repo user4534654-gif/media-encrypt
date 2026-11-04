@@ -121,9 +121,14 @@
     <!-- 2. Selective Spatial Zones & Timeline Patches (Optional) -->
     <div class="ios-group" id="spatialZonesGroup">
         <div class="collapse-trigger disabled" id="spatialZonesCollapseHeader" onclick="toggleSection('spatialZonesCollapseHeader', 'spatialZonesCollapseContent')">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span>🩹 Selective Spatial Zones & Timeline Patches</span>
-                <span class="badge-optional" style="font-size: 11px; background: rgba(0,122,255,0.15); color: #007aff; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Optional</span>
+            <div class="collapse-left">
+                <div class="collapse-heading">
+                    <span class="collapse-title-row">
+                        <span class="collapse-title">🩹 Selective Spatial Zones &amp; Timeline Patches</span>
+                        <span class="badge-optional" style="font-size: 11px; background: rgba(0,122,255,0.15); color: #007aff; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Optional</span>
+                    </span>
+                    <span class="collapse-subtitle" id="spatialZonesSummary">Encrypt a region, or only part of the timeline</span>
+                </div>
                 <span class="collapse-arrow">▶️</span>
             </div>
             <label class="ios-switch-label" style="margin: 0; padding-left: 10px; display: inline-flex; align-items: center; gap: 4px;" onclick="event.stopPropagation()">
@@ -226,12 +231,13 @@
                             <span class="ve-zone-label" id="veActiveZoneTitle">Zone 1</span>
                             <div class="ve-zone-times">
                                 <span>Start:</span>
-                                <input type="text" id="veActiveStart" class="ve-time-input" onchange="veOnActiveTimeInput('start', this.value)">
+                                <input type="text" id="veActiveStart" class="ve-time-input" title="Zone start (mm:ss.mmm)" onchange="veOnActiveTimeInput('start', this.value)">
                                 <span>End:</span>
-                                <input type="text" id="veActiveEnd" class="ve-time-input" onchange="veOnActiveTimeInput('end', this.value)">
+                                <input type="text" id="veActiveEnd" class="ve-time-input" title="Zone end (mm:ss.mmm)" onchange="veOnActiveTimeInput('end', this.value)">
                                 <span class="ve-dur-tag" id="veActiveDurTag">(2.00s)</span>
+                                <button type="button" class="ve-mini-btn" id="veFullRangeBtn" onclick="veSetActiveZoneFullRange()" title="Set this zone to the whole video">All video</button>
                             </div>
-                            <span class="ve-zone-roi-tag" id="veActiveRoiBadge">ROI: [0.20, 0.20, 0.80, 0.80]</span>
+                            <span class="ve-zone-roi-tag" id="veActiveRoiBadge" title="Zone rectangle (x1, y1, x2, y2)">ROI: [0.20, 0.20, 0.80, 0.80]</span>
                         </div>
                     </div>
 
@@ -278,7 +284,10 @@
     <div class="ios-group" id="exportSettings">
         <!-- Video Quality Collapsible Trigger -->
         <div class="collapse-trigger" id="vidCollapseHeader" onclick="toggleSection('vidCollapseHeader', 'vidCollapseContent')">
-            <span>🎬 Video Quality & Format Settings</span>
+            <div class="collapse-heading">
+                <span class="collapse-title">🎬 Video Quality &amp; Format Settings</span>
+                <span class="collapse-subtitle">Output size, codec and bitrate</span>
+            </div>
             <span class="collapse-arrow">▶️</span>
         </div>
         
@@ -470,8 +479,11 @@
 
         <!-- Audio Quality & Scrambling Collapsible Trigger -->
         <div class="collapse-trigger" id="audCollapseHeader" onclick="toggleSection('audCollapseHeader', 'audCollapseContent')">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span>🎵 Audio Quality & Scrambling Settings</span>
+            <div class="collapse-left">
+                <div class="collapse-heading">
+                    <span class="collapse-title">🎵 Audio Quality &amp; Scrambling Settings</span>
+                    <span class="collapse-subtitle">Codec, sample rate and track</span>
+                </div>
                 <span class="collapse-arrow">▶️</span>
             </div>
             <label class="ios-switch-label" style="margin: 0; padding-left: 10px; display: inline-flex; align-items: center; gap: 4px;" onclick="event.stopPropagation()">
@@ -533,20 +545,17 @@
                         <option value="right">Right Channel Only (R)</option>
                     </select>
                 </div>
-                <!-- Volume reduction factor slider -->
-                <div class="ios-group-row" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
-                    <label class="ios-label" id="vol_factor_label">Encrypted Audio Volume: 100%<span class="help-tip">❔<span class="tooltip-text">Scale the encrypted audio volume (e.g. to 5% or 0% so it seems silent). It will be restored to 100% on decryption.</span></span></label>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <input type="range" id="vol_factor_slider" min="0" max="100" step="5" value="100" style="flex: 1; accent-color: #007aff;">
-                        <span id="vol_factor_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">100%</span>
+                <!-- Encrypted Audio Volume: parked here in Normal mode; in Center
+                     mode the same node moves into the Timeline Duration Preview
+                     (see relocateVolumeControl in preview.js). -->
+                <div id="volFactorHome">
+                    <div class="ios-group-row" id="volFactorRow" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
+                        <label class="ios-label" id="vol_factor_label">Encrypted Audio Volume: 5%<span class="help-tip">❔<span class="tooltip-text">Scale the encrypted audio volume (e.g. to 5% or 0% so it seems silent). It will be restored to 100% on decryption.</span></span></label>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <input type="range" id="vol_factor_slider" min="0" max="100" step="5" value="5" style="flex: 1; accent-color: #007aff;">
+                            <span id="vol_factor_val" style="font-size: 13px; font-weight: bold; width: 60px; text-align: right;">5%</span>
+                        </div>
                     </div>
-                </div>
-                <!-- Dual track L/R checkbox (only visible in center video mode) -->
-                <div class="ios-group-row hidden" id="dualTrackRow" style="border-top: 1px solid #e0e0e0; padding-top: 12px;">
-                    <label class="ios-switch-label">
-                        <input type="checkbox" id="dual_track"> Dual-Track L/R Audio
-                        <span class="help-tip">❔<span class="tooltip-text">Left track has encrypted main audio; Right track has normal center video audio. Merged and normalized back to stereo on decryption.</span></span>
-                    </label>
                 </div>
             </div>
         </div>
@@ -556,7 +565,10 @@
     <div class="ios-group" id="encryptionParams">
         <!-- Video Grid Collapsible Trigger -->
         <div class="collapse-trigger" id="paramsCollapseHeader" onclick="toggleSection('paramsCollapseHeader', 'paramsCollapseContent')">
-            <span>🧩 Video Grid & Resize Settings</span>
+            <div class="collapse-heading">
+                <span class="collapse-title">🧩 Video Grid &amp; Resize Settings</span>
+                <span class="collapse-subtitle">Blocks, seed and output resolution</span>
+            </div>
             <span class="collapse-arrow">▶️</span>
         </div>
         
@@ -622,7 +634,7 @@
         </div>
     </div>
 
-    <div class="ios-group">
+    <div class="ios-group action-bar">
         <button onclick="startBatch('scramble')" class="ios-btn ios-btn-blue">🔒 ENCRYPT VIDEO</button>
     </div>
 </div>

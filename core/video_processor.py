@@ -765,7 +765,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 if center_mono is None:
                     LiveDebugger.log("AUD_CENTER_MISSING", f"Channel source 'center' selected but '{os.path.basename(_center_path)}' has no audio; using silence.", level="WARNING", module="AUDIO")
 
-            def _resolve_channel(which, src, custom_path, main_idx, vol, length_action):
+            def _resolve_channel(which, src, custom_path, main_idx, length_action):
                 data = None
                 if src == 'custom' and custom_path and os.path.exists(custom_path):
                     data = _load_or_extract_audio_channel(custom_path, main_sr, ffmpeg_exe, creation_flags)
@@ -781,8 +781,6 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 if data is None:
                     data = np.zeros(target_samples, dtype=np.float32)
                 data = _adjust_audio_length(data, target_samples, action=length_action)
-                if vol != 1.0:
-                    data = data * vol
                 return data
 
             vol_bg = options.get('vol_factor_bg', options.get('vol_factor', 1.0))
@@ -790,9 +788,9 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             vol_cus = options.get('vol_factor', 1.0)
             _vol_for = {'background': vol_bg, 'center': vol_center, 'custom': vol_cus}
             data_l = _resolve_channel('l', src_l, options.get('custom_audio_l'), 0,
-                                      _vol_for.get(src_l, 1.0), options.get('track_l_action', 'loop'))
+                                      options.get('track_l_action', 'loop'))
             data_r = _resolve_channel('r', src_r, options.get('custom_audio_r'), 1,
-                                      _vol_for.get(src_r, 1.0), options.get('track_r_action', 'loop'))
+                                      options.get('track_r_action', 'loop'))
 
             enc_l = options.get('track_l_enc', options.get('custom_audio_l_enc', True))
             enc_r = options.get('track_r_enc', options.get('custom_audio_r_enc', True))
@@ -800,13 +798,15 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 enc_l = str(enc_l).lower() not in ('false', '0', 'no', 'off')
             if enc_r not in (True, False):
                 enc_r = str(enc_r).lower() not in ('false', '0', 'no', 'off')
+            if options.get('dual_track') and 'track_r_enc' not in options and 'custom_audio_r_enc' not in options:
+                enc_r = False
 
-            def _enc_channel(data, tmp_name):
+            def _enc_channel(data, tmp_name, vol):
                 tmp_p = get_temp_file_path(tmp_name)
                 sf.write(tmp_p, data, main_sr)
                 process_audio_file(tmp_p, tmp_p, is_decrypt=False, method=options.get('aud_method', 'inversion'),
                                    key=options.get('aud_key', 42), num_splits=options.get('aud_splits', 10),
-                                   carrier_freq=carrier_freq, vol_factor=1.0,
+                                   carrier_freq=carrier_freq, vol_factor=vol,
                                    aud_track='both', patch_intervals=patch_intervals)
                 out, _ = sf.read(tmp_p)
                 if len(out.shape) > 1:
@@ -818,10 +818,13 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                         pass
                 return out
 
+            # Volume is applied inside the encryptor only: a channel left in the
+            # clear (|cal0 / |car0) is never scaled back on decryption, so
+            # scaling it here would leave it permanently quiet.
             if enc_l:
-                data_l = _enc_channel(data_l, "track_l_proc.wav")
+                data_l = _enc_channel(data_l, "track_l_proc.wav", _vol_for.get(src_l, 1.0))
             if enc_r:
-                data_r = _enc_channel(data_r, "track_r_proc.wav")
+                data_r = _enc_channel(data_r, "track_r_proc.wav", _vol_for.get(src_r, 1.0))
 
             stereo_data = np.vstack((data_l, data_r)).T
             sf.write(temp_aud, stereo_data, main_sr)
@@ -837,7 +840,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 num_splits=options.get('aud_splits', 10),
                 carrier_freq=carrier_freq,
                 vol_factor=vol_bg,
-                aud_track=options.get('aud_track', 'both'),
+                aud_track='left',
                 patch_intervals=patch_intervals
             )
             # Extract central video audio, resampling it to match main_sr exactly
@@ -886,6 +889,8 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                     dec_l = str(dec_l).lower() not in ('false', '0', 'no', 'off')
                 if dec_r not in (True, False):
                     dec_r = str(dec_r).lower() not in ('false', '0', 'no', 'off')
+                if options.get('dual_track') and 'track_r_enc' not in options:
+                    dec_r = False
 
                 def _dec_channel(data, tmp_name):
                     tmp_p = get_temp_file_path(tmp_name)
@@ -1315,6 +1320,19 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         else:
             LiveDebugger.log("ZONE_PRIORITY", f"Zone Priority steering ON (strength={_steer_strength}): background outside encrypt zones is softened so rate control feeds the zones", level="INFO", module="VIDEO")
 
+    # Truncate audio to match output video duration if video is being processed
+    if proc_vid and has_audio and os.path.exists(temp_aud) and fps and fps > 0 and output_total_frames > 0:
+        try:
+            import soundfile as _sf_trim
+            _vid_dur = output_total_frames / fps
+            _aud_d, _aud_sr = _sf_trim.read(temp_aud)
+            _max_aud_samples = int(round(_vid_dur * _aud_sr))
+            if len(_aud_d) > _max_aud_samples:
+                _sf_trim.write(temp_aud, _aud_d[:_max_aud_samples], _aud_sr)
+                LiveDebugger.log("AUD_TRUNC_VID", f"Audio track truncated to match video duration ({_vid_dur:.2f}s, {_max_aud_samples} samples)", level="INFO", module="AUDIO")
+        except Exception as _e_trim:
+            LiveDebugger.log("AUD_TRUNC_ERR", f"Failed to trim audio to video duration: {_e_trim}", level="WARNING", module="AUDIO")
+
     # ── FFmpeg output writers ────────────────────────────────────────
     cmd = [ffmpeg_exe, '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
            '-s', f'{out_w}x{out_h}', '-pix_fmt', 'bgr24', '-r', str(fps), '-i', '-']
@@ -1359,6 +1377,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
             cmd.extend(['-c:a', aud_c, '-b:a', aud_b, '-ar', aud_sr])
         else:
             cmd.extend(['-c:a', aud_c, '-ar', aud_sr])
+        cmd.append('-shortest')
     else:
         cmd.extend(['-an'])
     cmd.append(output_path)
@@ -1371,6 +1390,16 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
         base, ext = os.path.splitext(output_path)
         output_path_center = f"{base}_center{ext}"
         has_center_aud_out = os.path.exists(temp_center_aud_out)
+        if proc_vid and has_center_aud_out and fps and fps > 0 and output_total_frames > 0:
+            try:
+                import soundfile as _sf_c_trim
+                _vid_dur = output_total_frames / fps
+                _c_aud_d, _c_aud_sr = _sf_c_trim.read(temp_center_aud_out)
+                _c_max_samples = int(round(_vid_dur * _c_aud_sr))
+                if len(_c_aud_d) > _c_max_samples:
+                    _sf_c_trim.write(temp_center_aud_out, _c_aud_d[:_c_max_samples], _c_aud_sr)
+            except Exception:
+                pass
 
         # In Zone+Center mode, the center file holds the nested inner center
         # (regular center-video pipeline inside the zone), not the full zone.
@@ -1422,6 +1451,7 @@ def process_video_file(input_path, output_path, options, progress_dict, task_id)
                 cmd_center.extend(['-c:a', aud_c, '-b:a', aud_b, '-ar', aud_sr])
             else:
                 cmd_center.extend(['-c:a', aud_c, '-ar', aud_sr])
+            cmd_center.append('-shortest')
         else:
             cmd_center.extend(['-an'])
         cmd_center.append(output_path_center)

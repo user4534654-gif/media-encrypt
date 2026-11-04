@@ -70,8 +70,10 @@ document.addEventListener('DOMContentLoaded', () => {
             veBuildFilmstrip();
 
             if (patchSegments.length === 0 && patchVideoDuration > 0) {
-                const segEnd = Math.min(patchVideoDuration, Math.max(2.0, patchVideoDuration * 0.35));
-                addPatchSegment(0, segEnd);
+                // Default zone covers the whole clip: "all video" is the
+                // common case, and a 35% stub made users think the tail of
+                // the video was not encryptable.
+                addPatchSegment(0, patchVideoDuration);
             } else {
                 renderVeTimelineClips();
             }
@@ -608,6 +610,23 @@ function veDeleteActiveZone() {
     removePatchSegment(activePatchSegmentId);
 }
 
+// One-click "cover the whole clip" for the selected zone. The default zone
+// already spans the video; this restores that after trimming.
+function activeSegment() {
+    return patchSegments.find(s => s.id === activePatchSegmentId) || null;
+}
+
+function veSetActiveZoneFullRange() {
+    if (!activeSegment() || !(patchVideoDuration > 0)) return;
+    const seg = activeSegment();
+    seg.start = 0;
+    seg.end = parseFloat(patchVideoDuration.toFixed(3));
+    updateActiveZoneBar(seg);
+    renderVeTimelineClips();
+    const player = document.getElementById('patchVideoPlayer');
+    updateZoneVisibilityAtTime(player ? (player.currentTime || 0) : 0);
+}
+
 function removePatchSegment(id) {
     patchSegments = patchSegments.filter(s => s.id !== id);
     if (activePatchSegmentId === id) {
@@ -670,6 +689,7 @@ function updateActiveZoneBar(seg) {
         if (inEnd) inEnd.value = "00:00.000";
         if (durTag) durTag.innerText = "(0.00s)";
         if (roiBadge) roiBadge.innerText = "ROI: None";
+        updateSpatialZonesSummary();
         return;
     }
 
@@ -681,6 +701,27 @@ function updateActiveZoneBar(seg) {
 
     const roi = seg.roi || [patchRegion.x1, patchRegion.y1, patchRegion.x2, patchRegion.y2];
     if (roiBadge) roiBadge.innerText = `ROI: [${roi.map(v => v.toFixed(2)).join(', ')}]`;
+    updateSpatialZonesSummary();
+}
+
+// Keeps the collapsed section header informative: how many zones exist and
+// whether they cover the whole clip. The full area stats are visible inside.
+function updateSpatialZonesSummary() {
+    const el = document.getElementById('spatialZonesSummary');
+    if (!el) return;
+    const n = patchSegments.length;
+    if (n === 0 || !(patchVideoDuration > 0)) {
+        el.innerText = 'Encrypt a region, or only part of the timeline';
+        return;
+    }
+    const first = patchSegments[0];
+    const whole = n === 1 && first.start <= 0.001 && first.end >= patchVideoDuration - 0.001;
+    if (whole) {
+        el.innerText = '1 zone · whole video';
+        return;
+    }
+    const total = patchSegments.reduce((sum, s) => sum + Math.max(0, s.end - s.start), 0);
+    el.innerText = `${n} zone${n === 1 ? '' : 's'} · ${formatTimeMs(total)} total`;
 }
 
 function veOnActiveTimeInput(field, val) {

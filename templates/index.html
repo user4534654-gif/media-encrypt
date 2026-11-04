@@ -26,7 +26,7 @@
         {% include 'components/header.html' %}
 
         <!-- Main Studio Navigation Tabs -->
-        <div class="ios-group" style="margin: 12px; padding: 5px; background: rgba(0,0,0,0.05); border-color: #a5abb0;">
+        <div class="ios-group main-tab-bar">
             <div class="segmented-control">
                 <button type="button" id="tabBtnEncrypt" class="segment-btn active" onclick="switchMainTab('encrypt')">🔒 Encrypt</button>
                 <button type="button" id="tabBtnDecrypt" class="segment-btn" onclick="switchMainTab('decrypt')">🔓 Decrypt</button>
@@ -49,8 +49,9 @@
             <!-- ENCRYPT TAB CONTENT -->
             <div id="tabContentEncrypt">
                 <!-- Media Type Tabs -->
-                <div class="ios-group" style="padding: 5px; margin-bottom: 12px; border-color: #b0b5ba;">
-                    <div class="segmented-control">
+                <div class="ios-group media-type-bar">
+                    <span class="media-type-label">Media type</span>
+                    <div class="segmented-control media-type-tabs">
                         <button type="button" id="mediaTabVideo" class="segment-btn active" onclick="setMediaTypeTab('video')">🎬 Video</button>
                         <button type="button" id="mediaTabImage" class="segment-btn" onclick="setMediaTypeTab('image')">🖼️ Image</button>
                         <button type="button" id="mediaTabAudio" class="segment-btn" onclick="setMediaTypeTab('audio')">🎵 Audio</button>

@@ -74,6 +74,7 @@ function initVisualPreview() {
 
     // Initial render
     updateTimelineVisualization();
+    relocateVolumeControl();
 }
 
 function selectPreviewTarget(target, event) {
@@ -295,20 +296,55 @@ function updateTrackRouting(channel, source) {
         customRow.style.display = (source === 'custom') ? 'flex' : 'none';
     }
 
-    // Auto sync dual_track backend setting if L and R sources differ
-    const sourceL = document.getElementById('trackLSourceSelect') ? document.getElementById('trackLSourceSelect').value : 'background';
-    const sourceR = document.getElementById('trackRSourceSelect') ? document.getElementById('trackRSourceSelect').value : 'center';
-
-    const dualTrackElem = document.getElementById('dual_track');
-    if (dualTrackElem) {
-        dualTrackElem.checked = (sourceL !== sourceR);
-    }
-
+    // Dual-track no longer has its own checkbox: the job flag is derived from
+    // this routing matrix at submit time (getDualTrackState).
     updateTimelineVisualization();
+    syncVolumeRowVisibility();
 }
 
 function updateTrackEncState(channel, isEncrypted) {
     updateTimelineVisualization();
+    syncVolumeRowVisibility();
+}
+
+// Dual-track is implied by the L/R matrix: when Left and Right resolve to
+// different sources the job carries two tracks. The removed #dual_track
+// checkbox only ever mirrored this rule.
+function getDualTrackState() {
+    const selectL = document.getElementById('trackLSourceSelect');
+    const selectR = document.getElementById('trackRSourceSelect');
+    const srcL = selectL ? selectL.value : 'background';
+    const srcR = selectR ? selectR.value : 'center';
+    return srcL !== srcR;
+}
+
+// Encrypted Audio Volume sits in the Audio section in Normal mode and moves
+// into the Timeline Duration Preview in Center mode, right below the tracks.
+function relocateVolumeControl() {
+    const row = document.getElementById('volFactorRow');
+    if (!row) return;
+    const inCenter = (typeof encryptionMode !== 'undefined') && encryptionMode === 'center';
+    const target = document.getElementById(inCenter ? 'audioTimelineVolumeSlot' : 'volFactorHome');
+    if (target && row.parentElement !== target) {
+        target.appendChild(row);
+    }
+    syncVolumeRowVisibility();
+}
+
+// The volume only matters while at least one track keeps Encrypt on, so it
+// hides when both tracks pass through untouched.
+function syncVolumeRowVisibility() {
+    const row = document.getElementById('volFactorRow');
+    if (!row) return;
+    const inCenter = (typeof encryptionMode !== 'undefined') && encryptionMode === 'center';
+    if (!inCenter) {
+        row.classList.remove('hidden');
+        return;
+    }
+    const encL = document.getElementById('trackLEncCheckbox');
+    const encR = document.getElementById('trackREncCheckbox');
+    const anyEncrypted = (encL ? encL.checked : true) || (encR ? encR.checked : true);
+    row.classList.toggle('hidden', !anyEncrypted);
 }
 
 function probeFileDuration(file, callback) {
