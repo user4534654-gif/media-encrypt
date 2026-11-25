@@ -1,6 +1,39 @@
 let activeJobPollingInterval = null;
 let currentJobStartTime = null;
 
+/* POST the job with XHR instead of fetch so the upload progress of the
+   multipart body (including the file bytes) can feed the background Colab
+   file indicator. fetch() has no upload progress events. Behavior on the
+   caller side is unchanged: resolves with the parsed JSON, rejects on a
+   network or parse error. */
+function postJobStartWithProgress(fd) {
+    return new Promise(function (resolve, reject) {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/job/start', true);
+        if (xhr.upload) {
+            xhr.upload.onprogress = function (event) {
+                if (typeof window.updateColabFileStatus !== 'function') return;
+                const pct = event.lengthComputable
+                    ? Math.round(event.loaded / event.total * 100)
+                    : null;
+                window.updateColabFileStatus('uploading', pct);
+            };
+        }
+        xhr.onload = function () {
+            let data;
+            try {
+                data = JSON.parse(xhr.responseText);
+            } catch (err) {
+                reject(new Error('Invalid server response'));
+                return;
+            }
+            resolve(data);
+        };
+        xhr.onerror = function () { reject(new Error('Network error')); };
+        xhr.send(fd);
+    });
+}
+
 async function startBatch(action) {
     let rawFiles = [];
     let isVaultSelection = false;
@@ -329,16 +362,18 @@ async function startBatch(action) {
     }
 
     try {
-        const res = await fetch('/api/job/start', { method: 'POST', body: fd });
-        const data = await res.json();
+        const data = await postJobStartWithProgress(fd);
         if (data.status === 'ok') {
+            if (typeof window.updateColabFileStatus === 'function') window.updateColabFileStatus('checking');
             startJobPolling();
         } else {
+            if (typeof window.updateColabFileStatus === 'function') window.updateColabFileStatus('error');
             if (spinner) spinner.style.display = 'none';
             if (cancelCont) cancelCont.style.display = 'none';
             alert("Could not start processing: " + (data.message || "Unknown error"));
         }
     } catch (err) {
+        if (typeof window.updateColabFileStatus === 'function') window.updateColabFileStatus('error');
         if (spinner) spinner.style.display = 'none';
         if (cancelCont) cancelCont.style.display = 'none';
         openDebugger("Network error submitting batch job", err.stack || err.toString());
@@ -858,15 +893,17 @@ async function startBatchWithFormData(fd, action) {
     currentJobStartTime = Date.now();
 
     try {
-        const res = await fetch('/api/job/start', { method: 'POST', body: fd });
-        const data = await res.json();
+        const data = await postJobStartWithProgress(fd);
         if (data.status === 'ok') {
+            if (typeof window.updateColabFileStatus === 'function') window.updateColabFileStatus('checking');
             startJobPolling();
         } else {
+            if (typeof window.updateColabFileStatus === 'function') window.updateColabFileStatus('error');
             alert(data.error || "Failed to start job");
             if (progBox) progBox.style.display = 'none';
         }
     } catch (e) {
+        if (typeof window.updateColabFileStatus === 'function') window.updateColabFileStatus('error');
         alert("Error starting job: " + e.message);
         if (progBox) progBox.style.display = 'none';
     }

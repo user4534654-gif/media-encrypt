@@ -1,5 +1,14 @@
 /* iOS 1-6 Skeuomorphic Style for Media-Crypto */
 
+/* Android WebView (and some mobile Chromium builds) inflate text to a
+   device-DPI-dependent size unless text autosizing is disabled. That makes
+   fixed-size labels and controls overflow on small panels. Keep 1 CSS px
+   equal to 1 WebView px on every density. */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
 :root {
   /* Matte Metal Base Colors */
   --metal-highlight: #2d3139; /* Lightest part of the matte sheen */
@@ -2080,6 +2089,58 @@ body.layout-mobile #trackRCustomRow {
     flex-wrap: wrap;
 }
 
+/* ── Mobile DPI fit ─────────────────────────────────────────────────────────
+   The mobile scale is laid out around a ~480px column. A 720px-wide phone
+   at 2x density exposes only ~360 CSS px, so fixed-size chrome (header
+   buttons, file pickers) does not fit and gets clipped by the device frame.
+   Scale the whole mobile UI down on narrow panels, and let input rows wrap
+   so the native file-picker label is never cut off. Desktop is untouched. */
+@media (max-width: 420px) {
+    body.layout-mobile {
+        zoom: 0.9;
+    }
+}
+
+@media (max-width: 340px) {
+    body.layout-mobile {
+        zoom: 0.8;
+    }
+}
+
+/* A phone is already fullscreen; the desktop-only button steals ~100px
+   from the centered title. */
+@media (max-width: 480px) {
+    body.layout-mobile #fullscreenBtn {
+        display: none !important;
+    }
+}
+
+body.layout-mobile .ios-nav-title {
+    max-width: calc(100% - 130px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.layout-mobile .ios-group-row div[style*="display: flex"] {
+    flex-wrap: wrap;
+}
+
+body.layout-mobile .ios-file-input {
+    min-width: 100%;
+}
+
+/* On real phones drop the fake device bezel: it costs 12px of border plus
+   16px of margin on every side, which is exactly what narrow panels lack. */
+@media (max-width: 768px) {
+    body.layout-mobile .ios-device-container {
+        max-width: 100%;
+        margin: 0;
+        border: none;
+        border-radius: 0;
+    }
+}
+
 /* NOTE: every selector below is prefixed with `body` on purpose —
    preview.css loads AFTER this file, so a bare tie (0,1,0) would lose
    the cascade to it. `body .x` (0,1,1) always wins. */
@@ -2406,4 +2467,66 @@ body.ios-dark-theme .auto-quality-target {
 body.ios-dark-theme .auto-quality-readout.auto-quality-warn,
 body.ios-dark-theme .auto-quality-hint.auto-quality-warn {
     color: #fbbf24;
+}
+
+/* ── Background Colab file-presence indicator ───────────────────────────────
+   Small status chip in the bottom-left corner. It is purely informational:
+   it never takes focus, never covers a control and adds no layout shift. */
+.colab-file-status {
+    position: fixed;
+    left: 8px;
+    bottom: 8px;
+    z-index: 5000;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 60vw;
+    padding: 4px 9px;
+    border-radius: 12px;
+    background: rgba(24, 28, 34, 0.78);
+    color: #f2f4f7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 11px;
+    line-height: 1.3;
+    letter-spacing: 0.1px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.9;
+    transition: opacity 0.2s ease;
+}
+
+.colab-file-status.hidden {
+    display: none;
+}
+
+.colab-file-status-dot {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #9aa3b2;
+}
+
+.colab-file-status[data-state="uploading"] .colab-file-status-dot {
+    background: #3b82f6;
+    animation: colab-status-pulse 1s ease-in-out infinite;
+}
+
+.colab-file-status[data-state="pending"] .colab-file-status-dot,
+.colab-file-status[data-state="partial"] .colab-file-status-dot {
+    background: #fbbf24;
+}
+
+.colab-file-status[data-state="ok"] .colab-file-status-dot {
+    background: #34d399;
+}
+
+.colab-file-status[data-state="error"] .colab-file-status-dot {
+    background: #f87171;
+}
+
+@keyframes colab-status-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
 }

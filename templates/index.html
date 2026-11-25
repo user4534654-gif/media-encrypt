@@ -118,7 +118,15 @@
     <!-- EXCEPTION TRACEBACK DEBUGGER OVERLAY -->
     {% include 'components/debugger.html' %}
 
+    <!-- Background Colab file-presence indicator (outside the device frame,
+         pointer-events off so it never covers a control). -->
+    <div id="colabFileStatus" class="colab-file-status hidden" aria-live="polite">
+        <span class="colab-file-status-dot"></span>
+        <span id="colabFileStatusText"></span>
+    </div>
+
     <!-- Sequential load of modular JS files -->
+    <script src="{{ url_for('static', filename='js/colab_status.js') }}"></script>
     <script src="{{ url_for('static', filename='js/preview.js') }}"></script>
     <script src="{{ url_for('static', filename='js/media_inspector.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
